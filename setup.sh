@@ -190,6 +190,82 @@ install_dependencies() {
   fi
 }
 
+install_tmux_plugins() {
+  info "Instalando TPM y plugins de tmux"
+  local tpm_dir="$HOME/.tmux/plugins/tpm"
+  if [ ! -d "$tpm_dir" ]; then
+    git clone https://github.com/tmux-plugins/tpm "$tpm_dir"
+  fi
+  # Plugins definidos en tmux/.tmux.conf serán gestionados por TPM al iniciar tmux
+}
+
+install_zsh_plugins() {
+  info "Instalando complementos de zsh (zsh-autosuggestions, zsh-syntax-highlighting)"
+  local zsh_local="$HOME/.local/share/zsh"
+  mkdir -p "$zsh_local"
+  if [ ! -d "$zsh_local/zsh-autosuggestions" ]; then
+    git clone https://github.com/zsh-users/zsh-autosuggestions "$zsh_local/zsh-autosuggestions"
+  fi
+  if [ ! -d "$zsh_local/zsh-syntax-highlighting" ]; then
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting "$zsh_local/zsh-syntax-highlighting"
+  fi
+}
+
+install_powerlevel10k() {
+  info "Instalando Powerlevel10k"
+  if [ ! -f "$HOME/.p10k.zsh" ]; then
+    if [ ! -d "$HOME/.powerlevel10k" ]; then
+      git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$HOME/.powerlevel10k"
+    fi
+    # Copy provided p10k config if exists in repo
+    if [ -f "$SCRIPT_DIR/p10k.zsh" ]; then
+      backup_path "$HOME/.p10k.zsh"
+      cp "$SCRIPT_DIR/p10k.zsh" "$HOME/.p10k.zsh"
+    else
+      # create minimal p10k bootstrap
+      cat > "$HOME/.p10k.zsh" <<'P10K'
+# Minimal Powerlevel10k config
+typeset -g POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(context dir vcs)
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status command_execution_time)
+P10K
+    fi
+  fi
+}
+
+install_starship() {
+  info "Instalando Starship prompt"
+  if command -v brew >/dev/null 2>&1 && [ "$PLATFORM" = "mac" ]; then
+    brew install starship || true
+  else
+    if [ "$PLATFORM" = "linux" ]; then
+      if command -v apt-get >/dev/null 2>&1; then
+        curl -sS https://starship.rs/install.sh | sh -s -- -y
+      else
+        curl -sS https://starship.rs/install.sh | sh -s -- -y
+      fi
+    fi
+  fi
+  # Copy starship.toml if provided
+  if [ -f "$SCRIPT_DIR/starship.toml" ]; then
+    backup_path "$HOME/.config/starship.toml"
+    mkdir -p "$HOME/.config"
+    cp "$SCRIPT_DIR/starship.toml" "$HOME/.config/starship.toml"
+  fi
+}
+
+install_clipboard_tools() {
+  info "Instalando herramientas de portapapeles (xclip/xsel)"
+  if [ "$PLATFORM" = "linux" ]; then
+    if [ "$LINUX_MANAGER" = "apt" ]; then
+      sudo apt-get install -y xclip xsel || true
+    elif [ "$LINUX_MANAGER" = "pacman" ]; then
+      sudo pacman -S --needed --noconfirm xclip xsel || true
+    fi
+  fi
+  # Note: win32yank is Windows-only; user should install on Windows host if needed
+}
+
 setup_alacritty() {
   info "Configurando Alacritty"
   local dest="$HOME/.config/alacritty"
@@ -205,12 +281,18 @@ setup_neovim() {
 }
 
 main() {
-  info "Preparando entorno para Alacritty y Neovim"
+  info "Preparando entorno para Alacritty, Neovim, tmux y zsh"
   keep_sudo_credentials
   install_dependencies
+  install_tmux_plugins
+  install_zsh_plugins
+  install_powerlevel10k
+  install_starship
+  install_clipboard_tools
   setup_alacritty
   setup_neovim
-  info "Proceso completado. Abre Alacritty y Neovim para comenzar."
+  info "Proceso completado. Abre Alacritty, Neovim y tmux para finalizar la instalación de plugins."
+  info "Para tmux: abre tmux y presiona prefix + I para que TPM instale plugins"
 }
 
 main "$@"

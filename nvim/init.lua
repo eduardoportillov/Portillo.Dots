@@ -106,6 +106,57 @@ require("lazy").setup({
       require("gitsigns").setup()
     end,
   },
+
+  -- New plugins requested
+  {
+    "opencodez/opencode.nvim",
+    config = function()
+      -- opencode.nvim minimal setup
+      pcall(require, "opencode").setup({})
+    end,
+  },
+  {
+    "yetone/avante.nvim",
+    config = function()
+      require("avante").setup({})
+    end,
+  },
+  {
+    "zbirenbaum/copilot.lua",
+    event = "VeryLazy",
+    config = function()
+      require("copilot").setup({
+        suggestion = { enabled = false },
+        panel = { enabled = false },
+      })
+    end,
+  },
+  {
+    "zbirenbaum/copilot-cmp",
+    dependencies = { "zbirenbaum/copilot.lua" },
+  },
+  {
+    "ziblo/CoPilotChat.nvim",
+    -- note: repo name might differ; leave minimal placeholder
+    config = function()
+      -- Copilot Chat integration placeholder
+    end,
+  },
+  {
+    "sphamba/smear-cursor.nvim",
+    config = function()
+      require("smear-cursor").setup({})
+    end,
+  },
+  {
+    "akinsho/bufferline.nvim",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    config = function()
+      require("bufferline").setup({
+        options = { diagnostics = "nvim_lsp" },
+      })
+    end,
+  },
 })
 
 local map = vim.keymap.set

@@ -52,3 +52,25 @@ export PATH="$PATH:$HOME/.local/bin"
 
 . "$HOME/.local/bin/env"
 export PATH="$PATH:$HOME/.local/bin"
+
+# Powerlevel10k (sourcing file managed in repo)
+if [ -f "$HOME/.p10k.zsh" ]; then
+  source "$HOME/.p10k.zsh"
+fi
+
+# Zsh plugins (installed by setup.sh into ~/.local/share)
+ZSH_LOCAL="$HOME/.local/share/zsh"
+if [ -d "$ZSH_LOCAL/zsh-autosuggestions" ]; then
+  source "$ZSH_LOCAL/zsh-autosuggestions/zsh-autosuggestions.zsh"
+fi
+if [ -d "$ZSH_LOCAL/zsh-syntax-highlighting" ]; then
+  source "$ZSH_LOCAL/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+fi
+
+# Starship prompt
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init zsh)"
+fi
+
+# Clipboard helpers (win32yank/xclip/xsel) prefer CLI tools; setup.sh will install xclip/xsel on Linux
+# Use clipboard integration in tmux and Neovim via system clipboard
