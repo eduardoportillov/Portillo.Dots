@@ -1,0 +1,4 @@
+# Minimal starship configuration
+add_newline = false
+[git_branch]
+format = " $branch"
