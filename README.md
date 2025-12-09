@@ -33,3 +33,17 @@
 - Portapapeles y utilidades
   - Linux: `xclip`, `xsel` — manejo del portapapeles desde comandos y Neovim/tmux.
   - Windows: `win32yank` — recomendado para integración en Windows/WSL.
+
+# Dotstack
+
+Este repositorio contiene el scaffold de dotstack en el subdirectorio `dotstack/`.
+
+Para inicializar en un host:
+
+1. Clona este repositorio (si no lo has hecho).
+2. Ejecuta `dotstack/setup.sh --yes --preflight` desde `dotstack/` o manualmente:
+   - `ln -s $(pwd)/dotstack ~/.dotstack`
+   - `~/.dotstack/bin/dotstack preflight`
+   - `~/.dotstack/bin/dotstack activate --append --yes`
+
+El directorio `~/.dotstack` está enlazado al subdirectorio `dotstack/` de este repositorio para que el repositorio sea la fuente de verdad.
