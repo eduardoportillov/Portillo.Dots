@@ -1,0 +1,472 @@
+#!/bin/sh
+# dotstack - entrypoint POSIX sh
+# Idioma: español
+# Diseño: subcomandos + funciones modulares
+
+DOTSTACK_ROOT="${DOTSTACK_ROOT:-$HOME/.dotstack}"
+DOTSTACK_BIN="$DOTSTACK_ROOT/bin"
+DOTSTACK_REPO="$DOTSTACK_ROOT/repo"
+DOTSTACK_SHARE="$DOTSTACK_ROOT/share"
+DOTSTACK_OPT="$DOTSTACK_ROOT/opt"
+DOTSTACK_BACKUPS="$DOTSTACK_ROOT/backups"
+DOTSTACK_LOGS="$DOTSTACK_ROOT/logs"
+STATE_FILE="$DOTSTACK_ROOT/state.json"
+
+export DOTSTACK_ROOT DOTSTACK_BIN DOTSTACK_REPO DOTSTACK_SHARE DOTSTACK_OPT DOTSTACK_BACKUPS DOTSTACK_LOGS STATE_FILE
+
+timestamp() {
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+logfile() {
+  cmd="$1"; ts="$(timestamp | tr ':' '-')"; echo "$DOTSTACK_LOGS/${cmd}-${ts}.log"
+}
+
+log() {
+  echo "[$(timestamp)] $*"
+}
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+# util: ensure directories exist (non-destructive)
+ensure_dirs() {
+  for d in "$DOTSTACK_BIN" "$DOTSTACK_REPO" "$DOTSTACK_REPO/configs" "$DOTSTACK_REPO/manifests" "$DOTSTACK_REPO/scripts" "$DOTSTACK_SHARE" "$DOTSTACK_OPT" "$DOTSTACK_BACKUPS" "$DOTSTACK_LOGS"; do
+    [ -d "$d" ] || mkdir -p "$d" || die "No se pudo crear $d"
+  done
+}
+
+# detect_os: devuelve "linux" o "darwin" y "x86_64" o "aarch64"
+detect_os() {
+  os="$(uname -s 2>/dev/null || echo unknown)"
+  arch="$(uname -m 2>/dev/null || echo unknown)"
+  case "$os" in
+    Linux*) os="linux" ;;
+    Darwin*) os="darwin" ;;
+    *) os="unknown" ;;
+  esac
+  case "$arch" in
+    x86_64|amd64) arch="x86_64" ;;
+    aarch64|arm64) arch="aarch64" ;;
+    *) arch="unknown" ;;
+  esac
+  echo "${os}:${arch}"
+}
+
+# find_pkgmgr: detecta gestor de paquetes disponible o vacío
+find_pkgmgr() {
+  for c in apt dnf pacman apk zypper brew; do
+    command -v "$c" >/dev/null 2>&1 && { echo "$c"; return 0; }
+  done
+  echo ""
+}
+
+# try_download_portable: intenta descargar binarios portables de releases
+try_download_portable() {
+  name="$1"; shift
+  case "$name" in
+    jq)
+      url_linux_x86="https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64"
+      url_linux_arm="https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64"
+      target="$DOTSTACK_BIN/jq"
+      ;;
+    fzf)
+      url_linux_x86="https://github.com/junegunn/fzf/releases/download/0.46.0/fzf-0.46.0-linux_amd64"
+      url_linux_arm="https://github.com/junegunn/fzf/releases/download/0.46.0/fzf-0.46.0-linux_arm64"
+      target="$DOTSTACK_BIN/fzf"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  os_arch="$(detect_os)"
+  os="${os_arch%%:*}"; arch="${os_arch##*:}"
+  case "$arch" in
+    x86_64) url_var="url_linux_x86" ;;
+    aarch64) url_var="url_linux_arm" ;;
+    *) url_var="url_linux_x86" ;;
+  esac
+  url="$(eval echo \${$url_var})"
+  if [ -z "$url" ]; then
+    return 1
+  fi
+  mkdir -p "$DOTSTACK_BIN"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$target" "$url" || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$target" "$url" || return 1
+  else
+    return 1
+  fi
+  chmod +x "$target" || return 1
+  log "Descargado portable $name → $target"
+  return 0
+}
+
+# preflight_check: valida dependencias y trata de resolver jq/fzf portables o su instalación vía pkgmgr
+preflight_check() {
+  ensure_dirs
+  missing=""
+  need_pkgmgr=""
+  for cmd in git curl tar unzip; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing="$missing $cmd"
+      need_pkgmgr=1
+    fi
+  done
+
+  # check optional but desired
+  for opt in jq fzf; do
+    if ! command -v "$opt" >/dev/null 2>&1; then
+      log "$opt no encontrado, intentando descarga portable..."
+      if try_download_portable "$opt"; then
+        log "$opt instalado en $DOTSTACK_BIN"
+      else
+        missing="$missing $opt"
+        need_pkgmgr=1
+      fi
+    fi
+  done
+
+  if [ -n "$need_pkgmgr" ]; then
+    pkgmgr="$(find_pkgmgr)"
+    if [ -z "$pkgmgr" ]; then
+      echo "Faltan dependencias:$missing y no se detectó gestor de paquetes. Instale manualmente o permita usar pkgmgr." >&2
+      return 2
+    fi
+    echo "Faltan dependencias:$missing. Se puede intentar instalar con: sudo $pkgmgr install -y <paquetes>"
+    echo "Ejemplo: sudo $pkgmgr install -y git curl tar unzip jq fzf"
+    return 1
+  fi
+
+  case ":$PATH:" in
+    *":$HOME/.local/bin:") ;;
+    *) PATH="$HOME/.local/bin:$PATH"; export PATH; log "Se agregó temporalmente ~/.local/bin al PATH para esta sesión";;
+  esac
+
+  echo "OK"
+  return 0
+}
+
+# clone_repo_if_needed: clona repo (si --repo dado) a $DOTSTACK_REPO
+clone_repo_if_needed() {
+  repo_url="$1"
+  if [ -z "$repo_url" ]; then
+    echo "No se indicó --repo"
+    return 1
+  fi
+  ensure_dirs
+  if [ -d "$DOTSTACK_REPO/.git" ]; then
+    log "Repositorio local ya existe en $DOTSTACK_REPO. Haciendo pull..."
+    (cd "$DOTSTACK_REPO" && git pull --ff-only) || die "git pull falló"
+    return 0
+  else
+    git clone "$repo_url" "$DOTSTACK_REPO" || die "git clone falló"
+    return 0
+  fi
+}
+
+# install: recorre manifests y aplica (soporta type=git, tar, script)
+install() {
+  yes_flag=0
+  use_pkgmgr=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --yes) yes_flag=1; shift;;
+      --use-pkgmgr) use_pkgmgr=1; shift;;
+      *) shift;;
+    esac
+  done
+  ensure_dirs
+  for mf in "$DOTSTACK_REPO"/manifests/*.json; do
+    [ -f "$mf" ] || continue
+    name="$(basename "$mf" .json)"
+    type="$(jq -r '.type // "git"' "$mf" 2>/dev/null || echo git)"
+    allow_pkgmgr="$(jq -r '.allow_pkgmgr // false' "$mf" 2>/dev/null || echo false)"
+    case "$type" in
+      git)
+        repo="$(jq -r '.repo' "$mf")"
+        dest="$DOTSTACK_SHARE/$name"
+        if [ -d "$dest/.git" ]; then
+          log "Actualizando git $name"
+          (cd "$dest" && git pull --ff-only) || log "Advertencia: git pull falló para $name"
+        else
+          log "Clonando git $name desde $repo"
+          git clone "$repo" "$dest" || log "Fallo clonando $repo"
+        fi
+        ;;
+      tar)
+        url_template="$(jq -r '.url_template' "$mf")"
+        version="$(jq -r '.version' "$mf")"
+        osarch="$(detect_os)"; os="${osarch%%:*}" ; arch="${osarch##*:}"
+        url="$(echo "$url_template" | sed "s/{version}/$version/g" | sed "s/{os}/$os/g" | sed "s/{arch}/$arch/g")"
+        destdir="$DOTSTACK_OPT/$name-$version"
+        mkdir -p "$destdir"
+        tmpf="$(mktemp)"
+        log "Descargando $url"
+        if command -v curl >/dev/null 2>&1; then
+          curl -fsSL -o "$tmpf" "$url" || { log "Descarga fallida: $url"; rm -f "$tmpf"; continue; }
+        else
+          log "curl no disponible para descargar $url"; rm -f "$tmpf"; continue
+        fi
+        case "$url" in
+          *.tar.gz|*.tgz) tar -xzf "$tmpf" -C "$destdir" || log "extracción falló";;
+          *.zip) unzip -q "$tmpf" -d "$destdir" || log "unzip falló";;
+          *) log "Formato desconocido; mover $tmpf a $destdir"; mv "$tmpf" "$destdir"/ || true;;
+        esac
+        rm -f "$tmpf"
+        binpath="$(jq -r '.bin // ""' "$mf")"
+        if [ -n "$binpath" ]; then
+          wrapper="$DOTSTACK_BIN/$name"
+          cat > "$wrapper" <<'SH'
+#!/bin/sh
+DOTSTACK_ROOT="${DOTSTACK_ROOT:-$HOME/.dotstack}"
+exec "$DOTSTACK_ROOT/opt/REPLACE_PATH/$BIN" "$@"
+SH
+          sed -i "s|REPLACE_PATH|$name-$version|g" "$wrapper" 2>/dev/null || true
+          sed -i "s|$BIN|$binpath|g" "$wrapper" 2>/dev/null || true
+          chmod +x "$wrapper" || true
+        fi
+        ;;
+      script)
+        inst_script="$(jq -r '.script // ""' "$mf")"
+        if [ -n "$inst_script" ] && [ -x "$DOTSTACK_REPO/scripts/$inst_script" ]; then
+          log "Ejecutando script de instalación $inst_script"
+          (cd "$DOTSTACK_REPO" && sh "scripts/$inst_script") || log "Script $inst_script falló"
+        else
+          log "No existe script ejecutable $inst_script"
+        fi
+        ;;
+      *)
+        log "Tipo desconocido en $mf: $type"
+        ;;
+    esac
+  done
+  tmp="$(mktemp)"
+  jq '.installed=true | .installed_at="'"$(timestamp)"'"' "$STATE_FILE" 2>/dev/null > "$tmp" || echo '{"installed":true,"installed_at":"'"$(timestamp)"'"}' > "$tmp"
+  mv "$tmp" "$STATE_FILE"
+  log "Install complete"
+}
+
+# sync: sincroniza configs desde repo hacia host o viceversa
+sync() {
+  dryrun=0; method="symlink"; mode="auto"; yes_flag=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) dryrun=1; shift;;
+      --copy) method="copy"; shift;;
+      --symlink) method="symlink"; shift;;
+      --mode=*) mode="${1#*=}"; shift;;
+      --yes) yes_flag=1; shift;;
+      *) shift;;
+    esac
+  done
+
+  mapfile_list="$DOTSTACK_REPO/manifests/sync_map.json"
+  for src in "$DOTSTACK_REPO/configs"/*; do
+    [ -e "$src" ] || continue
+    base="$(basename "$src")"
+    if [ "${base#*.}" != "$base" ]; then
+      dest="$HOME/$base"
+    else
+      if [ -d "$src" ]; then
+        dest="$HOME/.config/$base"
+      else
+        dest="$HOME/$base"
+      fi
+    fi
+    sha_src="$(command -v sha256sum >/dev/null 2>&1 && sha256sum "$src" 2>/dev/null | awk '{print $1}' || true)"
+    sha_dest="$( [ -f "$dest" ] && command -v sha256sum >/dev/null 2>&1 && sha256sum "$dest" 2>/dev/null | awk '{print $1}' || true)"
+
+    if [ "$sha_src" != "$sha_dest" ]; then
+      echo "Diferencia: $src -> $dest"
+      if [ "$dryrun" -eq 1 ]; then
+        echo "  (dry-run) se haría: $method"
+        continue
+      fi
+      if [ -e "$dest" ]; then
+        ts="$(date +%s)"
+        backup_dir="$DOTSTACK_BACKUPS/sync-$ts"
+        mkdir -p "$backup_dir"
+        cp -a "$dest" "$backup_dir/" 2>/dev/null || true
+        echo "  Backup de $dest creado en $backup_dir"
+      fi
+      if [ "$method" = "symlink" ]; then
+        ln -sfn "$src" "$dest"
+        echo "  Enlazado: $dest -> $src"
+      else
+        cp -a "$src" "$dest"
+        echo "  Copiado: $src -> $dest"
+      fi
+    fi
+  done
+  echo "Sync completado."
+}
+
+# update: detectar y aplicar actualizaciones (git y tar)
+update() {
+  interactive=1
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --interactive) interactive=1; shift;;
+      --yes) interactive=0; shift;;
+      *) shift;;
+    esac
+  done
+  for mf in "$DOTSTACK_REPO"/manifests/*.json; do
+    [ -f "$mf" ] || continue
+    type="$(jq -r '.type // "git"' "$mf" 2>/dev/null || echo git)"
+    name="$(basename "$mf" .json)"
+    case "$type" in
+      git)
+        url="$(jq -r '.repo' "$mf")"
+        dir="$DOTSTACK_SHARE/$name"
+        if [ -d "$dir/.git" ]; then
+          (cd "$dir" && git fetch) || log "git fetch falló para $name"
+          remote_head="$(cd "$dir" && git rev-parse origin/HEAD 2>/dev/null || true)"
+          local_head="$(cd "$dir" && git rev-parse HEAD 2>/dev/null || true)"
+          if [ -n "$remote_head" ] && [ "$remote_head" != "$local_head" ]; then
+            if [ "$interactive" -eq 1 ]; then
+              echo "Update disponible para $name (git). Ejecutar pull? [y/N]"
+              read ans
+              [ "$ans" = "y" ] && (cd "$dir" && git pull --ff-only)
+            else
+              (cd "$dir" && git pull --ff-only)
+            fi
+          fi
+        fi
+        ;;
+      tar)
+        preferred="$(jq -r '.version' "$mf")"
+        installed="$(ls -d "$DOTSTACK_OPT/$name-"* 2>/dev/null | sort -V | tail -n1 | xargs -r basename || true)"
+        if echo "$installed" | grep -q "$preferred"; then
+          log "$name ya está en la versión preferida ($preferred)"
+        else
+          echo "Nueva versión sugerida para $name: $preferred (instalada: $installed)"
+          if [ "$interactive" -eq 1 ]; then
+            echo "Actualizar? [y/N]"; read ans
+            [ "$ans" = "y" ] && install --yes
+          else
+            install --yes
+          fi
+        fi
+        ;;
+    esac
+  done
+  echo "Update completado."
+}
+
+# export/import: exporta la carpeta DOTSTACK en tar.gz e importa (merging manual)
+export_dotstack() {
+  out="$1"
+  include_backups=0
+  if [ "$2" = "--include-backups" ]; then include_backups=1; fi
+  [ -z "$out" ] && out="$HOME/dotstack-export-$(date +%Y%m%d%H%M%S).tar.gz"
+  tar_args="--exclude='logs' --exclude='*.log'"
+  [ $include_backups -eq 0 ] && tar_args="$tar_args --exclude='backups'"
+  tar czf "$out" -C "$HOME" ".dotstack" || die "Export falló"
+  echo "Exportado a $out"
+}
+
+import_dotstack() {
+  file="$1"
+  [ -z "$file" ] && die "Falta archivo para importar"
+  tmpdir="$(mktemp -d)"
+  tar xzf "$file" -C "$tmpdir" || die "Extracción falló"
+  echo "Contenido extraído en $tmpdir. Revisión manual necesaria. Opciones: merge/replace/abort"
+}
+
+# activate: muestra plantilla o agrega source a shells si --append
+activate_cmd() {
+  append=0; yes_flag=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --append) append=1; shift;;
+      --yes) yes_flag=1; shift;;
+      *) shift;;
+    esac
+  done
+  cat > "$DOTSTACK_ROOT/activate" <<'EOF'
+# Dotstack activate
+export DOTSTACK_ROOT="${DOTSTACK_ROOT:-$HOME/.dotstack}"
+export PATH="$DOTSTACK_ROOT/bin:$PATH"
+export NVM_DIR="$DOTSTACK_ROOT/share/nvm"
+export SDKMAN_DIR="$DOTSTACK_ROOT/share/sdkman"
+export GOPATH="$HOME/go"
+EOF
+  chmod 644 "$DOTSTACK_ROOT/activate" 2>/dev/null || true
+  echo "Archivo $DOTSTACK_ROOT/activate creado."
+  if [ "$append" -eq 1 ]; then
+    for f in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
+      [ -f "$f" ] || continue
+      grep -q "source \"$DOTSTACK_ROOT/activate\"" "$f" 2>/dev/null || {
+        if [ "$yes_flag" -eq 1 ]; then
+          printf "\n# Dotstack activation\n[ -f \"$DOTSTACK_ROOT/activate\" ] && . \"$DOTSTACK_ROOT/activate\"\n" >> "$f"
+          echo "Append realizado en $f"
+        else
+          echo "Agregar manualmente 'source \"$DOTSTACK_ROOT/activate\"' en $f o ejecutar dotstack activate --append --yes"
+        fi
+      }
+    done
+  fi
+}
+
+# status / doctor
+status_cmd() {
+  echo "DOTSTACK_ROOT=$DOTSTACK_ROOT"
+  [ -f "$STATE_FILE" ] && jq . "$STATE_FILE" 2>/dev/null || echo "state.json no encontrado"
+}
+
+doctor_cmd() {
+  echo "Preflight check:"
+  preflight_check || echo "preflight detectó problemas"
+  echo "Estado:"
+  status_cmd
+}
+
+usage() {
+  cat <<EOF
+dotstack - gestor de dotfiles y componentes
+Uso: dotstack <subcomando> [opciones]
+
+Subcomandos:
+  detect_os                    Detecta sistema y arquitectura
+  preflight                    Comprueba dependencias (git,curl,tar,unzip,jq,fzf)
+  clone --repo <url>           Clona repo con configs/manifests/scripts
+  install [--yes] [--use-pkgmgr]  Instala componentes listados en repo/manifests
+  sync [--dry-run] [--symlink|--copy] [--mode=repo2host|auto]
+  update [--interactive|--yes] Actualiza componentes
+  export <file> [--include-backups]  Exporta ~/.dotstack a tar.gz
+  import <file>                Importa export (requiere revisión)
+  activate [--append] [--yes]  Crea activate y opcionalmente lo añade a shells
+  status                       Muestra state.json y rutas
+  doctor                       Ejecuta preflight + status
+  help                         Muestra esta ayuda
+EOF
+}
+
+# entrypoint: parse subcommand
+main() {
+  if [ $# -lt 1 ]; then usage; exit 0; fi
+  cmd="$1"; shift
+  case "$cmd" in
+    detect_os) detect_os ;;
+    preflight) preflight_check ;;
+    clone) while [ $# -gt 0 ]; do case "$1" in --repo) shift; clone_repo_if_needed "$1"; shift;; *) shift;; esac; done ;;
+    install) install "$@" ;;
+    sync) sync "$@" ;;
+    update) update "$@" ;;
+    export) export_dotstack "$@" ;;
+    import) import_dotstack "$@" ;;
+    activate) activate_cmd "$@" ;;
+    status) status_cmd ;;
+    doctor) doctor_cmd ;;
+    help|-h|--help) usage ;;
+    *) echo "Comando desconocido: $cmd"; usage; exit 2 ;;
+  esac
+}
+
+main "$@"

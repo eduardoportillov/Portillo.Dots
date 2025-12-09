@@ -1,0 +1,8 @@
+{
+  "name": "jq",
+  "type": "tar",
+  "version": "1.6",
+  "url_template": "https://github.com/stedolan/jq/releases/download/jq-{version}/jq-linux64",
+  "bin": "jq",
+  "allow_pkgmgr": true
+}
