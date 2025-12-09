@@ -1,0 +1,6 @@
+
+# Dotstack runtime dirs
+dotstack/opt/
+dotstack/logs/
+dotstack/backups/
+dotstack/share/
