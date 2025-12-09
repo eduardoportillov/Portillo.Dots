@@ -1,0 +1,6 @@
+# Dotstack activate
+export DOTSTACK_ROOT="${DOTSTACK_ROOT:-$HOME/.dotstack}"
+export PATH="$DOTSTACK_ROOT/bin:$PATH"
+export NVM_DIR="$DOTSTACK_ROOT/share/nvm"
+export SDKMAN_DIR="$DOTSTACK_ROOT/share/sdkman"
+export GOPATH="$HOME/go"

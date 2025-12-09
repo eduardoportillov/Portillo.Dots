@@ -1,0 +1,6 @@
+{
+  "name": "neovim",
+  "type": "git",
+  "repo": "https://github.com/neovim/neovim.git",
+  "allow_pkgmgr": true
+}

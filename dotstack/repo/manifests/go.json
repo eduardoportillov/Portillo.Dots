@@ -1,0 +1,8 @@
+{
+  "name": "go",
+  "type": "tar",
+  "version": "1.20.5",
+  "url_template": "https://golang.org/dl/go{version}.{os}-{arch}.tar.gz",
+  "bin": "go/bin/go",
+  "allow_pkgmgr": false
+}
