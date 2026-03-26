@@ -1,4 +1,4 @@
-# Minimal starship configuration
-add_newline = false
+# Portillo starship config
 [git_branch]
-format = " $branch"
+symbol = "🌱 "
+truncation_length = 20
