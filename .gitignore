@@ -1,5 +1,7 @@
-dotstack/opt/
-dotstack/logs/
-dotstack/backups/
-dotstack/share/
+# Logs
 *.log
+
+# Neovim
+nvim/.tests/
+nvim/debug/
+nvim/data/

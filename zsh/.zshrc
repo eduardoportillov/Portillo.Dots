@@ -85,10 +85,16 @@ export PATH="$HOME/.local/bin:$PATH"
 # tmux wrapper function for cross-platform session management
 function tm() {
   [[ -n "$TMUX" ]] && change="switch-client" || change="new-session"
-  if [ $1 ]; then
+  if [[ -n "${1:-}" ]]; then
     tmux $change -t "$1" 2>/dev/null || tmux new-session -d -s "$1" && tmux $change -t "$1"
   else
-    tmux $change -t "$(tmux list-sessions -F '#{session_name}' | head -n1)"
+    local session
+    session="$(tmux list-sessions -F '#{session_name}' 2>/dev/null | head -n1)"
+    if [[ -n "$session" ]]; then
+      tmux $change -t "$session"
+    else
+      tmux new-session
+    fi
   fi
 }
 

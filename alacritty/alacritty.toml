@@ -70,7 +70,7 @@ command = { program = "sh", args = ["-c", "uname -s | grep -q Darwin && open -R 
 hyperlinks = true
 post_processing = true
 persist = false
-mouse = { enabled = true, mods = "Command" }
+mouse = { enabled = true, mods = "Alt" }
 binding = { key = "Space", mods = "Shift" }
 
 # --- 7. RENDIMIENTO Y ENTORNO ---

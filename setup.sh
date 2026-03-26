@@ -113,7 +113,6 @@ install_brew_packages() {
   local packages=(
     "git" "curl" "unzip" "tmux" "neovim" "ripgrep" "fd" "fzf" "bat"
     "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin"
-    "zsh-autosuggestions" "zsh-syntax-highlighting" "powerlevel10k"
     "starship" "go"
   )
   
