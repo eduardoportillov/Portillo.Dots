@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 # === VARIABLES GLOBALES ===
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+LOG="$HOME/.dotfiles-setup.log"
+
+# === LOGGING ===
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG"
+}
 
 # Determinar PLATFORM
 if [[ "$OS" == "Darwin" ]]; then
@@ -30,7 +36,9 @@ banner() {
   echo -e "${NC}"
   echo "Platform: $PLATFORM"
   echo "Architecture: $ARCH"
+  echo "Log file: $LOG"
   echo ""
+  log "=== SETUP STARTED ==="
 }
 
 info() {
@@ -74,6 +82,28 @@ ask_yn() {
   [[ "$response" =~ ^[Yy]$ ]]
 }
 
+# === SAFE GIT UPDATE ===
+safe_git_update() {
+  local dir="$1"
+  local name="$2"
+  
+  if [[ ! -d "$dir/.git" ]]; then
+    warn "$name: not a git repository, skipping"
+    return 0
+  fi
+  
+  if ! git -C "$dir" diff-index --quiet HEAD -- 2>/dev/null; then
+    warn "$name: local changes detected, skipping update"
+    return 0
+  fi
+  
+  if git -C "$dir" pull --ff-only --quiet 2>/dev/null; then
+    ok "$name: updated"
+  else
+    warn "$name: update skipped (offline or conflict)"
+  fi
+}
+
 # === PASO 1: OS DETECTION ===
 detect_os() {
   info "Detecting OS..."
@@ -103,7 +133,7 @@ setup_brew() {
   fi
   
   info "Running brew update..."
-  brew update
+  brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
 }
 
 # === PASO 3: INSTALL BREW PACKAGES ===
@@ -188,8 +218,7 @@ setup_oh_my_zsh() {
     local plugin_path="$custom_plugins_dir/$plugin_name"
     
     if [[ -d "$plugin_path" ]]; then
-      info "Updating $plugin_name..."
-      git -C "$plugin_path" pull -q
+      safe_git_update "$plugin_path" "$plugin_name"
     else
       info "Installing $plugin_name..."
       git clone -q "$plugin_url" "$plugin_path"
@@ -199,8 +228,7 @@ setup_oh_my_zsh() {
   # Setup powerlevel10k theme
   local theme_dir="$HOME/.oh-my-zsh/custom/themes/powerlevel10k"
   if [[ -d "$theme_dir" ]]; then
-    info "Updating powerlevel10k..."
-    git -C "$theme_dir" pull -q
+    safe_git_update "$theme_dir" "powerlevel10k"
   else
     info "Installing powerlevel10k..."
     git clone -q https://github.com/romkatv/powerlevel10k.git "$theme_dir"
@@ -214,60 +242,72 @@ setup_tpm() {
   local tpm_dir="$HOME/.tmux/plugins/tpm"
   
   if [[ -d "$tpm_dir" ]]; then
-    info "Updating TPM..."
-    git -C "$tpm_dir" pull -q
+    safe_git_update "$tpm_dir" "TPM"
   else
     info "Installing TPM..."
     git clone -q https://github.com/tmux-plugins/tpm "$tpm_dir"
   fi
 }
 
-# === PASO 7: INSTALL DEV TOOLS (INTERACTIVE) ===
+# === PASO 7: INSTALL DEV TOOLS (IDEMPOTENT) ===
 install_dev_tools() {
   info "Dev Tools (optional)"
   echo ""
   
   # NVM
-  if ask_yn "Install Node Version Manager (NVM)?" "y"; then
-    if [[ ! -s "$HOME/.nvm/nvm.sh" ]]; then
+  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+    ok "NVM already installed"
+  else
+    if ask_yn "Install Node Version Manager (NVM)?" "y"; then
       info "Installing NVM..."
-      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash > /dev/null 2>&1
-      ok "NVM installed"
-    else
-      ok "NVM already installed"
+      if curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh 2>>"$LOG" | bash >>"$LOG" 2>&1; then
+        ok "NVM installed"
+      else
+        warn "NVM installation failed, continuing..."
+      fi
     fi
   fi
   
   # SDKMAN
-  if ask_yn "Install SDKMAN (Java, Kotlin, Gradle)?" "y"; then
-    if [[ ! -s "$HOME/.sdkman/bin/sdkman-init.sh" ]]; then
+  if [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]]; then
+    ok "SDKMAN already installed"
+  else
+    if ask_yn "Install SDKMAN (Java, Kotlin, Gradle)?" "y"; then
       info "Installing SDKMAN..."
-      curl -s "https://get.sdkman.io" | bash > /dev/null 2>&1
-      ok "SDKMAN installed"
-    else
-      ok "SDKMAN already installed"
+      if curl -s "https://get.sdkman.io" 2>>"$LOG" | bash >>"$LOG" 2>&1; then
+        ok "SDKMAN installed"
+      else
+        warn "SDKMAN installation failed, continuing..."
+      fi
     fi
   fi
   
-  # Go (already in brew, confirm)
-  if ask_yn "Confirm Go installation?" "y"; then
-    if ! command -v go &> /dev/null; then
+  # Go
+  if command -v go &> /dev/null; then
+    ok "Go already installed"
+  else
+    if ask_yn "Install Go?" "y"; then
       info "Installing Go via Homebrew..."
-      brew install go
-    else
-      ok "Go already installed"
+      if brew install go >>"$LOG" 2>&1; then
+        ok "Go installed"
+      else
+        warn "Go installation failed, continuing..."
+      fi
     fi
   fi
   
   # uv
-  if ask_yn "Install uv (Python package manager)?" "y"; then
-    if [[ ! -f "$HOME/.local/bin/uv" ]]; then
+  if [[ -f "$HOME/.local/bin/uv" ]]; then
+    ok "uv already installed"
+  else
+    if ask_yn "Install uv (Python package manager)?" "y"; then
       info "Installing uv..."
       mkdir -p "$HOME/.local/bin"
-      curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1
-      ok "uv installed"
-    else
-      ok "uv already installed"
+      if curl -LsSf https://astral.sh/uv/install.sh 2>>"$LOG" | sh >>"$LOG" 2>&1; then
+        ok "uv installed"
+      else
+        warn "uv installation failed, continuing..."
+      fi
     fi
   fi
 }
@@ -428,6 +468,10 @@ verify() {
   else
     warn "Some checks failed. Review above."
   fi
+  
+  # Never return error from verify
+  log "VERIFY: $ok_count/$total checks passed"
+  return 0
 }
 
 # === MAIN ===
@@ -465,6 +509,8 @@ main() {
   echo ""
   
   echo "Done! Open a new terminal or run: exec zsh"
+  echo "Log file: $LOG"
+  log "=== SETUP COMPLETED ==="
 }
 
 main "$@"

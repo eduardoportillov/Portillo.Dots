@@ -6,3 +6,8 @@ debug
 foo.*
 *.log
 data
+
+lazy/
+mason/
+node_modules/
+.cache/
