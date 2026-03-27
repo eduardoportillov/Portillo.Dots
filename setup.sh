@@ -430,10 +430,14 @@ verify() {
   
   # Fonts
   total=$((total + 1))
-  if fc-list | grep -q "Hack Nerd Font" 2>/dev/null; then
+  # Temporarily disable pipefail for fc-list (SIGPIPE with grep -q)
+  set +o pipefail
+  if fc-list 2>&1 | grep -q "Hack Nerd Font"; then
+    set -o pipefail
     ok "✓ Hack Nerd Font"
     ok_count=$((ok_count + 1))
   else
+    set -o pipefail
     error "✗ Hack Nerd Font"
   fi
   
