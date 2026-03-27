@@ -160,35 +160,50 @@ install_brew_packages() {
 install_fonts() {
   info "Installing Hack Nerd Font..."
   
-  local fonts_dir="$HOME/.local/share/fonts"
-  mkdir -p "$fonts_dir"
-  
-  if fc-list | grep -q "Hack Nerd Font"; then
-    ok "Hack Nerd Font already installed"
-    return 0
-  fi
-  
+  # Check if already installed (platform-specific)
   if [[ "$PLATFORM" == "mac" ]]; then
-    info "Installing via Homebrew Cask (macOS)..."
-    brew install --cask font-hack-nerd-font
+    # macOS: check if brew cask is installed
+    if brew list --cask 2>/dev/null | grep -q "font-hack-nerd-font"; then
+      ok "Hack Nerd Font already installed"
+      return 0
+    fi
   else
-    info "Installing via direct download (Linux)..."
-    local tmp_dir="/tmp/hack-font-$$"
-    mkdir -p "$tmp_dir"
-    
-    cd "$tmp_dir"
-    curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.zip
-    unzip -o Hack.zip > /dev/null 2>&1
-    cp *.ttf "$fonts_dir/" 2>/dev/null || true
-    cd - > /dev/null
-    rm -rf "$tmp_dir"
-    
-    if command -v fc-cache &> /dev/null; then
-      fc-cache -fv > /dev/null 2>&1
+    # Linux: check with fc-list
+    if fc-list 2>/dev/null | grep -q "Hack Nerd Font"; then
+      ok "Hack Nerd Font already installed"
+      return 0
     fi
   fi
   
-  ok "Hack Nerd Font installed"
+  # Install
+  if [[ "$PLATFORM" == "mac" ]]; then
+    info "Installing via Homebrew Cask (macOS)..."
+    if brew install --cask font-hack-nerd-font >>"$LOG" 2>&1; then
+      ok "Hack Nerd Font installed"
+    else
+      warn "Font installation failed, continuing..."
+    fi
+  else
+    info "Installing via direct download (Linux)..."
+    local fonts_dir="$HOME/.local/share/fonts"
+    local tmp_dir="/tmp/hack-font-$$"
+    mkdir -p "$fonts_dir" "$tmp_dir"
+    
+    cd "$tmp_dir"
+    if curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.zip 2>>"$LOG"; then
+      unzip -o Hack.zip -d "$tmp_dir" >>"$LOG" 2>&1 || true
+      cp "$tmp_dir"/*.ttf "$fonts_dir/" 2>/dev/null || true
+      
+      if command -v fc-cache &> /dev/null; then
+        fc-cache -fv >>"$LOG" 2>&1 || true
+      fi
+      ok "Hack Nerd Font installed"
+    else
+      warn "Font download failed, continuing..."
+    fi
+    cd - > /dev/null
+    rm -rf "$tmp_dir" 2>/dev/null || true
+  fi
 }
 
 # === PASO 5: SETUP OH MY ZSH ===

@@ -4,9 +4,11 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
 fi
 
 # OS detection
-_PORTILLO_OS="linux"
-if [[ "$(uname -s)" == "Darwin" ]]; then
+_PORTILLO_OS="$(uname -s)"
+if [[ "$_PORTILLO_OS" == "Darwin" ]]; then
   _PORTILLO_OS="macos"
+else
+  _PORTILLO_OS="linux"
 fi
 
 # Homebrew shellenv

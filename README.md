@@ -27,6 +27,8 @@ The setup script is **idempotent**: run it multiple times without issues. Symlin
 - **alacritty** — GPU-accelerated terminal emulator
   - Hack Nerd Font, Tokyo Night Storm theme
   - Blur, padding, custom keybindings
+  - URL hints with Alt+Space (works on both macOS and Linux)
+  - Note: On macOS, some users may prefer Command instead of Alt for hints. Edit `alacritty/alacritty.toml` line 73 to change `mods = "Alt"` to `mods = "Command"`
   
 - **tmux** — Terminal multiplexer with plugins via TPM
   - Kanagawa Dragon theme, vim mode, floating scratch window
