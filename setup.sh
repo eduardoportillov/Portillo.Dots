@@ -5,7 +5,7 @@ set -uo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
-BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
 LOG="$HOME/.dotfiles-setup.log"
 
 # === LOGGING ===
