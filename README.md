@@ -35,7 +35,8 @@ The setup script is **idempotent**: run it multiple times without issues. Symlin
 ### Shell & Prompt
 
 - **zsh** + **Oh My Zsh** — Shell with plugin framework
-  - **powerlevel10k** — Fast, customizable prompt
+  - **powerlevel10k** — Fast, customizable prompt (default)
+  - **starship** — Alternative prompt (available for future use, not installed by default)
   
 - **Plugins**: git, z, brew, sudo, extract, web-search, zsh-autosuggestions, zsh-syntax-highlighting, you-should-use, copyfile, copypath, fzf
 
