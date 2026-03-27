@@ -35,8 +35,7 @@ The setup script is **idempotent**: run it multiple times without issues. Symlin
 ### Shell & Prompt
 
 - **zsh** + **Oh My Zsh** — Shell with plugin framework
-  - **powerlevel10k** — Fast, customizable prompt (default)
-  - **starship** — Alternative prompt (optional, available)
+  - **powerlevel10k** — Fast, customizable prompt
   
 - **Plugins**: git, z, brew, sudo, extract, web-search, zsh-autosuggestions, zsh-syntax-highlighting, you-should-use, copyfile, copypath, fzf
 
@@ -90,7 +89,6 @@ Portillo.Dots/
 ├── zsh/
 │   ├── .zshrc
 │   └── p10k.zsh           # Powerlevel10k config (1837 lines)
-└── starship.toml          # Alternative prompt config
 ```
 
 ## Symlinks
@@ -102,7 +100,6 @@ After running `setup.sh`:
 - `~/.config/alacritty/alacritty.toml` → `$REPO/alacritty/alacritty.toml`
 - `~/.zshrc` → `$REPO/zsh/.zshrc`
 - `~/.p10k.zsh` → `$REPO/zsh/p10k.zsh`
-- `~/.config/starship.toml` → `$REPO/starship.toml`
 
 ## Customization
 
@@ -111,6 +108,18 @@ After running `setup.sh`:
 - **Editor**: Add/modify plugins in `nvim/lua/plugins/` (LazyVim spec format)
 - **Terminal**: Adjust colors, fonts, opacity in `alacritty/alacritty.toml`
 - **Multiplexer**: Edit `tmux/tmux.conf` for bindings, plugins, theme
+
+## Alternativa: Starship
+
+[Starship](https://starship.rs) es un prompt cross-shell minimalista escrito en Rust.
+
+### ¿Cuándo considerar migrar?
+
+| Situación                                   | ¿Migrar? |
+| ------------------------------------------- | -------- |
+| Usas múltiples shells (Fish, Bash, Nushell) | ✅ Sí    |
+| Quieres unificación de prompt               | ✅ Sí    |
+| Solo usas Zsh y p10k te funciona bien       | ❌ No    |
 
 ## Feedback & Issues
 

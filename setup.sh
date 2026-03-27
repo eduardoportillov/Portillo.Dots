@@ -143,7 +143,7 @@ install_brew_packages() {
   local packages=(
     "git" "curl" "unzip" "tmux" "neovim" "ripgrep" "fd" "fzf" "bat"
     "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin"
-    "starship" "go"
+    "go"
   )
   
   for pkg in "${packages[@]}"; do
@@ -322,7 +322,6 @@ create_symlinks() {
     "alacritty/alacritty.toml:$HOME/.config/alacritty/alacritty.toml"
     "zsh/.zshrc:$HOME/.zshrc"
     "zsh/p10k.zsh:$HOME/.p10k.zsh"
-    "starship.toml:$HOME/.config/starship.toml"
   )
   
   for symlink_spec in "${symlinks[@]}"; do
@@ -444,7 +443,6 @@ verify() {
     "$HOME/.config/alacritty/alacritty.toml:$REPO_DIR/alacritty/alacritty.toml"
     "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
     "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
-    "$HOME/.config/starship.toml:$REPO_DIR/starship.toml"
   )
   
   for symlink_check in "${symlinks_to_check[@]}"; do
