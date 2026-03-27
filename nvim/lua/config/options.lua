@@ -5,4 +5,4 @@
 vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/site")
 
 -- Colorscheme
-vim.g.lazyvim_colorscheme = "rose-pine"
+vim.g.lazyvim_colorscheme = "habamax"
