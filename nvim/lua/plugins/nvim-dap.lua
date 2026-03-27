@@ -12,6 +12,15 @@ local function get_args(config)
   return config
 end
 
+local function close_dap_floats()
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local config = vim.api.nvim_win_get_config(win)
+    if config.relative ~= "" then
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+end
+
 return {
   {
     "mfussenegger/nvim-dap",
@@ -42,7 +51,7 @@ return {
       { "<leader>do", function() require("dap").step_out() end, desc = "Step Out" },
       { "<leader>dO", function() require("dap").step_over() end, desc = "Step Over" },
       { "<leader>dp", function() require("dap").pause() end, desc = "Pause" },
-      { "<leader>dr", function() require("dap").repl.toggle() end, desc = "Toggle REPL" },
+      { "<leader>dr", function() require("dap").restart() end, desc = "Restart" },
       { "<leader>ds", function() require("dap").session() end, desc = "Session" },
       { "<leader>dt", function() require("dap").terminate() end, desc = "Terminate" },
       { "<leader>dw", function() require("dap.ui.widgets").hover() end, desc = "Widgets" },
@@ -291,11 +300,20 @@ return {
     dependencies = { "nvim-neotest/nvim-nio" },
     keys = {
       { "<leader>du", function() require("dapui").toggle() end, desc = "Toggle DAP UI" },
-      { "<leader>dub", function() require("dapui").float_element("breakpoints", { enter = true }) end, desc = "Breakpoints" },
-      { "<leader>duw", function() require("dapui").float_element("watches", { enter = true }) end, desc = "Watches" },
-      { "<leader>dus", function() require("dapui").float_element("stacks", { enter = true }) end, desc = "Stacks" },
-      { "<leader>duc", function() require("dapui").float_element("console", { enter = true }) end, desc = "Console" },
-      { "<leader>dur", function() require("dapui").float_element("repl", { enter = true }) end, desc = "REPL" },
+      { "<leader>dub", function() close_dap_floats(); require("dapui").float_element("breakpoints", { enter = true }) end, desc = "Breakpoints" },
+      { "<leader>duw", function() close_dap_floats(); require("dapui").float_element("watches", { enter = true }) end, desc = "Watches" },
+      { "<leader>dus", function() close_dap_floats(); require("dapui").float_element("stacks", { enter = true }) end, desc = "Stacks" },
+      { "<leader>duc", function()
+  close_dap_floats()
+  require("dapui").float_element("console", { enter = true })
+  vim.schedule(function()
+    local keys = { "i", "I", "a", "A", "o", "O", "s", "S", "c", "C", "r", "R" }
+    for _, key in ipairs(keys) do
+      vim.keymap.set("n", key, "<NOP>", { buffer = true })
+    end
+  end)
+end, desc = "Console" },
+      { "<leader>dur", function() close_dap_floats(); require("dapui").float_element("repl", { enter = true }) end, desc = "REPL" },
       { "<leader>de", function() require("dapui").eval() end, desc = "Eval", mode = { "n", "v" } },
     },
     opts = {
