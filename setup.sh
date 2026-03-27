@@ -322,6 +322,7 @@ create_symlinks() {
     "alacritty/alacritty.toml:$HOME/.config/alacritty/alacritty.toml"
     "zsh/.zshrc:$HOME/.zshrc"
     "zsh/p10k.zsh:$HOME/.p10k.zsh"
+    "starship.toml:$HOME/.config/starship.toml"
   )
   
   for symlink_spec in "${symlinks[@]}"; do
