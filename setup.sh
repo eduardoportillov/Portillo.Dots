@@ -327,13 +327,57 @@ install_dev_tools() {
   fi
 }
 
+create_nvim_symlinks() {
+  info "Setting up nvim config (directory + internal symlinks)..."
+  
+  local nvim_config="$HOME/.config/nvim"
+  local nvim_repo="$REPO_DIR/nvim"
+  
+  if [[ -L "$nvim_config" ]]; then
+    rm "$nvim_config"
+    ok "Removed old nvim directory symlink"
+  fi
+  
+  mkdir -p "$nvim_config"
+  
+  local nvim_links=(
+    "init.lua"
+    "lua"
+    "lazy-lock.json"
+    "lazyvim.json"
+    "stylua.toml"
+    ".gitignore"
+    ".neoconf.json"
+  )
+  
+  for item in "${nvim_links[@]}"; do
+    local src="$nvim_repo/$item"
+    local dst="$nvim_config/$item"
+    
+    if [[ ! -e "$src" ]]; then
+      continue
+    fi
+    
+    if [[ -L "$dst" ]] && [[ "$(readlink "$dst")" == "$src" ]]; then
+      ok "nvim/$item already linked"
+      continue
+    fi
+    
+    if [[ -e "$dst" ]] && [[ ! -L "$dst" ]]; then
+      backup "$dst"
+    fi
+    
+    ln -sf "$src" "$dst"
+    ok "Linked nvim/$item"
+  done
+}
+
 # === PASO 8: CREATE SYMLINKS ===
 create_symlinks() {
   info "Creating symlinks..."
   
   local symlinks=(
     "tmux/tmux.conf:$HOME/.tmux.conf"
-    "nvim:$HOME/.config/nvim"
     "alacritty/alacritty.toml:$HOME/.config/alacritty/alacritty.toml"
     "zsh/.zshrc:$HOME/.zshrc"
     "zsh/p10k.zsh:$HOME/.p10k.zsh"
@@ -344,25 +388,22 @@ create_symlinks() {
     local dst_path="${symlink_spec#*:}"
     local src_full="$REPO_DIR/$src_path"
     
-    # Create parent directory if needed
     mkdir -p "$(dirname "$dst_path")"
     
-    # Handle existing symlinks or files
     if [[ -L "$dst_path" ]]; then
-      # Already a symlink, update it
       ln -sf "$src_full" "$dst_path"
       ok "Updated symlink: $dst_path"
     elif [[ -e "$dst_path" ]]; then
-      # Real file/dir exists, backup it
       backup "$dst_path"
       ln -s "$src_full" "$dst_path"
       ok "Created symlink: $dst_path"
     else
-      # Doesn't exist, just create symlink
       ln -s "$src_full" "$dst_path"
       ok "Created symlink: $dst_path"
     fi
   done
+  
+  create_nvim_symlinks
 }
 
 # === PASO 9: INSTALL TMUX PLUGINS ===
@@ -455,10 +496,9 @@ verify() {
     error "✗ Hack Nerd Font"
   fi
   
-  # Symlinks
+  # Symlinks (standard)
   local symlinks_to_check=(
     "$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf"
-    "$HOME/.config/nvim:$REPO_DIR/nvim"
     "$HOME/.config/alacritty/alacritty.toml:$REPO_DIR/alacritty/alacritty.toml"
     "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
     "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
@@ -474,6 +514,29 @@ verify() {
       ok_count=$((ok_count + 1))
     else
       error "✗ $(basename "$target") symlink"
+    fi
+  done
+  
+  # Nvim: verify real directory + internal symlinks
+  total=$((total + 1))
+  if [[ -d "$HOME/.config/nvim" ]] && [[ ! -L "$HOME/.config/nvim" ]]; then
+    ok "✓ nvim config directory (real)"
+    ok_count=$((ok_count + 1))
+  else
+    error "✗ nvim config directory (expected real dir, got symlink or missing)"
+  fi
+  
+  local nvim_check_links=("init.lua" "lua" "lazy-lock.json" "stylua.toml" ".gitignore")
+  for item in "${nvim_check_links[@]}"; do
+    local nvim_target="$HOME/.config/nvim/$item"
+    local nvim_expected="$REPO_DIR/nvim/$item"
+    total=$((total + 1))
+    
+    if [[ -L "$nvim_target" ]] && [[ "$(readlink "$nvim_target")" == "$nvim_expected" ]]; then
+      ok "✓ nvim/$item symlink"
+      ok_count=$((ok_count + 1))
+    else
+      error "✗ nvim/$item symlink"
     fi
   done
   
