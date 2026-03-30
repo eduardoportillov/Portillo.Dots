@@ -348,6 +348,7 @@ create_nvim_symlinks() {
     "stylua.toml"
     ".gitignore"
     ".neoconf.json"
+    "db_ui"
   )
   
   for item in "${nvim_links[@]}"; do
@@ -526,7 +527,7 @@ verify() {
     error "✗ nvim config directory (expected real dir, got symlink or missing)"
   fi
   
-  local nvim_check_links=("init.lua" "lua" "lazy-lock.json" "stylua.toml" ".gitignore")
+  local nvim_check_links=("init.lua" "lua" "lazy-lock.json" "stylua.toml" ".gitignore" "db_ui")
   for item in "${nvim_check_links[@]}"; do
     local nvim_target="$HOME/.config/nvim/$item"
     local nvim_expected="$REPO_DIR/nvim/$item"

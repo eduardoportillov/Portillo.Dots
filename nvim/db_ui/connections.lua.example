@@ -1,0 +1,15 @@
+-- Template de conexiones para DBUI (vim-dadbod-ui)
+-- Copia este archivo a `connections.lua` y reemplaza las credenciales reales.
+
+return {
+  -- entrada como arreglo (mantiene el orden)
+  { name = "dev", url = "postgres://user:password@192.168.1.100:5432/dev_db" },
+  { name = "staging", url = "postgres://user:password@192.168.1.101:5432/staging_db" },
+  {
+    name = "production",
+    url = function()
+      -- Puedes devolver dinámicamente la URL si lo necesitas
+      return "postgres://user:password@192.168.1.200:5432/prod_db"
+    end,
+  },
+}

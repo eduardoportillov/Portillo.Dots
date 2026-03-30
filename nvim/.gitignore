@@ -12,3 +12,4 @@ lazy/
 mason/
 node_modules/
 .cache/
+db_ui/connections.lua

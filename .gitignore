@@ -8,3 +8,4 @@
 nvim/.tests/
 nvim/debug/
 nvim/data/
+nvim/db_ui/connections.lua
