@@ -9,3 +9,7 @@ nvim/.tests/
 nvim/debug/
 nvim/data/
 nvim/db_ui/connections.lua
+
+# Remote
+remote/.remote-bashrc
+remote/hosts.local.conf
