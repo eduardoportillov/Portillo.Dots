@@ -50,10 +50,10 @@ source $ZSH/oh-my-zsh.sh
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# NVM (Node Version Manager)
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+# Volta (Node/npm Version Manager) - replaces nvm
+# Volta is automatically initialized by the installer in ~/.bashrc / ~/.zshrc
+# No additional initialization needed here. Use `volta install` to manage tools globally
+# and `volta pin` in package.json for per-project versions.
 
 # SDKMAN (Java, Kotlin, Gradle) - manages JAVA_HOME automatically
 export SDKMAN_DIR="$HOME/.sdkman"
