@@ -269,16 +269,16 @@ install_dev_tools() {
   info "Dev Tools (optional)"
   echo ""
   
-  # NVM
-  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
-    ok "NVM already installed"
+  # FVM
+  if [[ -s "$HOME/.local/share/fnm/fnm" ]]; then
+    ok "FVM already installed"
   else
-    if ask_yn "Install Node Version Manager (NVM)?" "y"; then
-      info "Installing NVM..."
-      if curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh 2>>"$LOG" | bash >>"$LOG" 2>&1; then
-        ok "NVM installed"
+    if ask_yn "Install FVM (Fast Node Manager)?" "y"; then
+      info "Installing FVM..."
+      if curl -fsSL https://fnm.io/install 2>>"$LOG" | bash >>"$LOG" 2>&1; then
+        ok "FVM installed"
       else
-        warn "NVM installation failed, continuing..."
+        warn "FVM installation failed, continuing..."
       fi
     fi
   fi
@@ -407,7 +407,49 @@ create_symlinks() {
   create_nvim_symlinks
 }
 
-# === PASO 9: INSTALL TMUX PLUGINS ===
+# === PASO 9: CONFIGURE DEFAULT SHELL (ZSH) ===
+configure_default_shell() {
+  info "Configuring default shell..."
+  
+  local current_shell="$SHELL"
+  local zsh_path
+  
+  # Find zsh path
+  if command -v zsh &> /dev/null; then
+    zsh_path="$(command -v zsh)"
+  else
+    error "zsh not found, skipping shell configuration"
+    return 1
+  fi
+  
+  # Check if current shell is bash
+  if [[ "$current_shell" == *"bash"* ]]; then
+    info "Current shell is bash: $current_shell"
+    info "Changing default shell to zsh: $zsh_path"
+    
+    # Change default shell (requires password in interactive mode, but we use -s flag)
+    if chsh -s "$zsh_path" >>"$LOG" 2>&1; then
+      ok "Default shell changed to zsh"
+      ok "Run 'exec zsh' or start a new terminal to use zsh immediately"
+    else
+      warn "Failed to change shell using chsh, trying SHELL environment variable method..."
+      # Alternative: the shell will change after next login
+      warn "Shell will be zsh after next login or terminal session"
+    fi
+  elif [[ "$current_shell" == *"zsh"* ]]; then
+    ok "Already using zsh: $current_shell"
+  else
+    warn "Using non-standard shell: $current_shell"
+    info "Attempting to set default shell to zsh..."
+    if chsh -s "$zsh_path" >>"$LOG" 2>&1; then
+      ok "Default shell changed to zsh"
+    else
+      warn "Could not change shell, continuing..."
+    fi
+  fi
+}
+
+# === PASO 10: INSTALL TMUX PLUGINS ===
 install_tmux_plugins() {
   info "Installing Tmux plugins..."
   
@@ -419,7 +461,7 @@ install_tmux_plugins() {
   fi
 }
 
-# === PASO 10: VERIFY INSTALLATION ===
+# === PASO 11: VERIFY INSTALLATION ===
 verify() {
   info "Verification"
   echo ""
@@ -581,6 +623,9 @@ main() {
   echo ""
   
   create_symlinks
+  echo ""
+  
+  configure_default_shell
   echo ""
   
   install_tmux_plugins

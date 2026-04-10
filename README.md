@@ -63,7 +63,7 @@ The setup script is **idempotent**: run it multiple times without issues. Symlin
 
 ### Development Tools (optional via setup.sh)
 
-- **NVM** — Node Version Manager
+- **FVM** — Fast Node Manager
 - **SDKMAN** — Java, Kotlin, Gradle (auto-manages JAVA_HOME)
 - **Go** — Via Homebrew
 - **uv** — Python package/project manager
