@@ -1,5 +1,6 @@
 # Logs
 *.log
+logs/
 
 # Backups (local to repo workspace)
 .backup/

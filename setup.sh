@@ -6,7 +6,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
-LOG="$HOME/.dotfiles-setup.log"
+LOG="$REPO_DIR/logs/setup.log"
+mkdir -p "$REPO_DIR/logs"
 
 # === LOGGING ===
 log() {
@@ -72,10 +73,10 @@ ask_yn() {
   local response
   
   if [[ "$default" == "y" ]]; then
-    read -p "$(echo -e ${YELLOW}?)${NC} $prompt [Y/n]: " -r response
+    read -rp "$(echo -e "${YELLOW}?${NC}") $prompt [Y/n]: " response
     response="${response:-y}"
   else
-    read -p "$(echo -e ${YELLOW}?)${NC} $prompt [y/N]: " -r response
+    read -rp "$(echo -e "${YELLOW}?${NC}") $prompt [y/N]: " response
     response="${response:-n}"
   fi
   
@@ -381,7 +382,7 @@ setup_oh_my_zsh() {
   )
   
   for plugin_spec in "${plugins[@]}"; do
-    local plugin_name="${plugin_spec%:*}"
+    local plugin_name="${plugin_spec%%:*}"
     local plugin_url="${plugin_spec#*:}"
     local plugin_path="$custom_plugins_dir/$plugin_name"
     
@@ -422,16 +423,16 @@ install_dev_tools() {
   info "Dev Tools (optional)"
   echo ""
   
-  # FVM
-  if [[ -s "$HOME/.local/share/fnm/fnm" ]]; then
-    ok "FVM already installed"
+  # fnm (Fast Node Manager)
+  if command -v fnm &> /dev/null || [[ -f "$HOME/.local/share/fnm/fnm" ]] || [[ -f "$HOME/.fnm/fnm" ]]; then
+    ok "fnm already installed"
   else
-    if ask_yn "Install FVM (Fast Node Manager)?" "y"; then
-      info "Installing FVM..."
-      if curl -fsSL https://fnm.io/install 2>>"$LOG" | bash >>"$LOG" 2>&1; then
-        ok "FVM installed"
+    if ask_yn "Install fnm (Fast Node Manager for Node.js)?" "y"; then
+      info "Installing fnm..."
+      if curl -fsSL https://raw.githubusercontent.com/Schniz/fnm/master/.ci/install.sh 2>>"$LOG" | bash >>"$LOG" 2>&1; then
+        ok "fnm installed"
       else
-        warn "FVM installation failed, continuing..."
+        warn "fnm installation failed, continuing..."
       fi
     fi
   fi
@@ -442,12 +443,14 @@ install_dev_tools() {
   else
     if ask_yn "Install SDKMAN (Java, Kotlin, Gradle)?" "y"; then
       info "Installing SDKMAN..."
-      # SDKMAN needs unzip, ensure it's available
-      if ! command -v unzip &> /dev/null; then
-        warn "unzip required for SDKMAN, attempting to install..."
-        local pkg_manager="$(detect_pkg_manager)"
-        if [[ -n "$pkg_manager" ]]; then
-          install_system_packages "$pkg_manager" "unzip"
+      # SDKMAN needs unzip and zip, ensure both are available
+      local pkg_manager_sdk="$(detect_pkg_manager)"
+      if ! command -v unzip &> /dev/null || ! command -v zip &> /dev/null; then
+        warn "unzip/zip required for SDKMAN, attempting to install..."
+        if [[ -n "$pkg_manager_sdk" ]] && [[ "$pkg_manager_sdk" != "brew" ]]; then
+          install_system_packages "$pkg_manager_sdk" "unzip" "zip"
+        elif command -v brew &> /dev/null; then
+          brew install unzip zip >>"$LOG" 2>&1 || true
         fi
       fi
       
@@ -599,30 +602,34 @@ configure_default_shell() {
     return 1
   fi
   
-  # Check if current shell is bash
-  if [[ "$current_shell" == *"bash"* ]]; then
-    info "Current shell is bash: $current_shell"
-    info "Changing default shell to zsh: $zsh_path"
-    
-    # Change default shell (requires password in interactive mode, but we use -s flag)
-    if chsh -s "$zsh_path" >>"$LOG" 2>&1; then
-      ok "Default shell changed to zsh"
-      ok "Run 'exec zsh' or start a new terminal to use zsh immediately"
-    else
-      warn "Failed to change shell using chsh, trying SHELL environment variable method..."
-      # Alternative: the shell will change after next login
-      warn "Shell will be zsh after next login or terminal session"
-    fi
-  elif [[ "$current_shell" == *"zsh"* ]]; then
+  # Check if current shell is zsh already
+  if [[ "$current_shell" == *"zsh"* ]]; then
     ok "Already using zsh: $current_shell"
-  else
-    warn "Using non-standard shell: $current_shell"
-    info "Attempting to set default shell to zsh..."
-    if chsh -s "$zsh_path" >>"$LOG" 2>&1; then
-      ok "Default shell changed to zsh"
+    return 0
+  fi
+  
+  info "Current shell is: $current_shell"
+  info "Attempting to set default shell to zsh: $zsh_path"
+  
+  # Ensure zsh is listed in /etc/shells (required for chsh)
+  if ! grep -qxF "$zsh_path" /etc/shells 2>/dev/null; then
+    info "Adding $zsh_path to /etc/shells..."
+    if echo "$zsh_path" | sudo tee -a /etc/shells >>"$LOG" 2>&1; then
+      ok "Added $zsh_path to /etc/shells"
     else
-      warn "Could not change shell, continuing..."
+      warn "Could not add zsh to /etc/shells (may need sudo)"
     fi
+  fi
+  
+  # Try chsh with sudo first (avoids PAM issues in scripts)
+  if sudo chsh -s "$zsh_path" "$USER" >>"$LOG" 2>&1; then
+    ok "Default shell changed to zsh (run 'exec zsh' or open a new terminal)"
+  elif chsh -s "$zsh_path" >>"$LOG" 2>&1; then
+    ok "Default shell changed to zsh (run 'exec zsh' or open a new terminal)"
+  else
+    warn "Could not change shell automatically."
+    warn "To set zsh manually, run: chsh -s $zsh_path"
+    warn "Or add to your .bashrc: exec zsh"
   fi
 }
 
