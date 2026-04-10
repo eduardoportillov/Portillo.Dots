@@ -8,6 +8,7 @@ ARCH="$(uname -m)"
 BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
 LOG="$REPO_DIR/logs/setup.log"
 AUTO_YES=false
+APT_UPDATED=false
 mkdir -p "$REPO_DIR/logs"
 
 # === ARG PARSING ===
@@ -153,7 +154,10 @@ install_system_packages() {
   
   case "$pkg_manager" in
     apt)
-      sudo apt-get update -qq >>"$LOG" 2>&1
+      if [[ "$APT_UPDATED" != true ]]; then
+        sudo apt-get update -qq >>"$LOG" 2>&1
+        APT_UPDATED=true
+      fi
       for pkg in "${packages[@]}"; do
         info "Installing $pkg..."
         sudo apt-get install -y "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
@@ -246,10 +250,15 @@ install_brew_packages() {
   info "Installing packages..."
   
   local packages=(
-    "git" "curl" "unzip" "tmux" "neovim" "ripgrep" "fd" "fzf" "bat"
+    "git" "curl" "unzip" "zip" "tmux" "neovim" "ripgrep" "fd" "fzf" "bat"
     "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin" "go"
   )
-  
+
+  # Linux-only packages
+  if [[ "$PLATFORM" == "linux" ]]; then
+    packages+=("xclip")
+  fi
+
   # If brew is available, use it
   if command -v brew &> /dev/null; then
     for pkg in "${packages[@]}"; do
@@ -518,6 +527,29 @@ install_dev_tools() {
       fi
     fi
   fi
+
+  # copyq
+  if command -v copyq &> /dev/null; then
+    ok "copyq already installed"
+  else
+    if ask_yn "Install CopyQ (clipboard manager)?" "y"; then
+      info "Installing copyq..."
+      if [[ "$PLATFORM" == "mac" ]]; then
+        if brew install --cask copyq >>"$LOG" 2>&1; then
+          ok "copyq installed"
+        else
+          warn "copyq installation failed, continuing..."
+        fi
+      else
+        local pm_copyq="$(detect_pkg_manager)"
+        if [[ -n "$pm_copyq" ]] && [[ "$pm_copyq" != "brew" ]]; then
+          install_system_packages "$pm_copyq" "copyq"
+        elif command -v brew &> /dev/null; then
+          brew install copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq installation failed, continuing..."
+        fi
+      fi
+    fi
+  fi
 }
 
 create_nvim_symlinks() {
@@ -672,7 +704,9 @@ verify() {
   )
   
   if [[ "$PLATFORM" == "linux" ]]; then
-    binaries+=("xclip")
+    binaries+=("xclip" "copyq")
+  else
+    binaries+=("copyq")
   fi
   
   for bin in "${binaries[@]}"; do
