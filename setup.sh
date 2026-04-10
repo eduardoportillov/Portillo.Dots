@@ -7,7 +7,15 @@ OS="$(uname -s)"
 ARCH="$(uname -m)"
 BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
 LOG="$REPO_DIR/logs/setup.log"
+AUTO_YES=false
 mkdir -p "$REPO_DIR/logs"
+
+# === ARG PARSING ===
+for arg in "$@"; do
+  case "$arg" in
+    -y|--yes) AUTO_YES=true ;;
+  esac
+done
 
 # === LOGGING ===
 log() {
@@ -71,6 +79,11 @@ ask_yn() {
   local prompt="$1"
   local default="${2:-y}"
   local response
+
+  if [[ "$AUTO_YES" == true ]]; then
+    echo -e "$(echo -e "${YELLOW}?${NC}") $prompt [Y/n]: y (auto)"
+    return 0
+  fi
   
   if [[ "$default" == "y" ]]; then
     read -rp "$(echo -e "${YELLOW}?${NC}") $prompt [Y/n]: " response
@@ -784,7 +797,20 @@ verify() {
 # === MAIN ===
 main() {
   banner
-  
+
+  # === SUDO: pedir contraseña una sola vez al inicio ===
+  if [[ "$PLATFORM" == "linux" ]]; then
+    info "Requesting sudo access (will be cached for the entire setup)..."
+    if ! sudo -v; then
+      error "sudo access required. Aborting."
+      exit 1
+    fi
+    # Mantener el ticket sudo activo en background mientras corre el script
+    ( while true; do sudo -n true; sleep 50; done ) &
+    SUDO_KEEPALIVE_PID=$!
+    trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
+  fi
+
   detect_os
   echo ""
   
