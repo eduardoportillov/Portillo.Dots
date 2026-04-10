@@ -110,50 +110,166 @@ detect_os() {
   echo "Platform: $PLATFORM, Architecture: $ARCH"
 }
 
+# === DETECT SYSTEM PACKAGE MANAGER ===
+detect_pkg_manager() {
+  if [[ "$PLATFORM" == "mac" ]]; then
+    echo "brew"
+  elif command -v apt-get &> /dev/null; then
+    echo "apt"
+  elif command -v pacman &> /dev/null; then
+    echo "pacman"
+  elif command -v yum &> /dev/null; then
+    echo "yum"
+  elif command -v dnf &> /dev/null; then
+    echo "dnf"
+  elif command -v zypper &> /dev/null; then
+    echo "zypper"
+  elif command -v apk &> /dev/null; then
+    echo "apk"
+  else
+    echo ""
+  fi
+}
+
+# === INSTALL SYSTEM PACKAGES ===
+install_system_packages() {
+  local pkg_manager="$1"
+  shift
+  local packages=("$@")
+  
+  case "$pkg_manager" in
+    apt)
+      sudo apt-get update -qq >>"$LOG" 2>&1
+      for pkg in "${packages[@]}"; do
+        info "Installing $pkg..."
+        sudo apt-get install -y "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
+      done
+      ;;
+    pacman)
+      for pkg in "${packages[@]}"; do
+        info "Installing $pkg..."
+        sudo pacman -S --noconfirm "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
+      done
+      ;;
+    yum|dnf)
+      for pkg in "${packages[@]}"; do
+        info "Installing $pkg..."
+        sudo "$pkg_manager" install -y "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
+      done
+      ;;
+    zypper)
+      for pkg in "${packages[@]}"; do
+        info "Installing $pkg..."
+        sudo zypper -n install "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
+      done
+      ;;
+    apk)
+      for pkg in "${packages[@]}"; do
+        info "Installing $pkg..."
+        sudo apk add "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
+      done
+      ;;
+    *)
+      warn "Unknown package manager, skipping installation"
+      return 1
+      ;;
+  esac
+}
+
 # === PASO 2: SETUP BREW ===
 setup_brew() {
   info "Setting up Homebrew..."
   
-  if ! command -v brew &> /dev/null; then
-    warn "Homebrew not found. Installing..."
-    if [[ "$PLATFORM" == "mac" ]]; then
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    else
-      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
-  else
+  if command -v brew &> /dev/null; then
     ok "Homebrew already installed"
+    if [[ "$PLATFORM" == "mac" ]]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    else
+      eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" 2>/dev/null || true
+    fi
+    return 0
   fi
   
-  # Source brew shellenv
+  # For Linux, try to install system basics first
+  if [[ "$PLATFORM" == "linux" ]]; then
+    local pkg_manager="$(detect_pkg_manager)"
+    if [[ -n "$pkg_manager" ]]; then
+      info "Installing essential system packages first ($pkg_manager)..."
+      install_system_packages "$pkg_manager" "git" "curl" "unzip" "sudo" "build-essential"
+    fi
+  fi
+  
+  # Try Homebrew installation
+  warn "Homebrew not found. Attempting installation..."
   if [[ "$PLATFORM" == "mac" ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   else
-    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>>"$LOG" || true
   fi
   
-  info "Running brew update..."
-  brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
+  # Try to source brew
+  if [[ "$PLATFORM" == "mac" ]] && [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+    ok "Homebrew initialized (macOS)"
+  elif [[ -f $HOME/.linuxbrew/bin/brew ]]; then
+    eval "$($HOME/.linuxbrew/bin/brew shellenv)"
+    ok "Homebrew initialized (Linux - user install)"
+  elif [[ -f /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    ok "Homebrew initialized (Linux - system install)"
+  else
+    warn "Homebrew installation failed or not available"
+  fi
+  
+  if command -v brew &> /dev/null; then
+    info "Running brew update..."
+    brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
+  fi
 }
 
 # === PASO 3: INSTALL BREW PACKAGES ===
 install_brew_packages() {
-  info "Installing Homebrew packages..."
+  info "Installing packages..."
   
   local packages=(
     "git" "curl" "unzip" "tmux" "neovim" "ripgrep" "fd" "fzf" "bat"
-    "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin"
-    "go"
+    "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin" "go"
   )
   
-  for pkg in "${packages[@]}"; do
-    if brew list "$pkg" &> /dev/null; then
-      ok "$pkg already installed"
+  # If brew is available, use it
+  if command -v brew &> /dev/null; then
+    for pkg in "${packages[@]}"; do
+      if brew list "$pkg" &> /dev/null; then
+        ok "$pkg already installed"
+      else
+        info "Installing $pkg with brew..."
+        brew install "$pkg" >>"$LOG" 2>&1 || warn "Failed to install $pkg with brew"
+      fi
+    done
+  else
+    # Fallback to system package manager
+    local pkg_manager="$(detect_pkg_manager)"
+    if [[ -n "$pkg_manager" ]]; then
+      info "Brew not available, using system package manager ($pkg_manager)..."
+      
+      # Map package names for different package managers
+      local pkg_list=()
+      for pkg in "${packages[@]}"; do
+        # Some packages have different names in different package managers
+        case "$pkg" in
+          lazygit|lazydocker|atuin|fzf|bat|ripgrep|fd|zoxide|tree-sitter|zsh|tmux|git|curl|unzip|neovim|go)
+            pkg_list+=("$pkg") ;;
+          *)
+            pkg_list+=("$pkg") ;;
+        esac
+      done
+      
+      install_system_packages "$pkg_manager" "${pkg_list[@]}"
     else
-      info "Installing $pkg..."
-      brew install "$pkg"
+      error "No package manager found and brew is not available. Please install packages manually."
+      return 1
     fi
-  done
+  fi
 }
 
 # === PASO 4: INSTALL FONTS ===
@@ -178,10 +294,14 @@ install_fonts() {
   # Install
   if [[ "$PLATFORM" == "mac" ]]; then
     info "Installing via Homebrew Cask (macOS)..."
-    if brew install --cask font-hack-nerd-font >>"$LOG" 2>&1; then
-      ok "Hack Nerd Font installed"
+    if command -v brew &> /dev/null; then
+      if brew install --cask font-hack-nerd-font >>"$LOG" 2>&1; then
+        ok "Hack Nerd Font installed"
+      else
+        warn "Font installation failed, continuing..."
+      fi
     else
-      warn "Font installation failed, continuing..."
+      warn "Homebrew not available, skipping font installation"
     fi
   else
     info "Installing via direct download (Linux)..."
@@ -190,6 +310,39 @@ install_fonts() {
     mkdir -p "$fonts_dir" "$tmp_dir"
     
     cd "$tmp_dir"
+    
+    # Check if unzip is available, if not try to install it
+    if ! command -v unzip &> /dev/null; then
+      warn "unzip not found, attempting to install..."
+      local pkg_manager="$(detect_pkg_manager)"
+      if [[ -n "$pkg_manager" ]]; then
+        install_system_packages "$pkg_manager" "unzip"
+      fi
+      
+      # Check again
+      if ! command -v unzip &> /dev/null; then
+        warn "unzip still not available, trying alternative extraction..."
+        # Try bsdtar or 7z or tar
+        if command -v bsdtar &> /dev/null; then
+          if curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.zip 2>>"$LOG"; then
+            bsdtar -xf Hack.zip -C "$tmp_dir" >>"$LOG" 2>&1 || true
+            cp "$tmp_dir"/*.ttf "$fonts_dir/" 2>/dev/null || true
+          fi
+        elif command -v 7z &> /dev/null; then
+          if curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.zip 2>>"$LOG"; then
+            7z x Hack.zip -o"$tmp_dir" >>"$LOG" 2>&1 || true
+            cp "$tmp_dir"/*.ttf "$fonts_dir/" 2>/dev/null || true
+          fi
+        else
+          warn "No extraction tool available (unzip, bsdtar, 7z), skipping font installation"
+        fi
+        cd - > /dev/null
+        rm -rf "$tmp_dir" 2>/dev/null || true
+        return 1
+      fi
+    fi
+    
+    # Now unzip should be available
     if curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.zip 2>>"$LOG"; then
       unzip -o Hack.zip -d "$tmp_dir" >>"$LOG" 2>&1 || true
       cp "$tmp_dir"/*.ttf "$fonts_dir/" 2>/dev/null || true
@@ -289,6 +442,15 @@ install_dev_tools() {
   else
     if ask_yn "Install SDKMAN (Java, Kotlin, Gradle)?" "y"; then
       info "Installing SDKMAN..."
+      # SDKMAN needs unzip, ensure it's available
+      if ! command -v unzip &> /dev/null; then
+        warn "unzip required for SDKMAN, attempting to install..."
+        local pkg_manager="$(detect_pkg_manager)"
+        if [[ -n "$pkg_manager" ]]; then
+          install_system_packages "$pkg_manager" "unzip"
+        fi
+      fi
+      
       if curl -s "https://get.sdkman.io" 2>>"$LOG" | bash >>"$LOG" 2>&1; then
         ok "SDKMAN installed"
       else
@@ -302,11 +464,26 @@ install_dev_tools() {
     ok "Go already installed"
   else
     if ask_yn "Install Go?" "y"; then
-      info "Installing Go via Homebrew..."
-      if brew install go >>"$LOG" 2>&1; then
-        ok "Go installed"
+      if command -v brew &> /dev/null; then
+        info "Installing Go via Homebrew..."
+        if brew install go >>"$LOG" 2>&1; then
+          ok "Go installed"
+        else
+          warn "Go installation failed, continuing..."
+        fi
       else
-        warn "Go installation failed, continuing..."
+        # Try system package manager
+        local pkg_manager="$(detect_pkg_manager)"
+        if [[ -n "$pkg_manager" ]]; then
+          info "Installing Go via $pkg_manager..."
+          if install_system_packages "$pkg_manager" "golang-go" 2>/dev/null; then
+            ok "Go installed"
+          else
+            warn "Go installation failed, continuing..."
+          fi
+        else
+          warn "Homebrew and system package manager not available for Go installation"
+        fi
       fi
     fi
   fi
