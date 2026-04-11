@@ -218,7 +218,7 @@ setup_brew() {
   fi
   
   # Try Homebrew installation
-  warn "Homebrew not found. Attempting installation..."
+  info "Homebrew not found. Installing..."
   if [[ "$PLATFORM" == "mac" ]]; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   else
@@ -387,7 +387,7 @@ setup_oh_my_zsh() {
   info "Setting up Oh My Zsh..."
   
   if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-    warn "Oh My Zsh not found. Installing..."
+    info "Oh My Zsh not found. Installing..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
   else
     ok "Oh My Zsh already installed"
@@ -437,6 +437,94 @@ setup_tpm() {
   else
     info "Installing TPM..."
     git clone -q https://github.com/tmux-plugins/tpm "$tpm_dir"
+  fi
+}
+
+# === PASO 7A: SETUP OPENCODE ===
+setup_opencode() {
+  info "Setting up OpenCode..."
+  
+  local opencode_config_dir="$HOME/.config/opencode"
+  local opencode_config_file="$opencode_config_dir/config.jsonc"
+  local template_file="$REPO_DIR/opencode/opencode.template.jsonc"
+  local env_file="$REPO_DIR/opencode/.env"
+  local generated_config="$REPO_DIR/opencode/opencode.jsonc"
+  local regenerate_script="$REPO_DIR/opencode/regenerate-config.sh"
+  
+  # Check template exists
+  if [[ ! -f "$template_file" ]]; then
+    warn "OpenCode template not found at $template_file, skipping"
+    return 1
+  fi
+  
+  # Make regenerate script executable
+  if [[ -f "$regenerate_script" ]]; then
+    chmod +x "$regenerate_script"
+  fi
+  
+  # Generate opencode.jsonc from template using .env as source of truth
+  if [[ -f "$env_file" ]]; then
+    info "Generating opencode.jsonc from template with .env variables..."
+    
+    # Read template
+    local config_content="$(<"$template_file")"
+    
+    # Replace ALL variables from .env dynamically
+    local var_count=0
+    while IFS='=' read -r key value; do
+      # Skip empty lines and comments
+      [[ -z "$key" ]] && continue
+      [[ "$key" =~ ^#.* ]] && continue
+      
+      # Trim whitespace
+      key="$(echo "$key" | xargs)"
+      value="$(echo "$value" | xargs)"
+      
+      # Replace {{VARIABLE}} with the value
+      config_content="${config_content//\{\{$key\}\}/$value}"
+      var_count=$((var_count + 1))
+    done < "$env_file"
+    
+    # Write generated config to repo
+    echo "$config_content" > "$generated_config"
+    ok "Generated opencode.jsonc with $var_count variables"
+  else
+    warn "OpenCode .env not found, using template as-is"
+    cp "$template_file" "$generated_config"
+  fi
+  
+  # Create symlink from ~/.config/opencode/config.jsonc to generated opencode.jsonc
+  mkdir -p "$opencode_config_dir"
+  
+  if [[ -L "$opencode_config_file" ]] && [[ "$(readlink "$opencode_config_file")" == "$generated_config" ]]; then
+    ok "OpenCode config symlink already correct"
+  elif [[ -e "$opencode_config_file" ]] && [[ ! -L "$opencode_config_file" ]]; then
+    backup "$opencode_config_file"
+    ln -sf "$generated_config" "$opencode_config_file"
+    ok "Created symlink for OpenCode config"
+  else
+    ln -sf "$generated_config" "$opencode_config_file"
+    ok "Created symlink for OpenCode config"
+  fi
+  
+  # Install OpenCode via brew (preferred) — do NOT rely on command -v opencode
+  # since it may find a Windows-mounted binary (e.g., /mnt/c/...) that won't work on Linux
+  if command -v brew &> /dev/null; then
+    if brew list opencode &>/dev/null 2>&1; then
+      ok "OpenCode already installed (brew)"
+    else
+      info "Installing OpenCode via brew (sst/tap)..."
+      brew install sst/tap/opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via brew"
+    fi
+  elif ! command -v opencode &> /dev/null; then
+    if command -v npm &> /dev/null; then
+      info "Installing OpenCode via npm..."
+      npm install -g opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via npm"
+    else
+      warn "Neither brew nor npm found, skipping OpenCode installation"
+    fi
+  else
+    ok "OpenCode already installed"
   fi
 }
 
@@ -541,11 +629,14 @@ install_dev_tools() {
           warn "copyq installation failed, continuing..."
         fi
       else
-        local pm_copyq="$(detect_pkg_manager)"
-        if [[ -n "$pm_copyq" ]] && [[ "$pm_copyq" != "brew" ]]; then
-          install_system_packages "$pm_copyq" "copyq"
-        elif command -v brew &> /dev/null; then
+        # On Linux: prefer brew (no sudo needed), fall back to system package manager
+        if command -v brew &> /dev/null; then
           brew install copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq installation failed, continuing..."
+        else
+          local pm_copyq="$(detect_pkg_manager)"
+          if [[ -n "$pm_copyq" ]]; then
+            install_system_packages "$pm_copyq" "copyq"
+          fi
         fi
       fi
     fi
@@ -700,7 +791,7 @@ verify() {
   
   # Binarios
   local binaries=(
-    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker"
+    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode"
   )
   
   if [[ "$PLATFORM" == "linux" ]]; then
@@ -755,6 +846,17 @@ verify() {
     ok_count=$((ok_count + 1))
   else
     error "✗ TPM"
+  fi
+
+  # OpenCode
+  total=$((total + 1))
+  local opencode_generated="$REPO_DIR/opencode/opencode.jsonc"
+  local opencode_config="$HOME/.config/opencode/config.jsonc"
+  if [[ -f "$opencode_generated" ]] && [[ -L "$opencode_config" ]] && [[ "$(readlink "$opencode_config")" == "$opencode_generated" ]]; then
+    ok "✓ OpenCode config (generated + symlinked)"
+    ok_count=$((ok_count + 1))
+  else
+    error "✗ OpenCode config"
   fi
   
   # Fonts
@@ -840,7 +942,8 @@ main() {
       exit 1
     fi
     # Mantener el ticket sudo activo en background mientras corre el script
-    ( while true; do sudo -n true; sleep 50; done ) &
+    # sudo -v refresca el timestamp de credenciales (sin -n para que no falle silenciosamente)
+    ( while true; do sudo -v 2>/dev/null; sleep 55; done ) &
     SUDO_KEEPALIVE_PID=$!
     trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
   fi
@@ -861,6 +964,9 @@ main() {
   echo ""
   
   setup_tpm
+  echo ""
+  
+  setup_opencode
   echo ""
   
   install_dev_tools

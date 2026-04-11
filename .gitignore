@@ -1,3 +1,5 @@
+/opencode/.env
+/opencode/opencode.jsonc
 # Logs
 *.log
 logs/

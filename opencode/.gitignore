@@ -1,0 +1,8 @@
+# OpenCode Generated Configuration
+# This file is generated from opencode.template.jsonc + .env
+# Do NOT commit this file - it contains sensitive information
+# To update: edit opencode.template.jsonc or .env, then run regenerate-config.sh
+opencode.jsonc
+
+# Local environment override (if needed)
+.env.local
