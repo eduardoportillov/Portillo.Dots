@@ -629,14 +629,24 @@ install_dev_tools() {
           warn "copyq installation failed, continuing..."
         fi
       else
-        # On Linux: prefer brew (no sudo needed), fall back to system package manager
-        if command -v brew &> /dev/null; then
-          brew install copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq installation failed, continuing..."
-        else
-          local pm_copyq="$(detect_pkg_manager)"
-          if [[ -n "$pm_copyq" ]]; then
-            install_system_packages "$pm_copyq" "copyq"
+        # On Linux: copyq is a macOS-only brew cask; install via apt with the hluk PPA
+        local pm_copyq="$(detect_pkg_manager)"
+        if [[ "$pm_copyq" == "apt" ]]; then
+          # Ensure add-apt-repository is available
+          if ! command -v add-apt-repository &>/dev/null; then
+            sudo apt-get install -y software-properties-common >>"$LOG" 2>&1 || true
           fi
+          if sudo add-apt-repository -y ppa:hluk/copyq >>"$LOG" 2>&1; then
+            sudo apt-get update -qq >>"$LOG" 2>&1
+            sudo apt-get install -y copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq installation failed, continuing..."
+          else
+            # PPA failed, try direct from apt (may exist in universe)
+            sudo apt-get install -y copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq not available in apt, skipping"
+          fi
+        elif [[ -n "$pm_copyq" ]]; then
+          install_system_packages "$pm_copyq" "copyq"
+        else
+          warn "No supported package manager for copyq on Linux, skipping"
         fi
       fi
     fi
@@ -750,6 +760,8 @@ configure_default_shell() {
   # Ensure zsh is listed in /etc/shells (required for chsh)
   if ! grep -qxF "$zsh_path" /etc/shells 2>/dev/null; then
     info "Adding $zsh_path to /etc/shells..."
+    # Refresh sudo ticket explicitly — the background keepalive may race with interactive prompts
+    sudo -v 2>/dev/null || sudo -v
     if echo "$zsh_path" | sudo tee -a /etc/shells >>"$LOG" 2>&1; then
       ok "Added $zsh_path to /etc/shells"
     else
@@ -758,6 +770,7 @@ configure_default_shell() {
   fi
   
   # Try chsh with sudo first (avoids PAM issues in scripts)
+  sudo -v 2>/dev/null || true  # Ensure ticket is fresh before chsh
   if sudo chsh -s "$zsh_path" "$USER" >>"$LOG" 2>&1; then
     ok "Default shell changed to zsh (run 'exec zsh' or open a new terminal)"
   elif chsh -s "$zsh_path" >>"$LOG" 2>&1; then
