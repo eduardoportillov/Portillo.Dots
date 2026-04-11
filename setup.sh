@@ -462,6 +462,12 @@ setup_opencode() {
     chmod +x "$regenerate_script"
   fi
   
+  # If .env doesn't exist but .env.example does, copy it so the user has a starting point
+  if [[ ! -f "$env_file" ]] && [[ -f "${env_file}.example" ]]; then
+    cp "${env_file}.example" "$env_file"
+    info "Copied .env.example → .env (fill in your API keys)"
+  fi
+
   # Generate opencode.jsonc from template using .env as source of truth
   if [[ -f "$env_file" ]]; then
     info "Generating opencode.jsonc from template with .env variables..."
@@ -541,6 +547,14 @@ install_dev_tools() {
       info "Installing fnm..."
       if curl -fsSL https://raw.githubusercontent.com/Schniz/fnm/master/.ci/install.sh 2>>"$LOG" | bash >>"$LOG" 2>&1; then
         ok "fnm installed"
+        # Install Node.js 22 LTS as default
+        local fnm_bin="$HOME/.local/share/fnm/fnm"
+        [[ ! -f "$fnm_bin" ]] && fnm_bin="$HOME/.fnm/fnm"
+        if [[ -f "$fnm_bin" ]]; then
+          info "Installing Node.js 22 LTS (default)..."
+          eval "$("$fnm_bin" env --shell bash)" 2>/dev/null
+          "$fnm_bin" install 22 >>"$LOG" 2>&1 && "$fnm_bin" default 22 >>"$LOG" 2>&1 && ok "Node.js 22 set as default" || warn "Node.js 22 install failed, set manually with: fnm install 22 && fnm default 22"
+        fi
       else
         warn "fnm installation failed, continuing..."
       fi
@@ -760,8 +774,6 @@ configure_default_shell() {
   # Ensure zsh is listed in /etc/shells (required for chsh)
   if ! grep -qxF "$zsh_path" /etc/shells 2>/dev/null; then
     info "Adding $zsh_path to /etc/shells..."
-    # Refresh sudo ticket explicitly — the background keepalive may race with interactive prompts
-    sudo -v 2>/dev/null || sudo -v
     if echo "$zsh_path" | sudo tee -a /etc/shells >>"$LOG" 2>&1; then
       ok "Added $zsh_path to /etc/shells"
     else
@@ -770,7 +782,6 @@ configure_default_shell() {
   fi
   
   # Try chsh with sudo first (avoids PAM issues in scripts)
-  sudo -v 2>/dev/null || true  # Ensure ticket is fresh before chsh
   if sudo chsh -s "$zsh_path" "$USER" >>"$LOG" 2>&1; then
     ok "Default shell changed to zsh (run 'exec zsh' or open a new terminal)"
   elif chsh -s "$zsh_path" >>"$LOG" 2>&1; then
@@ -954,9 +965,10 @@ main() {
       error "sudo access required. Aborting."
       exit 1
     fi
-    # Mantener el ticket sudo activo en background mientras corre el script
-    # sudo -v refresca el timestamp de credenciales (sin -n para que no falle silenciosamente)
-    ( while true; do sudo -v 2>/dev/null; sleep 55; done ) &
+    # Mantener el ticket sudo activo en background mientras corre el script.
+    # sudo -n true: nunca pide contraseña (no-interactive), solo refresca el ticket si sigue válido.
+    # Esto evita la condición de carrera entre el keepalive y los prompts del script principal.
+    ( while true; do sudo -n true 2>/dev/null; sleep 30; done ) &
     SUDO_KEEPALIVE_PID=$!
     trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
   fi
