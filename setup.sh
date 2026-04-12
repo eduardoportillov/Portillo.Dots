@@ -238,7 +238,17 @@ setup_brew() {
   else
     warn "Homebrew installation failed or not available"
   fi
-  
+
+  # Agregar brew shellenv al .bashrc para que también funcione en sesiones bash
+  if [[ "$PLATFORM" == "linux" ]] && command -v brew &>/dev/null; then
+    local brew_line='eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"'
+    if ! grep -qF 'linuxbrew' "$HOME/.bashrc" 2>/dev/null; then
+      echo >> "$HOME/.bashrc"
+      echo "# Homebrew" >> "$HOME/.bashrc"
+      echo "$brew_line" >> "$HOME/.bashrc"
+    fi
+  fi
+
   if command -v brew &> /dev/null; then
     info "Running brew update..."
     brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
@@ -958,19 +968,20 @@ verify() {
 main() {
   banner
 
-  # === SUDO: pedir contraseña una sola vez al inicio ===
+  # === SUDO: pedir contraseña UNA sola vez al inicio ===
+  # Usamos una regla temporal en sudoers para que ningún llamado posterior a sudo
+  # pida contraseña, independientemente del tiempo que tarde la instalación.
   if [[ "$PLATFORM" == "linux" ]]; then
     info "Requesting sudo access (will be cached for the entire setup)..."
     if ! sudo -v; then
       error "sudo access required. Aborting."
       exit 1
     fi
-    # Mantener el ticket sudo activo en background mientras corre el script.
-    # sudo -n true: nunca pide contraseña (no-interactive), solo refresca el ticket si sigue válido.
-    # Esto evita la condición de carrera entre el keepalive y los prompts del script principal.
-    ( while true; do sudo -n true 2>/dev/null; sleep 30; done ) &
-    SUDO_KEEPALIVE_PID=$!
-    trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
+    local _sudoers_tmp="/etc/sudoers.d/portillo-dots-setup"
+    echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee "$_sudoers_tmp" > /dev/null
+    sudo chmod 0440 "$_sudoers_tmp"
+    # Eliminar la regla temporal al salir (éxito o error)
+    trap 'sudo rm -f "$_sudoers_tmp" 2>/dev/null' EXIT
   fi
 
   detect_os
