@@ -223,7 +223,9 @@ setup_brew() {
   if [[ "$PLATFORM" == "mac" ]]; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   else
-    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>>"$LOG" || true
+    # </dev/null sella stdin: Homebrew no puede hacer sudo -v interactivo,
+    # lo que evita que registre su trap 'sudo -k' EXIT al terminar.
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null 2>>"$LOG" || true
   fi
   
   # Try to source brew
@@ -983,9 +985,13 @@ main() {
     error "sudo access required. Aborting."
     exit 1
   fi
-  # Extender timeout a infinito durante el setup — sin expiración
+  # Extender timeout a infinito durante el setup — inmune a sudo -k
+  # NOPASSWD:ALL bypasea timestamps completamente — sudo -k (que llama el
+  # installer de Homebrew al terminar) solo borra timestamps, no afecta NOPASSWD.
+  # La regla se borra al salir via trap. _sudoers_tmp es global (no local)
+  # para que el trap la vea correctamente después de que main() retorne.
   _sudoers_tmp="/etc/sudoers.d/portillo-dots-setup"
-  echo "Defaults:$USER timestamp_timeout=-1" | sudo tee "$_sudoers_tmp" > /dev/null
+  echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee "$_sudoers_tmp" > /dev/null
   sudo chmod 0440 "$_sudoers_tmp"
   trap 'sudo rm -f "$_sudoers_tmp" 2>/dev/null' EXIT
 
