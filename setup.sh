@@ -172,6 +172,50 @@ ask_yn() {
   [[ "$response" =~ ^[Yy]$ ]]
 }
 
+# === BREW SMART UPGRADE ===
+# Checks if a brew formula/cask is outdated, shows v_old → v_new, and upgrades.
+# Usage: brew_smart_upgrade <pkg> [--cask] [<display_name>]
+# Silently prints "up to date" if no update is available.
+# Prints warn (not error) on failure so the caller can continue.
+brew_smart_upgrade() {
+  local pkg="$1"
+  shift
+  local cask_args=()
+  local display_name="$pkg"
+
+  for arg in "$@"; do
+    case "$arg" in
+      --cask) cask_args=("--cask") ;;
+      *)      display_name="$arg" ;;
+    esac
+  done
+
+  local outdated_out outdated_rc
+  outdated_out=$(brew outdated "${cask_args[@]}" --verbose "$pkg" 2>/dev/null)
+  outdated_rc=$?
+
+  # brew outdated exits 0 when the package IS outdated (has a newer version)
+  if [[ $outdated_rc -ne 0 ]]; then
+    ok "$display_name up to date"
+    return 0
+  fi
+
+  # Parse "pkg (old_version) < new_version" or "pkg (old_version) != new_version"
+  local old_ver new_ver
+  old_ver=$(printf '%s' "$outdated_out" | grep -oE '\([^)]+\)' | tr -d '()' | head -1)
+  new_ver=$(printf '%s' "$outdated_out" | grep -oE '[<>!=]+[[:space:]]+[^[:space:]]+' | awk '{print $NF}' | head -1)
+
+  if [[ -n "$old_ver" && -n "$new_ver" ]]; then
+    info "Upgrading $display_name ($old_ver → $new_ver)..."
+  else
+    info "Upgrading $display_name..."
+  fi
+
+  brew upgrade "${cask_args[@]}" "$pkg" >>"$LOG" 2>&1 \
+    && ok "$display_name upgraded" \
+    || warn "Failed to upgrade $display_name"
+}
+
 # === SAFE GIT UPDATE ===
 safe_git_update() {
   local dir="$1"
@@ -272,14 +316,20 @@ install_system_packages() {
 # === PASO 2: SETUP BREW ===
 setup_brew() {
   info "Setting up Homebrew..."
-  
-  if command -v brew &> /dev/null; then
+
+  # Cargar brew al PATH si está instalado pero no en la sesión bash actual.
+  # Esto es necesario en runs subsecuentes donde el shell no fue reiniciado
+  # después del primer setup (brew no está en $PATH por defecto en bash).
+  if [[ "$PLATFORM" == "mac" ]] && [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -f /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" 2>/dev/null || true
+  elif [[ -f "$HOME/.linuxbrew/bin/brew" ]]; then
+    eval "$("$HOME/.linuxbrew/bin/brew" shellenv)" 2>/dev/null || true
+  fi
+
+  if command -v brew &>/dev/null; then
     ok "Homebrew already installed"
-    if [[ "$PLATFORM" == "mac" ]]; then
-      eval "$(/opt/homebrew/bin/brew shellenv)"
-    else
-      eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" 2>/dev/null || true
-    fi
     info "Running brew update..."
     brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
     return 0
@@ -348,12 +398,7 @@ install_brew_packages() {
   if command -v brew &> /dev/null; then
     for pkg in "${packages[@]}"; do
       if brew list "$pkg" &>/dev/null; then
-        if brew outdated "$pkg" &>/dev/null; then
-          info "Upgrading $pkg..."
-          brew upgrade "$pkg" >>"$LOG" 2>&1 && ok "$pkg upgraded" || warn "Failed to upgrade $pkg"
-        else
-          ok "$pkg up to date"
-        fi
+        brew_smart_upgrade "$pkg"
       else
         info "Installing $pkg..."
         brew install "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
@@ -607,12 +652,7 @@ setup_opencode() {
   # since it may find a Windows-mounted binary (e.g., /mnt/c/...) that won't work on Linux
   if command -v brew &>/dev/null; then
     if brew list opencode &>/dev/null 2>&1; then
-      if brew outdated opencode &>/dev/null; then
-        info "Upgrading OpenCode..."
-        brew upgrade opencode >>"$LOG" 2>&1 && ok "OpenCode upgraded" || warn "Failed to upgrade OpenCode"
-      else
-        ok "OpenCode up to date"
-      fi
+      brew_smart_upgrade opencode "OpenCode"
     else
       info "Installing OpenCode via brew (sst/tap)..."
       brew install sst/tap/opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via brew"
@@ -691,12 +731,7 @@ install_dev_tools() {
   if command -v go &>/dev/null; then
     # If installed via brew, check for newer version
     if command -v brew &>/dev/null && brew list go &>/dev/null 2>&1; then
-      if brew outdated go &>/dev/null; then
-        info "Upgrading Go..."
-        brew upgrade go >>"$LOG" 2>&1 && ok "Go upgraded" || warn "Go upgrade failed, continuing..."
-      else
-        ok "Go up to date"
-      fi
+      brew_smart_upgrade go "Go"
     else
       ok "Go up to date"
     fi
@@ -739,12 +774,7 @@ install_dev_tools() {
      || { [[ "$PLATFORM" == "mac" ]] && [[ -d "/Applications/CopyQ.app" ]]; }; then
     if [[ "$PLATFORM" == "mac" ]]; then
       # macOS: cask — brew outdated --cask solo actualiza si hay versión nueva
-      if brew outdated --cask copyq &>/dev/null 2>&1; then
-        info "Upgrading CopyQ..."
-        brew upgrade --cask copyq >>"$LOG" 2>&1 && ok "copyq upgraded" || warn "copyq upgrade failed, continuing..."
-      else
-        ok "copyq up to date"
-      fi
+      brew_smart_upgrade copyq --cask "CopyQ"
     else
       # Linux: apt --only-upgrade no reinstala si ya está al día
       local pm_copyq="$(detect_pkg_manager)"
@@ -927,12 +957,7 @@ install_alacritty() {
     if command -v brew &>/dev/null; then
       if [[ -d "/Applications/Alacritty.app" ]] || command -v alacritty &>/dev/null; then
         # Ya instalado — actualizar solo si hay versión nueva
-        if brew outdated --cask alacritty &>/dev/null 2>&1; then
-          info "Upgrading Alacritty..."
-          brew upgrade --cask alacritty >>"$LOG" 2>&1 && ok "alacritty upgraded" || warn "alacritty upgrade failed, continuing..."
-        else
-          ok "alacritty up to date"
-        fi
+        brew_smart_upgrade alacritty --cask "Alacritty"
       else
         info "Installing Alacritty..."
         brew install --cask alacritty >>"$LOG" 2>&1 && ok "alacritty installed" || warn "alacritty installation failed, continuing..."
@@ -953,10 +978,16 @@ install_alacritty() {
         ;;
     esac
 
-    # Obtener tag de la última release via GitHub API
-    local latest_version
-    latest_version=$(curl -fsSL "https://api.github.com/repos/alacritty/alacritty/releases/latest" 2>>"$LOG" \
-      | grep '"tag_name"' | head -1 | cut -d '"' -f 4)
+    # Obtener release completa (tag + assets) desde GitHub API en una sola llamada
+    local release_json latest_version
+    release_json=$(curl -fsSL "https://api.github.com/repos/alacritty/alacritty/releases/latest" 2>>"$LOG")
+
+    if [[ -z "$release_json" ]]; then
+      warn "Could not reach GitHub API for Alacritty, skipping"
+      return 0
+    fi
+
+    latest_version=$(echo "$release_json" | grep '"tag_name"' | head -1 | cut -d '"' -f 4)
 
     if [[ -z "$latest_version" ]]; then
       warn "Could not determine Alacritty version from GitHub API, skipping"
@@ -980,11 +1011,19 @@ install_alacritty() {
       info "Installing Alacritty $latest_version ($arch)..."
     fi
 
+    # Extraer la URL real del asset desde el JSON de la API (robusto ante cambios de naming)
+    local url
+    url=$(echo "$release_json" | grep '"browser_download_url"' \
+      | grep "${arch}\.tar\.gz" | head -1 | cut -d '"' -f 4)
+
+    if [[ -z "$url" ]]; then
+      warn "No .tar.gz asset found for $arch in Alacritty $latest_version release, skipping"
+      return 0
+    fi
+
     local bin_dir="$HOME/.local/bin"
     local tmp_dir="/tmp/alacritty-install-$$"
     mkdir -p "$bin_dir" "$tmp_dir"
-
-    local url="https://github.com/alacritty/alacritty/releases/download/${latest_version}/Alacritty-${latest_version}-${arch}.tar.gz"
 
     if curl -fLo "$tmp_dir/alacritty.tar.gz" "$url" 2>>"$LOG"; then
       if tar -xzf "$tmp_dir/alacritty.tar.gz" -C "$tmp_dir" 2>>"$LOG"; then
@@ -992,10 +1031,14 @@ install_alacritty() {
         chmod +x "$bin_dir/alacritty"
 
         # Desktop entry para el launcher del sistema
-        mkdir -p "$HOME/.local/share/applications"
-        curl -fLo "$HOME/.local/share/applications/Alacritty.desktop" \
-          "https://github.com/alacritty/alacritty/releases/download/${latest_version}/Alacritty.desktop" \
-          2>>"$LOG" || true
+        local desktop_url
+        desktop_url=$(echo "$release_json" | grep '"browser_download_url"' \
+          | grep '\.desktop"' | head -1 | cut -d '"' -f 4)
+        if [[ -n "$desktop_url" ]]; then
+          mkdir -p "$HOME/.local/share/applications"
+          curl -fLo "$HOME/.local/share/applications/Alacritty.desktop" \
+            "$desktop_url" 2>>"$LOG" || true
+        fi
 
         ok "alacritty installed/upgraded → $bin_dir/alacritty ($latest_version)"
       else
