@@ -10,6 +10,8 @@ LOG="$REPO_DIR/logs/setup.log"
 AUTO_YES=true
 APT_UPDATED=false
 mkdir -p "$REPO_DIR/logs"
+# Asegurar que ~/.local/bin esté en PATH durante el setup (necesario en Linux para binarios locales como alacritty)
+export PATH="$HOME/.local/bin:$PATH"
 
 # === ARG PARSING ===
 for arg in "$@"; do
@@ -822,7 +824,8 @@ install_tmux_plugins() {
 install_alacritty() {
   info "Installing Alacritty terminal..."
 
-  if command -v alacritty &>/dev/null; then
+  if command -v alacritty &>/dev/null \
+     || { [[ "$PLATFORM" == "mac" ]] && [[ -d "/Applications/Alacritty.app" ]]; }; then
     ok "alacritty already installed"
     return 0
   fi
@@ -900,7 +903,7 @@ verify() {
   
   # Binarios
   local binaries=(
-    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "alacritty"
+    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode"
   )
   
   if [[ "$PLATFORM" == "linux" ]]; then
@@ -918,6 +921,16 @@ verify() {
       error "✗ $bin"
     fi
   done
+  
+  # Alacritty — check específico por plataforma (macOS instala .app bundle, no binario en $PATH)
+  total=$((total + 1))
+  if command -v alacritty &>/dev/null \
+     || { [[ "$PLATFORM" == "mac" ]] && [[ -d "/Applications/Alacritty.app" ]]; }; then
+    ok "✓ alacritty"
+    ok_count=$((ok_count + 1))
+  else
+    error "✗ alacritty"
+  fi
   
   # Oh My Zsh
   total=$((total + 1))
