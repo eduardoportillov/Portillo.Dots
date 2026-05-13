@@ -970,20 +970,24 @@ main() {
   banner
 
   # === SUDO: pedir contraseña UNA sola vez al inicio (Linux y macOS) ===
-  # Usa un keepalive en background que refresca el timestamp de sudo cada 50s.
-  # La contraseña nunca se escribe en disco — sudo solo renueva el timestamp
-  # (macOS expira en ~5min, Linux en ~15min sin keepalive).
-  # -n: no-interactive, nunca prompts. </dev/null: sella stdin del subshell
-  # para que no robe input del terminal. Muere solo al salir via trap.
+  # Se autentica con sudo -v (interactivo, una sola vez) y luego escribe una
+  # regla temporal en sudoers que extiende el timeout a infinito (-1).
+  # Esto es más fiable que un keepalive porque el keepalive basado en TTY
+  # puede fallar si sudo vincula el timestamp al proceso principal en vez
+  # del subshell de background.
+  # Seguridad: timestamp_timeout=-1 solo extiende la sesión ya autenticada —
+  # NO elimina la autenticación (diferente a NOPASSWD:ALL).
+  # La regla se borra automáticamente al salir (éxito o error) via trap.
   info "Requesting sudo access (will be cached for the entire setup)..."
   if ! sudo -v; then
     error "sudo access required. Aborting."
     exit 1
   fi
-  # Keepalive silencioso — sin modificar sudoers, compatible Linux y macOS
-  ( while true; do sudo -v -n 2>/dev/null; sleep 50; done ) </dev/null &
-  _sudo_keepalive_pid=$!
-  trap 'kill "$_sudo_keepalive_pid" 2>/dev/null' EXIT
+  # Extender timeout a infinito durante el setup — sin expiración
+  _sudoers_tmp="/etc/sudoers.d/portillo-dots-setup"
+  echo "Defaults:$USER timestamp_timeout=-1" | sudo tee "$_sudoers_tmp" > /dev/null
+  sudo chmod 0440 "$_sudoers_tmp"
+  trap 'sudo rm -f "$_sudoers_tmp" 2>/dev/null' EXIT
 
   detect_os
   echo ""
