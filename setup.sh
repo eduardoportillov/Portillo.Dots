@@ -18,8 +18,80 @@ for arg in "$@"; do
   case "$arg" in
     -y|--yes) AUTO_YES=true ;;
     -i|--interactive) AUTO_YES=false ;;
+    -h|--help) SHOW_HELP=true ;;
   esac
 done
+
+# === HELP ===
+show_help() {
+  cat <<'EOF'
+Usage: ./setup.sh [OPTIONS]
+
+Installs and updates the full Portillo dotfiles stack.
+Smart mode: installs if not present, upgrades only if a newer version exists.
+
+OPTIONS:
+  -h, --help          Show this help message and exit
+  -i, --interactive   Prompt before each optional install (default: auto-yes)
+  -y, --yes           Auto-accept all prompts (default)
+
+WHAT THIS SCRIPT DOES (in order):
+
+  1. Detect OS & architecture (macOS / Linux x86_64 / Linux arm64)
+
+  2. Homebrew — install if missing; run 'brew update' to refresh index
+     macOS: /opt/homebrew | Linux: Linuxbrew at /home/linuxbrew
+
+  3. Core packages — install or upgrade if newer version available:
+       git, curl, unzip, zip, tmux, neovim, ripgrep, fd, fzf, bat,
+       lazygit, lazydocker, zsh, tree-sitter, zoxide, atuin, go
+       Linux only: xclip
+     Uses 'brew outdated' on systems with brew; apt/pacman/etc on others.
+
+  4. Alacritty terminal emulator
+       macOS: brew cask (brew outdated --cask to detect updates)
+       Linux: GitHub Releases binary → ~/.local/bin/alacritty
+              (version-compared: only re-downloads if newer release exists)
+
+  5. Hack Nerd Font — installs if not found (no version check)
+
+  6. Oh My Zsh — installs or 'git pull' to update
+     Plugins (always updated via git pull):
+       zsh-autosuggestions, zsh-syntax-highlighting, you-should-use
+     Theme: powerlevel10k (git pull)
+
+  7. Tmux Plugin Manager (TPM) — installs or 'git pull' to update
+
+  8. OpenCode (AI coding agent)
+       brew: brew outdated opencode → upgrade if newer
+       npm fallback: npm update -g opencode
+
+  9. Dev tools (optional, auto-yes by default):
+       fnm        Fast Node Manager — re-runs installer (self-version-aware)
+                  + Node.js 22 LTS on first install
+       SDKMAN     Java/Kotlin/Gradle — install only (run 'sdk selfupdate' to update)
+       Go         brew outdated go / system package manager
+       uv         Python package manager — 'uv self update'
+       CopyQ      Clipboard manager
+                  macOS: brew outdated --cask copyq
+                  Linux: apt-get install --only-upgrade copyq
+
+ 10. Dotfile symlinks — always recreated (backup of originals kept in .backup/):
+       ~/.zshrc, ~/.p10k.zsh, ~/.tmux.conf,
+       ~/.config/nvim, ~/.config/alacritty/alacritty.toml,
+       ~/.config/opencode/config.json
+
+ 11. Set zsh as default shell
+
+ 12. Install tmux plugins via TPM
+
+ 13. Verify installation — prints ✓/✗ for every component
+
+LOG FILE: <repo>/logs/setup.log
+EOF
+}
+
+[[ "${SHOW_HELP:-false}" == "true" ]] && show_help && exit 0
 
 # === LOGGING ===
 log() {
@@ -208,6 +280,8 @@ setup_brew() {
     else
       eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" 2>/dev/null || true
     fi
+    info "Running brew update..."
+    brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
     return 0
   fi
   
@@ -254,10 +328,6 @@ setup_brew() {
     fi
   fi
 
-  if command -v brew &> /dev/null; then
-    info "Running brew update..."
-    brew update >>"$LOG" 2>&1 || warn "brew update failed, continuing..."
-  fi
 }
 
 # === PASO 3: INSTALL BREW PACKAGES ===
@@ -277,11 +347,16 @@ install_brew_packages() {
   # If brew is available, use it
   if command -v brew &> /dev/null; then
     for pkg in "${packages[@]}"; do
-      if brew list "$pkg" &> /dev/null; then
-        ok "$pkg already installed"
+      if brew list "$pkg" &>/dev/null; then
+        if brew outdated "$pkg" &>/dev/null; then
+          info "Upgrading $pkg..."
+          brew upgrade "$pkg" >>"$LOG" 2>&1 && ok "$pkg upgraded" || warn "Failed to upgrade $pkg"
+        else
+          ok "$pkg up to date"
+        fi
       else
-        info "Installing $pkg with brew..."
-        brew install "$pkg" >>"$LOG" 2>&1 || warn "Failed to install $pkg with brew"
+        info "Installing $pkg..."
+        brew install "$pkg" >>"$LOG" 2>&1 && ok "$pkg installed" || warn "Failed to install $pkg"
       fi
     done
   else
@@ -405,7 +480,7 @@ setup_oh_my_zsh() {
     info "Oh My Zsh not found. Installing..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
   else
-    ok "Oh My Zsh already installed"
+    safe_git_update "$HOME/.oh-my-zsh" "Oh My Zsh"
   fi
   
   # Setup custom plugins
@@ -530,33 +605,44 @@ setup_opencode() {
   
   # Install OpenCode via brew (preferred) — do NOT rely on command -v opencode
   # since it may find a Windows-mounted binary (e.g., /mnt/c/...) that won't work on Linux
-  if command -v brew &> /dev/null; then
+  if command -v brew &>/dev/null; then
     if brew list opencode &>/dev/null 2>&1; then
-      ok "OpenCode already installed (brew)"
+      if brew outdated opencode &>/dev/null; then
+        info "Upgrading OpenCode..."
+        brew upgrade opencode >>"$LOG" 2>&1 && ok "OpenCode upgraded" || warn "Failed to upgrade OpenCode"
+      else
+        ok "OpenCode up to date"
+      fi
     else
       info "Installing OpenCode via brew (sst/tap)..."
       brew install sst/tap/opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via brew"
     fi
-  elif ! command -v opencode &> /dev/null; then
-    if command -v npm &> /dev/null; then
+  elif command -v npm &>/dev/null; then
+    if command -v opencode &>/dev/null; then
+      info "Updating OpenCode via npm..."
+      npm update -g opencode >>"$LOG" 2>&1 && ok "OpenCode updated" || warn "Failed to update OpenCode via npm"
+    else
       info "Installing OpenCode via npm..."
       npm install -g opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via npm"
-    else
-      warn "Neither brew nor npm found, skipping OpenCode installation"
     fi
   else
-    ok "OpenCode already installed"
+    warn "Neither brew nor npm found, skipping OpenCode installation"
   fi
 }
 
-# === PASO 7: INSTALL DEV TOOLS (IDEMPOTENT) ===
+# === PASO 7: INSTALL DEV TOOLS ===
 install_dev_tools() {
   info "Dev Tools"
   echo ""
-  
-  # fnm (Fast Node Manager)
-  if command -v fnm &> /dev/null || [[ -f "$HOME/.local/share/fnm/fnm" ]] || [[ -f "$HOME/.fnm/fnm" ]]; then
-    ok "fnm already installed"
+
+  # fnm (Fast Node Manager) — install script detecta versión instalada y actualiza si hay nueva
+  if command -v fnm &>/dev/null || [[ -f "$HOME/.local/share/fnm/fnm" ]] || [[ -f "$HOME/.fnm/fnm" ]]; then
+    info "Updating fnm..."
+    if curl -fsSL https://raw.githubusercontent.com/Schniz/fnm/master/.ci/install.sh 2>>"$LOG" | bash >>"$LOG" 2>&1; then
+      ok "fnm up to date"
+    else
+      warn "fnm update failed, continuing..."
+    fi
   else
     if ask_yn "Install fnm (Fast Node Manager for Node.js)?" "y"; then
       info "Installing fnm..."
@@ -568,31 +654,31 @@ install_dev_tools() {
         if [[ -f "$fnm_bin" ]]; then
           info "Installing Node.js 22 LTS (default)..."
           eval "$("$fnm_bin" env --shell bash)" 2>/dev/null
-          "$fnm_bin" install 22 >>"$LOG" 2>&1 && "$fnm_bin" default 22 >>"$LOG" 2>&1 && ok "Node.js 22 set as default" || warn "Node.js 22 install failed, set manually with: fnm install 22 && fnm default 22"
+          "$fnm_bin" install 22 >>"$LOG" 2>&1 && "$fnm_bin" default 22 >>"$LOG" 2>&1 \
+            && ok "Node.js 22 set as default" \
+            || warn "Node.js 22 install failed, set manually: fnm install 22 && fnm default 22"
         fi
       else
         warn "fnm installation failed, continuing..."
       fi
     fi
   fi
-  
-  # SDKMAN
+
+  # SDKMAN — manages its own updates via 'sdk selfupdate'
   if [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]]; then
-    ok "SDKMAN already installed"
+    ok "SDKMAN already installed (run 'sdk selfupdate' to update)"
   else
     if ask_yn "Install SDKMAN (Java, Kotlin, Gradle)?" "y"; then
       info "Installing SDKMAN..."
-      # SDKMAN needs unzip and zip, ensure both are available
       local pkg_manager_sdk="$(detect_pkg_manager)"
-      if ! command -v unzip &> /dev/null || ! command -v zip &> /dev/null; then
+      if ! command -v unzip &>/dev/null || ! command -v zip &>/dev/null; then
         warn "unzip/zip required for SDKMAN, attempting to install..."
         if [[ -n "$pkg_manager_sdk" ]] && [[ "$pkg_manager_sdk" != "brew" ]]; then
           install_system_packages "$pkg_manager_sdk" "unzip" "zip"
-        elif command -v brew &> /dev/null; then
+        elif command -v brew &>/dev/null; then
           brew install unzip zip >>"$LOG" 2>&1 || true
         fi
       fi
-      
       if curl -s "https://get.sdkman.io" 2>>"$LOG" | bash >>"$LOG" 2>&1; then
         ok "SDKMAN installed"
       else
@@ -600,39 +686,42 @@ install_dev_tools() {
       fi
     fi
   fi
-  
+
   # Go
-  if command -v go &> /dev/null; then
-    ok "Go already installed"
+  if command -v go &>/dev/null; then
+    # If installed via brew, check for newer version
+    if command -v brew &>/dev/null && brew list go &>/dev/null 2>&1; then
+      if brew outdated go &>/dev/null; then
+        info "Upgrading Go..."
+        brew upgrade go >>"$LOG" 2>&1 && ok "Go upgraded" || warn "Go upgrade failed, continuing..."
+      else
+        ok "Go up to date"
+      fi
+    else
+      ok "Go up to date"
+    fi
   else
     if ask_yn "Install Go?" "y"; then
-      if command -v brew &> /dev/null; then
+      if command -v brew &>/dev/null; then
         info "Installing Go via Homebrew..."
-        if brew install go >>"$LOG" 2>&1; then
-          ok "Go installed"
-        else
-          warn "Go installation failed, continuing..."
-        fi
+        brew install go >>"$LOG" 2>&1 && ok "Go installed" || warn "Go installation failed, continuing..."
       else
-        # Try system package manager
         local pkg_manager="$(detect_pkg_manager)"
         if [[ -n "$pkg_manager" ]]; then
           info "Installing Go via $pkg_manager..."
-          if install_system_packages "$pkg_manager" "golang-go" 2>/dev/null; then
-            ok "Go installed"
-          else
-            warn "Go installation failed, continuing..."
-          fi
+          install_system_packages "$pkg_manager" "golang-go" 2>/dev/null \
+            && ok "Go installed" || warn "Go installation failed, continuing..."
         else
-          warn "Homebrew and system package manager not available for Go installation"
+          warn "No package manager available for Go installation"
         fi
       fi
     fi
   fi
-  
-  # uv
-  if [[ -f "$HOME/.local/bin/uv" ]]; then
-    ok "uv already installed"
+
+  # uv (Python package manager) — has official self-update command (cross-platform)
+  if [[ -f "$HOME/.local/bin/uv" ]] || command -v uv &>/dev/null; then
+    info "Updating uv..."
+    uv self update >>"$LOG" 2>&1 && ok "uv up to date" || warn "uv self update failed, continuing..."
   else
     if ask_yn "Install uv (Python package manager)?" "y"; then
       info "Installing uv..."
@@ -646,22 +735,33 @@ install_dev_tools() {
   fi
 
   # copyq
-  if command -v copyq &> /dev/null; then
-    ok "copyq already installed"
+  if command -v copyq &>/dev/null \
+     || { [[ "$PLATFORM" == "mac" ]] && [[ -d "/Applications/CopyQ.app" ]]; }; then
+    if [[ "$PLATFORM" == "mac" ]]; then
+      # macOS: cask — brew outdated --cask solo actualiza si hay versión nueva
+      if brew outdated --cask copyq &>/dev/null 2>&1; then
+        info "Upgrading CopyQ..."
+        brew upgrade --cask copyq >>"$LOG" 2>&1 && ok "copyq upgraded" || warn "copyq upgrade failed, continuing..."
+      else
+        ok "copyq up to date"
+      fi
+    else
+      # Linux: apt --only-upgrade no reinstala si ya está al día
+      local pm_copyq="$(detect_pkg_manager)"
+      if [[ "$pm_copyq" == "apt" ]]; then
+        sudo apt-get install -y --only-upgrade copyq >>"$LOG" 2>&1 && ok "copyq up to date" || warn "copyq update failed, continuing..."
+      else
+        ok "copyq up to date"
+      fi
+    fi
   else
     if ask_yn "Install CopyQ (clipboard manager)?" "y"; then
       info "Installing copyq..."
       if [[ "$PLATFORM" == "mac" ]]; then
-        if brew install --cask copyq >>"$LOG" 2>&1; then
-          ok "copyq installed"
-        else
-          warn "copyq installation failed, continuing..."
-        fi
+        brew install --cask copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq installation failed, continuing..."
       else
-        # On Linux: copyq is a macOS-only brew cask; install via apt with the hluk PPA
         local pm_copyq="$(detect_pkg_manager)"
         if [[ "$pm_copyq" == "apt" ]]; then
-          # Ensure add-apt-repository is available
           if ! command -v add-apt-repository &>/dev/null; then
             sudo apt-get install -y software-properties-common >>"$LOG" 2>&1 || true
           fi
@@ -669,7 +769,6 @@ install_dev_tools() {
             sudo apt-get update -qq >>"$LOG" 2>&1
             sudo apt-get install -y copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq installation failed, continuing..."
           else
-            # PPA failed, try direct from apt (may exist in universe)
             sudo apt-get install -y copyq >>"$LOG" 2>&1 && ok "copyq installed" || warn "copyq not available in apt, skipping"
           fi
         elif [[ -n "$pm_copyq" ]]; then
@@ -824,18 +923,19 @@ install_tmux_plugins() {
 install_alacritty() {
   info "Installing Alacritty terminal..."
 
-  if command -v alacritty &>/dev/null \
-     || { [[ "$PLATFORM" == "mac" ]] && [[ -d "/Applications/Alacritty.app" ]]; }; then
-    ok "alacritty already installed"
-    return 0
-  fi
-
   if [[ "$PLATFORM" == "mac" ]]; then
     if command -v brew &>/dev/null; then
-      if brew install --cask alacritty >>"$LOG" 2>&1; then
-        ok "alacritty installed"
+      if [[ -d "/Applications/Alacritty.app" ]] || command -v alacritty &>/dev/null; then
+        # Ya instalado — actualizar solo si hay versión nueva
+        if brew outdated --cask alacritty &>/dev/null 2>&1; then
+          info "Upgrading Alacritty..."
+          brew upgrade --cask alacritty >>"$LOG" 2>&1 && ok "alacritty upgraded" || warn "alacritty upgrade failed, continuing..."
+        else
+          ok "alacritty up to date"
+        fi
       else
-        warn "alacritty installation failed, continuing..."
+        info "Installing Alacritty..."
+        brew install --cask alacritty >>"$LOG" 2>&1 && ok "alacritty installed" || warn "alacritty installation failed, continuing..."
       fi
     else
       warn "Homebrew not available, skipping alacritty installation"
@@ -854,21 +954,37 @@ install_alacritty() {
     esac
 
     # Obtener tag de la última release via GitHub API
-    local version
-    version=$(curl -fsSL "https://api.github.com/repos/alacritty/alacritty/releases/latest" 2>>"$LOG" \
+    local latest_version
+    latest_version=$(curl -fsSL "https://api.github.com/repos/alacritty/alacritty/releases/latest" 2>>"$LOG" \
       | grep '"tag_name"' | head -1 | cut -d '"' -f 4)
 
-    if [[ -z "$version" ]]; then
+    if [[ -z "$latest_version" ]]; then
       warn "Could not determine Alacritty version from GitHub API, skipping"
       return 0
+    fi
+
+    # Comparar versión instalada vs latest (solo re-descargar si hay diferencia)
+    local installed_version=""
+    if command -v alacritty &>/dev/null; then
+      installed_version="v$(alacritty --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    fi
+
+    if [[ -n "$installed_version" ]] && [[ "$installed_version" == "$latest_version" ]]; then
+      ok "alacritty up to date ($installed_version)"
+      return 0
+    fi
+
+    if [[ -n "$installed_version" ]]; then
+      info "Upgrading Alacritty $installed_version → $latest_version..."
+    else
+      info "Installing Alacritty $latest_version ($arch)..."
     fi
 
     local bin_dir="$HOME/.local/bin"
     local tmp_dir="/tmp/alacritty-install-$$"
     mkdir -p "$bin_dir" "$tmp_dir"
 
-    local url="https://github.com/alacritty/alacritty/releases/download/${version}/Alacritty-${version}-${arch}.tar.gz"
-    info "Downloading Alacritty ${version} (${arch})..."
+    local url="https://github.com/alacritty/alacritty/releases/download/${latest_version}/Alacritty-${latest_version}-${arch}.tar.gz"
 
     if curl -fLo "$tmp_dir/alacritty.tar.gz" "$url" 2>>"$LOG"; then
       if tar -xzf "$tmp_dir/alacritty.tar.gz" -C "$tmp_dir" 2>>"$LOG"; then
@@ -878,10 +994,10 @@ install_alacritty() {
         # Desktop entry para el launcher del sistema
         mkdir -p "$HOME/.local/share/applications"
         curl -fLo "$HOME/.local/share/applications/Alacritty.desktop" \
-          "https://github.com/alacritty/alacritty/releases/download/${version}/Alacritty.desktop" \
+          "https://github.com/alacritty/alacritty/releases/download/${latest_version}/Alacritty.desktop" \
           2>>"$LOG" || true
 
-        ok "alacritty installed → $bin_dir/alacritty"
+        ok "alacritty installed/upgraded → $bin_dir/alacritty ($latest_version)"
       else
         warn "Failed to extract Alacritty archive, skipping"
       fi
