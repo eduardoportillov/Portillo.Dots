@@ -818,7 +818,79 @@ install_tmux_plugins() {
   fi
 }
 
-# === PASO 11: VERIFY INSTALLATION ===
+# === PASO 11: INSTALL ALACRITTY ===
+install_alacritty() {
+  info "Installing Alacritty terminal..."
+
+  if command -v alacritty &>/dev/null; then
+    ok "alacritty already installed"
+    return 0
+  fi
+
+  if [[ "$PLATFORM" == "mac" ]]; then
+    if command -v brew &>/dev/null; then
+      if brew install --cask alacritty >>"$LOG" 2>&1; then
+        ok "alacritty installed"
+      else
+        warn "alacritty installation failed, continuing..."
+      fi
+    else
+      warn "Homebrew not available, skipping alacritty installation"
+    fi
+
+  else
+    # Linux: binary desde GitHub Releases (sin Rust, sin cargo)
+    local arch
+    case "$ARCH" in
+      x86_64)        arch="x86_64-unknown-linux-musl" ;;
+      aarch64|arm64) arch="aarch64-unknown-linux-musl" ;;
+      *)
+        warn "Unsupported architecture for Alacritty binary: $ARCH, skipping"
+        return 0
+        ;;
+    esac
+
+    # Obtener tag de la última release via GitHub API
+    local version
+    version=$(curl -fsSL "https://api.github.com/repos/alacritty/alacritty/releases/latest" 2>>"$LOG" \
+      | grep '"tag_name"' | head -1 | cut -d '"' -f 4)
+
+    if [[ -z "$version" ]]; then
+      warn "Could not determine Alacritty version from GitHub API, skipping"
+      return 0
+    fi
+
+    local bin_dir="$HOME/.local/bin"
+    local tmp_dir="/tmp/alacritty-install-$$"
+    mkdir -p "$bin_dir" "$tmp_dir"
+
+    local url="https://github.com/alacritty/alacritty/releases/download/${version}/Alacritty-${version}-${arch}.tar.gz"
+    info "Downloading Alacritty ${version} (${arch})..."
+
+    if curl -fLo "$tmp_dir/alacritty.tar.gz" "$url" 2>>"$LOG"; then
+      if tar -xzf "$tmp_dir/alacritty.tar.gz" -C "$tmp_dir" 2>>"$LOG"; then
+        mv "$tmp_dir/alacritty" "$bin_dir/alacritty"
+        chmod +x "$bin_dir/alacritty"
+
+        # Desktop entry para el launcher del sistema
+        mkdir -p "$HOME/.local/share/applications"
+        curl -fLo "$HOME/.local/share/applications/Alacritty.desktop" \
+          "https://github.com/alacritty/alacritty/releases/download/${version}/Alacritty.desktop" \
+          2>>"$LOG" || true
+
+        ok "alacritty installed → $bin_dir/alacritty"
+      else
+        warn "Failed to extract Alacritty archive, skipping"
+      fi
+    else
+      warn "Alacritty download failed (${url}), skipping"
+    fi
+
+    rm -rf "$tmp_dir" 2>/dev/null || true
+  fi
+}
+
+# === PASO 12: VERIFY INSTALLATION ===
 verify() {
   info "Verification"
   echo ""
@@ -828,7 +900,7 @@ verify() {
   
   # Binarios
   local binaries=(
-    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode"
+    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "alacritty"
   )
   
   if [[ "$PLATFORM" == "linux" ]]; then
@@ -1002,6 +1074,9 @@ main() {
   echo ""
   
   install_brew_packages
+  echo ""
+  
+  install_alacritty
   echo ""
   
   install_fonts
