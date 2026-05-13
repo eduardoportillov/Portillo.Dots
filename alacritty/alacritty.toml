@@ -1,79 +1,87 @@
-# --- 1. VENTANA Y ESTÉTICA ---
+# =============================================================
+#   ALACRITTY CONFIG — Linux
+# =============================================================
+
+# --- VENTANA Y ESTÉTICA ---
 [window]
 padding = { x = 12, y = 12 }
 dynamic_padding = true
-opacity = 0.95
-blur = true
-decorations = "full"
+opacity = 1.0
+blur = true          # Requiere compositor con soporte (Picom, KWin, etc.)
+decorations = "full" # En tiling WMs (i3, bspwm) considera cambiar a "None"
 startup_mode = "Windowed"
 
-# --- 2. FUENTES (Hack Nerd Font) ---
+# --- FUENTES (Hack Nerd Font) ---
 [font]
 size = 12.0
 
 [font.normal]
-family = "Hack Nerd Font Mono"
+family = "Hack Nerd Font"
 style = "Regular"
 
 [font.bold]
-family = "Hack Nerd Font Mono"
+family = "Hack Nerd Font"
 style = "Bold"
 
 [font.italic]
-family = "Hack Nerd Font Mono"
+family = "Hack Nerd Font"
 style = "Italic"
 
 [font.bold_italic]
-family = "Hack Nerd Font Mono"
+family = "Hack Nerd Font"
 style = "Bold Italic"
 
-# --- 3. CURSOR ---
+# --- CURSOR ---
 [cursor]
 style = { shape = "Beam", blinking = "On" }
 blink_timeout = 10
 
-# --- 4. COLORES (Tokyo Night Storm) ---
+# --- COLORES (Tokyo Night Storm) ---
 [colors.primary]
-background = "#1a1b26"
-foreground = "#e8e8f0"
+background = "#17171b"
+foreground = "#e6eef6"
+
+[colors.selection]
+background = "#2b2f35"
+text = "#e6eef6"
 
 [colors.normal]
-black =   "#15161e"
-red =     "#f7768e"
-green =   "#9ece6a"
-yellow =  "#e0af68"
-blue =    "#5b9cf5"
-magenta = "#bb9af7"
-cyan =    "#5dcfe9"
-white =   "#a9b1d6"
+black =   "#0f1114"
+red =     "#ff7b92"
+green =   "#9ef08a"
+yellow =  "#ffd580"
+blue =    "#7aa2ff"
+magenta = "#c79bff"
+cyan =    "#6be7e0"
+white =   "#cfd8ea"
 
 [colors.bright]
-black =   "#414868"
-red =     "#f7768e"
-green =   "#9ece6a"
-yellow =  "#e0af68"
+black =   "#5a6574"
+red =     "#ff92b0"
+green =   "#b4f09a"
+yellow =  "#ffe6a0"
 blue =    "#89b4ff"
-magenta = "#bb9af7"
-cyan =    "#7dd9ff"
-white =   "#c0caf5"
+magenta = "#d6b8ff"
+cyan =    "#8fefff"
+white =   "#e8f0ff"
 
-# --- 5. SELECCIÓN ---
+# --- SELECCIÓN ---
 [selection]
 save_to_clipboard = true
 
-# --- 6. HINTS (URLs - portable macOS/Linux) ---
+# --- HINTS ---
 [hints]
 alphabet = "jkhlndfsaugcvmoweyri"
 
 [[hints.enabled]]
-command = { program = "sh", args = ["-c", "uname -s | grep -q Darwin && open -R '{hint}' || xdg-open '{hint}'"] }
+command = { program = "xdg-open", args = ["{hint}"] }
 hyperlinks = true
 post_processing = true
 persist = false
-mouse = { enabled = true, mods = "Alt" }
-binding = { key = "Space", mods = "Shift" }
+mouse = { enabled = false, mods = "None" }
+binding = { key = "F24", mods = "Control|Shift" }
 
-# --- 7. RENDIMIENTO Y ENTORNO ---
+# --- RENDIMIENTO Y ENTORNO ---
 [env]
 TERM = "xterm-256color"
 
@@ -84,26 +92,32 @@ multiplier = 3
 [terminal]
 shell = { program = "/bin/zsh", args = ["--login"] }
 
-# --- 8. BELL ---
+# --- BELL ---
 [bell]
 animation = "EaseOutExpo"
 duration = 0
 
-# --- 9. KEYBINDINGS ---
+# --- KEYBINDINGS ---
 [keyboard]
 bindings = [
     { key = "Enter", mods = "Control", chars = "\u001b[13;5u" },
-    { key = "Enter", mods = "Shift",   chars = "\u001b[13;2u" },
+    { key = "Enter", mods = "Shift",   chars = "\u001b\r" },
+    { key = "Enter", mods = "Alt",     chars = "\u001b\r" },
+
     { key = "V", mods = "Control|Shift", action = "Paste" },
     { key = "C", mods = "Control|Shift", action = "Copy" },
     { key = "Equals", mods = "Control", action = "IncreaseFontSize" },
     { key = "Minus",  mods = "Control", action = "DecreaseFontSize" },
     { key = "Key0",   mods = "Control", action = "ResetFontSize" },
-   
-    # Saltar palabras con Alt + Flecha Izquierda/Derecha
-    { key = "Left",  mods = "Alt",   chars = "\u001bb" },
-    { key = "Right", mods = "Alt",   chars = "\u001bf" },
 
-    # Borrar palabra completa con Alt + Backspace (Opcional pero muy útil)
-    { key = "Back",  mods = "Alt",   chars = "\u001b\u007f" },
+    # Abrir directorio actual en el gestor de archivos
+    { key = "O", mods = "Control|Shift", chars = "xdg-open .\r" },
+
+    # Saltar palabras con Alt + Flecha Izquierda/Derecha
+    { key = "Left",  mods = "Alt", chars = "\u001bb" },
+    { key = "Right", mods = "Alt", chars = "\u001bf" },
+
+    # Borrar palabra completa con Alt + Backspace
+    { key = "Back",  mods = "Alt", chars = "\u001b\u007f" },
+    { key = "Return", mods = "Shift", chars = "\u001B\r" },
 ]

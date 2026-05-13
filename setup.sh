@@ -7,7 +7,7 @@ OS="$(uname -s)"
 ARCH="$(uname -m)"
 BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
 LOG="$REPO_DIR/logs/setup.log"
-AUTO_YES=false
+AUTO_YES=true
 APT_UPDATED=false
 mkdir -p "$REPO_DIR/logs"
 
@@ -15,6 +15,7 @@ mkdir -p "$REPO_DIR/logs"
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) AUTO_YES=true ;;
+    -i|--interactive) AUTO_YES=false ;;
   esac
 done
 
@@ -546,7 +547,7 @@ setup_opencode() {
 
 # === PASO 7: INSTALL DEV TOOLS (IDEMPOTENT) ===
 install_dev_tools() {
-  info "Dev Tools (optional)"
+  info "Dev Tools"
   echo ""
   
   # fnm (Fast Node Manager)
@@ -968,23 +969,21 @@ verify() {
 main() {
   banner
 
-  # === SUDO: pedir contraseña UNA sola vez al inicio ===
+  # === SUDO: pedir contraseña UNA sola vez al inicio (Linux y macOS) ===
   # Usa un keepalive en background que refresca el timestamp de sudo cada 50s.
   # La contraseña nunca se escribe en disco — sudo solo renueva el timestamp
-  # en /var/run/sudo/ (que expira por defecto a los 15min sin keepalive).
-  # No modifica sudoers. Si el script termina (éxito o error), el keepalive
-  # muere automáticamente via trap.
-  if [[ "$PLATFORM" == "linux" ]]; then
-    info "Requesting sudo access (will be cached for the entire setup)..."
-    if ! sudo -v; then
-      error "sudo access required. Aborting."
-      exit 1
-    fi
-    # Mantener credenciales activas en background (sin modificar sudoers)
-    ( while true; do sudo -v; sleep 50; done ) &
-    _sudo_keepalive_pid=$!
-    trap 'kill "$_sudo_keepalive_pid" 2>/dev/null' EXIT
+  # (macOS expira en ~5min, Linux en ~15min sin keepalive).
+  # -n: no-interactive, nunca prompts. </dev/null: sella stdin del subshell
+  # para que no robe input del terminal. Muere solo al salir via trap.
+  info "Requesting sudo access (will be cached for the entire setup)..."
+  if ! sudo -v; then
+    error "sudo access required. Aborting."
+    exit 1
   fi
+  # Keepalive silencioso — sin modificar sudoers, compatible Linux y macOS
+  ( while true; do sudo -v -n 2>/dev/null; sleep 50; done ) </dev/null &
+  _sudo_keepalive_pid=$!
+  trap 'kill "$_sudo_keepalive_pid" 2>/dev/null' EXIT
 
   detect_os
   echo ""
