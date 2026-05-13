@@ -190,15 +190,17 @@ brew_smart_upgrade() {
     esac
   done
 
-  local outdated_out outdated_rc
-  outdated_out=$(brew outdated "${cask_args[@]}" --verbose "$pkg" 2>/dev/null)
-  outdated_rc=$?
-
-  # brew outdated exits 0 when the package IS outdated (has a newer version)
-  if [[ $outdated_rc -ne 0 ]]; then
+  # Step 1: exit-code check (without --verbose).
+  # brew outdated <pkg>: exits 0 if outdated, exits 1 if up to date.
+  # Adding --verbose breaks this — it always exits 0 — so keep the checks separate.
+  if ! brew outdated "${cask_args[@]}" "$pkg" &>/dev/null; then
     ok "$display_name up to date"
     return 0
   fi
+
+  # Step 2: version info — only reached when the package IS outdated.
+  local outdated_out
+  outdated_out=$(brew outdated "${cask_args[@]}" --verbose "$pkg" 2>/dev/null)
 
   # Parse "pkg (old_version) < new_version" or "pkg (old_version) != new_version"
   local old_ver new_ver
@@ -967,88 +969,66 @@ install_alacritty() {
     fi
 
   else
-    # Linux: binary desde GitHub Releases (sin Rust, sin cargo)
-    local arch
-    case "$ARCH" in
-      x86_64)        arch="x86_64-unknown-linux-musl" ;;
-      aarch64|arm64) arch="aarch64-unknown-linux-musl" ;;
+    # Linux: Alacritty no longer ships pre-built binaries in GitHub Releases (v0.17.0+).
+    # Use the system package manager instead (available in Ubuntu 22.04+, Arch, Fedora, etc.)
+    local pm_alacritty
+    pm_alacritty="$(detect_pkg_manager)"
+
+    if command -v alacritty &>/dev/null; then
+      # Already installed — try to upgrade in-place
+      case "$pm_alacritty" in
+        apt)
+          sudo apt-get install -y --only-upgrade alacritty >>"$LOG" 2>&1 \
+            && ok "alacritty up to date" || warn "alacritty apt upgrade failed, continuing..."
+          ;;
+        pacman)
+          sudo pacman -S --noconfirm alacritty >>"$LOG" 2>&1 \
+            && ok "alacritty up to date" || warn "alacritty pacman upgrade failed, continuing..."
+          ;;
+        dnf|yum)
+          sudo "$pm_alacritty" upgrade -y alacritty >>"$LOG" 2>&1 \
+            && ok "alacritty up to date" || warn "alacritty $pm_alacritty upgrade failed, continuing..."
+          ;;
+        *)
+          ok "alacritty up to date (managed externally)"
+          ;;
+      esac
+      return 0
+    fi
+
+    # Fresh install
+    local installed_alacritty=false
+    case "$pm_alacritty" in
+      apt)
+        info "Installing alacritty via apt (Ubuntu 22.04+ universe)..."
+        if sudo apt-get install -y alacritty >>"$LOG" 2>&1; then
+          ok "alacritty installed"
+          installed_alacritty=true
+        else
+          warn "alacritty not found in apt (Ubuntu 22.04+ with universe enabled required)"
+        fi
+        ;;
+      pacman)
+        info "Installing alacritty via pacman..."
+        sudo pacman -S --noconfirm alacritty >>"$LOG" 2>&1 \
+          && ok "alacritty installed" && installed_alacritty=true \
+          || warn "alacritty pacman install failed, continuing..."
+        ;;
+      dnf|yum)
+        info "Installing alacritty via $pm_alacritty..."
+        sudo "$pm_alacritty" install -y alacritty >>"$LOG" 2>&1 \
+          && ok "alacritty installed" && installed_alacritty=true \
+          || warn "alacritty $pm_alacritty install failed, continuing..."
+        ;;
       *)
-        warn "Unsupported architecture for Alacritty binary: $ARCH, skipping"
-        return 0
+        warn "No supported package manager for alacritty on this distro"
         ;;
     esac
 
-    # Obtener release completa (tag + assets) desde GitHub API en una sola llamada
-    local release_json latest_version
-    release_json=$(curl -fsSL "https://api.github.com/repos/alacritty/alacritty/releases/latest" 2>>"$LOG")
-
-    if [[ -z "$release_json" ]]; then
-      warn "Could not reach GitHub API for Alacritty, skipping"
-      return 0
+    if [[ "$installed_alacritty" == false ]]; then
+      warn "Could not install alacritty automatically."
+      warn "Manual install: https://github.com/alacritty/alacritty/blob/master/INSTALL.md"
     fi
-
-    latest_version=$(echo "$release_json" | grep '"tag_name"' | head -1 | cut -d '"' -f 4)
-
-    if [[ -z "$latest_version" ]]; then
-      warn "Could not determine Alacritty version from GitHub API, skipping"
-      return 0
-    fi
-
-    # Comparar versión instalada vs latest (solo re-descargar si hay diferencia)
-    local installed_version=""
-    if command -v alacritty &>/dev/null; then
-      installed_version="v$(alacritty --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-    fi
-
-    if [[ -n "$installed_version" ]] && [[ "$installed_version" == "$latest_version" ]]; then
-      ok "alacritty up to date ($installed_version)"
-      return 0
-    fi
-
-    if [[ -n "$installed_version" ]]; then
-      info "Upgrading Alacritty $installed_version → $latest_version..."
-    else
-      info "Installing Alacritty $latest_version ($arch)..."
-    fi
-
-    # Extraer la URL real del asset desde el JSON de la API (robusto ante cambios de naming)
-    local url
-    url=$(echo "$release_json" | grep '"browser_download_url"' \
-      | grep "${arch}\.tar\.gz" | head -1 | cut -d '"' -f 4)
-
-    if [[ -z "$url" ]]; then
-      warn "No .tar.gz asset found for $arch in Alacritty $latest_version release, skipping"
-      return 0
-    fi
-
-    local bin_dir="$HOME/.local/bin"
-    local tmp_dir="/tmp/alacritty-install-$$"
-    mkdir -p "$bin_dir" "$tmp_dir"
-
-    if curl -fLo "$tmp_dir/alacritty.tar.gz" "$url" 2>>"$LOG"; then
-      if tar -xzf "$tmp_dir/alacritty.tar.gz" -C "$tmp_dir" 2>>"$LOG"; then
-        mv "$tmp_dir/alacritty" "$bin_dir/alacritty"
-        chmod +x "$bin_dir/alacritty"
-
-        # Desktop entry para el launcher del sistema
-        local desktop_url
-        desktop_url=$(echo "$release_json" | grep '"browser_download_url"' \
-          | grep '\.desktop"' | head -1 | cut -d '"' -f 4)
-        if [[ -n "$desktop_url" ]]; then
-          mkdir -p "$HOME/.local/share/applications"
-          curl -fLo "$HOME/.local/share/applications/Alacritty.desktop" \
-            "$desktop_url" 2>>"$LOG" || true
-        fi
-
-        ok "alacritty installed/upgraded → $bin_dir/alacritty ($latest_version)"
-      else
-        warn "Failed to extract Alacritty archive, skipping"
-      fi
-    else
-      warn "Alacritty download failed (${url}), skipping"
-    fi
-
-    rm -rf "$tmp_dir" 2>/dev/null || true
   fi
 }
 
@@ -1074,10 +1054,10 @@ verify() {
   for bin in "${binaries[@]}"; do
     total=$((total + 1))
     if command -v "$bin" &> /dev/null; then
-      ok "✓ $bin"
+      ok "$bin"
       ok_count=$((ok_count + 1))
     else
-      error "✗ $bin"
+      error "$bin"
     fi
   done
   
@@ -1085,39 +1065,39 @@ verify() {
   total=$((total + 1))
   if command -v alacritty &>/dev/null \
      || { [[ "$PLATFORM" == "mac" ]] && [[ -d "/Applications/Alacritty.app" ]]; }; then
-    ok "✓ alacritty"
+    ok "alacritty"
     ok_count=$((ok_count + 1))
   else
-    error "✗ alacritty"
+    error "alacritty"
   fi
   
   # Oh My Zsh
   total=$((total + 1))
   if [[ -d "$HOME/.oh-my-zsh" ]]; then
-    ok "✓ Oh My Zsh"
+    ok "Oh My Zsh"
     ok_count=$((ok_count + 1))
   else
-    error "✗ Oh My Zsh"
+    error "Oh My Zsh"
   fi
   
   # OMZ Plugins
   for plugin in "zsh-autosuggestions" "zsh-syntax-highlighting" "you-should-use"; do
     total=$((total + 1))
     if [[ -d "$HOME/.oh-my-zsh/custom/plugins/$plugin" ]]; then
-      ok "✓ $plugin"
+      ok "$plugin"
       ok_count=$((ok_count + 1))
     else
-      error "✗ $plugin"
+      error "$plugin"
     fi
   done
   
   # powerlevel10k
   total=$((total + 1))
   if [[ -d "$HOME/.oh-my-zsh/custom/themes/powerlevel10k" ]]; then
-    ok "✓ powerlevel10k"
+    ok "powerlevel10k"
     ok_count=$((ok_count + 1))
   else
-    error "✗ powerlevel10k"
+    error "powerlevel10k"
   fi
   
   # TPM
