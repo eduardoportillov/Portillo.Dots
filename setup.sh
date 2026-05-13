@@ -969,19 +969,21 @@ main() {
   banner
 
   # === SUDO: pedir contraseña UNA sola vez al inicio ===
-  # Usamos una regla temporal en sudoers para que ningún llamado posterior a sudo
-  # pida contraseña, independientemente del tiempo que tarde la instalación.
+  # Usa un keepalive en background que refresca el timestamp de sudo cada 50s.
+  # La contraseña nunca se escribe en disco — sudo solo renueva el timestamp
+  # en /var/run/sudo/ (que expira por defecto a los 15min sin keepalive).
+  # No modifica sudoers. Si el script termina (éxito o error), el keepalive
+  # muere automáticamente via trap.
   if [[ "$PLATFORM" == "linux" ]]; then
     info "Requesting sudo access (will be cached for the entire setup)..."
     if ! sudo -v; then
       error "sudo access required. Aborting."
       exit 1
     fi
-    local _sudoers_tmp="/etc/sudoers.d/portillo-dots-setup"
-    echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee "$_sudoers_tmp" > /dev/null
-    sudo chmod 0440 "$_sudoers_tmp"
-    # Eliminar la regla temporal al salir (éxito o error)
-    trap 'sudo rm -f "$_sudoers_tmp" 2>/dev/null' EXIT
+    # Mantener credenciales activas en background (sin modificar sudoers)
+    ( while true; do sudo -v; sleep 50; done ) &
+    _sudo_keepalive_pid=$!
+    trap 'kill "$_sudo_keepalive_pid" 2>/dev/null' EXIT
   fi
 
   detect_os
