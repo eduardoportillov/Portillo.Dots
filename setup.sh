@@ -659,16 +659,16 @@ setup_opencode() {
       info "Installing OpenCode via brew (sst/tap)..."
       brew install sst/tap/opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via brew"
     fi
-  elif command -v npm &>/dev/null; then
+  elif command -v pnpm &>/dev/null; then
     if command -v opencode &>/dev/null; then
-      info "Updating OpenCode via npm..."
-      npm update -g opencode >>"$LOG" 2>&1 && ok "OpenCode updated" || warn "Failed to update OpenCode via npm"
+      info "Updating OpenCode via pnpm..."
+      pnpm add -g opencode >>"$LOG" 2>&1 && ok "OpenCode updated" || warn "Failed to update OpenCode via pnpm"
     else
-      info "Installing OpenCode via npm..."
-      npm install -g opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via npm"
+      info "Installing OpenCode via pnpm..."
+      pnpm add -g opencode >>"$LOG" 2>&1 && ok "OpenCode installed" || warn "Failed to install OpenCode via pnpm"
     fi
   else
-    warn "Neither brew nor npm found, skipping OpenCode installation"
+    warn "Neither brew nor pnpm found, skipping OpenCode installation"
   fi
 }
 
@@ -704,6 +704,47 @@ install_dev_tools() {
         warn "fnm installation failed, continuing..."
       fi
     fi
+  fi
+
+  # pnpm — always latest; npm is shimmed to pnpm
+  # PNPM_HOME must be on PATH so the binary and global bins are found
+  export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
+  export PATH="$PNPM_HOME:$PATH"
+
+  if command -v pnpm &>/dev/null; then
+    info "Updating pnpm to latest..."
+    if pnpm self-update >>"$LOG" 2>&1; then
+      ok "pnpm up to date ($(pnpm --version 2>/dev/null))"
+    else
+      # self-update requires pnpm >= 7; fall back to npm-based upgrade
+      npm install -g pnpm@latest >>"$LOG" 2>&1 \
+        && ok "pnpm updated to $(pnpm --version 2>/dev/null)" \
+        || warn "pnpm self-update failed, continuing..."
+    fi
+  else
+    info "Installing pnpm (latest)..."
+    if curl -fsSL https://get.pnpm.io/install.sh 2>>"$LOG" | env PNPM_HOME="$PNPM_HOME" sh - >>"$LOG" 2>&1; then
+      # Re-source so pnpm is available for the rest of this run
+      export PATH="$PNPM_HOME:$PATH"
+      ok "pnpm installed ($(pnpm --version 2>/dev/null))"
+    else
+      warn "pnpm installation failed, continuing..."
+    fi
+  fi
+
+  # npm shim — redirect every bare `npm` call to pnpm
+  local npm_shim="$HOME/.local/bin/npm"
+  if [[ ! -f "$npm_shim" ]] || ! grep -q 'exec pnpm' "$npm_shim" 2>/dev/null; then
+    mkdir -p "$HOME/.local/bin"
+    cat > "$npm_shim" <<'EOF'
+#!/usr/bin/env sh
+# npm shim — transparently delegates to pnpm
+exec pnpm "$@"
+EOF
+    chmod +x "$npm_shim"
+    ok "npm → pnpm shim installed ($npm_shim)"
+  else
+    ok "npm shim up to date"
   fi
 
   # SDKMAN — manages its own updates via 'sdk selfupdate'
@@ -1042,7 +1083,7 @@ verify() {
   
   # Binarios
   local binaries=(
-    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode"
+    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "pnpm"
   )
   
   if [[ "$PLATFORM" == "linux" ]]; then

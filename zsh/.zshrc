@@ -50,9 +50,17 @@ source $ZSH/oh-my-zsh.sh
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# FVM (Fast Node Manager)
+# fnm (Fast Node Manager)
 export PATH="$HOME/.local/share/fnm:$PATH"
 eval "$(fnm env --use-on-cd)"
+
+# pnpm — default JS package manager; npm is aliased to pnpm
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+alias npm="pnpm"
 
 # SDKMAN (Java, Kotlin, Gradle) - manages JAVA_HOME automatically
 export SDKMAN_DIR="$HOME/.sdkman"
