@@ -180,12 +180,12 @@ ask_yn() {
 brew_smart_upgrade() {
   local pkg="$1"
   shift
-  local cask_args=()
+  local cask_flag=""
   local display_name="$pkg"
 
   for arg in "$@"; do
     case "$arg" in
-      --cask) cask_args=("--cask") ;;
+      --cask) cask_flag="--cask" ;;
       *)      display_name="$arg" ;;
     esac
   done
@@ -193,14 +193,16 @@ brew_smart_upgrade() {
   # Step 1: exit-code check (without --verbose).
   # brew outdated <pkg>: exits 0 if outdated, exits 1 if up to date.
   # Adding --verbose breaks this — it always exits 0 — so keep the checks separate.
-  if ! brew outdated "${cask_args[@]}" "$pkg" &>/dev/null; then
+  # Note: ${cask_flag:+$cask_flag} expands to --cask or nothing (zero words),
+  # compatible with bash 3.2 (macOS) and bash 5.x (Linux) under set -u.
+  if ! brew outdated ${cask_flag:+$cask_flag} "$pkg" &>/dev/null; then
     ok "$display_name up to date"
     return 0
   fi
 
   # Step 2: version info — only reached when the package IS outdated.
   local outdated_out
-  outdated_out=$(brew outdated "${cask_args[@]}" --verbose "$pkg" 2>/dev/null)
+  outdated_out=$(brew outdated ${cask_flag:+$cask_flag} --verbose "$pkg" 2>/dev/null)
 
   # Parse "pkg (old_version) < new_version" or "pkg (old_version) != new_version"
   local old_ver new_ver
@@ -213,7 +215,7 @@ brew_smart_upgrade() {
     info "Upgrading $display_name..."
   fi
 
-  brew upgrade "${cask_args[@]}" "$pkg" >>"$LOG" 2>&1 \
+  brew upgrade ${cask_flag:+$cask_flag} "$pkg" >>"$LOG" 2>&1 \
     && ok "$display_name upgraded" \
     || warn "Failed to upgrade $display_name"
 }
@@ -438,8 +440,9 @@ install_fonts() {
   
   # Check if already installed (platform-specific)
   if [[ "$PLATFORM" == "mac" ]]; then
-    # macOS: check if brew cask is installed
-    if brew list --cask 2>/dev/null | grep -q "font-hack-nerd-font"; then
+    # macOS: check brew cask OR font files in ~/Library/Fonts (e.g. manual install)
+    if brew list --cask 2>/dev/null | grep -q "font-hack-nerd-font" \
+       || ls ~/Library/Fonts/HackNerdFont* 2>/dev/null | grep -q .; then
       ok "Hack Nerd Font already installed"
       return 0
     fi
@@ -707,9 +710,11 @@ install_dev_tools() {
   fi
 
   # pnpm — always latest; npm is shimmed to pnpm
-  # PNPM_HOME must be on PATH so the binary and global bins are found
+  # PNPM_HOME must be on PATH so the binary and global bins are found.
+  # pnpm v10+ installs the pnpm binary to $PNPM_HOME/bin/; global package
+  # bins still land in $PNPM_HOME directly — so we need both on PATH.
   export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
-  export PATH="$PNPM_HOME:$PATH"
+  export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
 
   if command -v pnpm &>/dev/null; then
     info "Updating pnpm to latest..."
@@ -725,7 +730,7 @@ install_dev_tools() {
     info "Installing pnpm (latest)..."
     if curl -fsSL https://get.pnpm.io/install.sh 2>>"$LOG" | env PNPM_HOME="$PNPM_HOME" sh - >>"$LOG" 2>&1; then
       # Re-source so pnpm is available for the rest of this run
-      export PATH="$PNPM_HOME:$PATH"
+      export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
       ok "pnpm installed ($(pnpm --version 2>/dev/null))"
     else
       warn "pnpm installation failed, continuing..."
@@ -1088,8 +1093,18 @@ verify() {
   
   if [[ "$PLATFORM" == "linux" ]]; then
     binaries+=("xclip" "copyq")
-  else
-    binaries+=("copyq")
+  fi
+  
+  # copyq on macOS is a .app bundle with no CLI binary in PATH by default;
+  # check the app directory the same way the install logic does.
+  if [[ "$PLATFORM" == "mac" ]]; then
+    total=$((total + 1))
+    if command -v copyq &>/dev/null || [[ -d "/Applications/CopyQ.app" ]]; then
+      ok "copyq"
+      ok_count=$((ok_count + 1))
+    else
+      error "copyq"
+    fi
   fi
   
   for bin in "${binaries[@]}"; do
@@ -1163,15 +1178,27 @@ verify() {
   
   # Fonts
   total=$((total + 1))
-  # Temporarily disable pipefail for fc-list (SIGPIPE with grep -q)
-  set +o pipefail
-  if fc-list 2>&1 | grep -q "Hack Nerd Font"; then
-    set -o pipefail
-    ok "✓ Hack Nerd Font"
-    ok_count=$((ok_count + 1))
+  if [[ "$PLATFORM" == "mac" ]]; then
+    # macOS: fc-list doesn't index ~/Library/Fonts; check the files directly
+    if brew list --cask 2>/dev/null | grep -q "font-hack-nerd-font" \
+       || ls ~/Library/Fonts/HackNerdFont* 2>/dev/null | grep -q .; then
+      ok "✓ Hack Nerd Font"
+      ok_count=$((ok_count + 1))
+    else
+      error "✗ Hack Nerd Font"
+    fi
   else
-    set -o pipefail
-    error "✗ Hack Nerd Font"
+    # Linux: fontconfig indexes ~/.local/share/fonts; fc-list is reliable
+    # Temporarily disable pipefail for fc-list (SIGPIPE with grep -q)
+    set +o pipefail
+    if fc-list 2>&1 | grep -q "Hack Nerd Font"; then
+      set -o pipefail
+      ok "✓ Hack Nerd Font"
+      ok_count=$((ok_count + 1))
+    else
+      set -o pipefail
+      error "✗ Hack Nerd Font"
+    fi
   fi
   
   # Symlinks (standard)
