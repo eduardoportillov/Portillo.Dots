@@ -151,6 +151,20 @@ backup() {
   fi
 }
 
+symlink_file() {
+  local src="$1" dest="$2"
+  if [[ -L "$dest" ]] && [[ "$(readlink "$dest")" == "$src" ]]; then
+    ok "$(basename "$dest") symlink already correct"
+  elif [[ -e "$dest" ]] && [[ ! -L "$dest" ]]; then
+    backup "$dest"
+    ln -sf "$src" "$dest"
+    ok "Created symlink for $(basename "$dest")"
+  else
+    ln -sf "$src" "$dest"
+    ok "Created symlink for $(basename "$dest")"
+  fi
+}
+
 ask_yn() {
   local prompt="$1"
   local default="${2:-y}"
@@ -675,6 +689,158 @@ setup_opencode() {
   fi
 }
 
+# === PASO 7B: SETUP CLAUDE CODE ===
+setup_claude_code() {
+  info "Setting up Claude Code..."
+
+  # Ensure pnpm PATH is active (install_dev_tools exports these but re-export
+  # defensively so this function is self-contained)
+  export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
+  export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
+
+  # No official brew tap for Claude Code today — always pnpm. Structure kept
+  # parallel to setup_opencode so a future brew branch can slot in.
+  if command -v pnpm &>/dev/null; then
+    if command -v claude &>/dev/null; then
+      info "Updating Claude Code via pnpm..."
+      pnpm add -g @anthropic-ai/claude-code >>"$LOG" 2>&1 \
+        && ok "Claude Code updated ($(claude --version 2>/dev/null))" \
+        || warn "Failed to update Claude Code via pnpm"
+    else
+      info "Installing Claude Code via pnpm..."
+      pnpm add -g @anthropic-ai/claude-code >>"$LOG" 2>&1 \
+        && ok "Claude Code installed ($(claude --version 2>/dev/null))" \
+        || warn "Failed to install Claude Code via pnpm"
+    fi
+  else
+    warn "pnpm not found, skipping Claude Code installation"
+  fi
+
+  # Symlink user-level configs (settings.json + CLAUDE.md only).
+  # Do NOT symlink the whole ~/.claude/ directory — it also contains
+  # projects/, memory/, and .credentials.json which must NOT be in the repo.
+  mkdir -p "$HOME/.claude"
+  symlink_file "$REPO_DIR/claude/settings.json" "$HOME/.claude/settings.json"
+  symlink_file "$REPO_DIR/claude/CLAUDE.md"     "$HOME/.claude/CLAUDE.md"
+}
+
+# === PASO 7C: SETUP ZED ===
+setup_zed() {
+  info "Setting up Zed..."
+
+  # Install — brew cask on mac, official installer on Linux
+  if [[ "$PLATFORM" == "mac" ]]; then
+    if brew list --cask zed &>/dev/null 2>&1; then
+      brew_smart_upgrade zed --cask "Zed"
+    else
+      info "Installing Zed via brew (cask)..."
+      brew install --cask zed >>"$LOG" 2>&1 \
+        && ok "Zed installed" || warn "Zed install failed"
+    fi
+  else
+    if command -v zed &>/dev/null; then
+      info "Updating Zed via official installer..."
+      curl -f https://zed.dev/install.sh 2>>"$LOG" | sh >>"$LOG" 2>&1 \
+        && ok "Zed updated" || warn "Zed update failed"
+    else
+      info "Installing Zed via official installer..."
+      curl -f https://zed.dev/install.sh 2>>"$LOG" | sh >>"$LOG" 2>&1 \
+        && ok "Zed installed" || warn "Zed install failed"
+    fi
+  fi
+
+  # Symlink configs — Zed uses different base dirs per platform
+  local zed_dir
+  if [[ "$PLATFORM" == "mac" ]]; then
+    zed_dir="$HOME/.zed"
+  else
+    zed_dir="$HOME/.config/zed"
+  fi
+  mkdir -p "$zed_dir"
+  symlink_file "$REPO_DIR/zed/settings.json" "$zed_dir/settings.json"
+  symlink_file "$REPO_DIR/zed/keymap.json"   "$zed_dir/keymap.json"
+}
+
+# === PASO 7D: SETUP AEROSPACE (macOS only) ===
+setup_aerospace() {
+  [[ "$PLATFORM" != "mac" ]] && return 0
+  info "Setting up AeroSpace..."
+
+  if brew list --cask aerospace &>/dev/null 2>&1; then
+    brew_smart_upgrade aerospace --cask "AeroSpace"
+  else
+    info "Installing AeroSpace via brew tap (nikitabobko/tap)..."
+    brew install --cask nikitabobko/tap/aerospace >>"$LOG" 2>&1 \
+      && ok "AeroSpace installed" || warn "AeroSpace install failed"
+  fi
+
+  symlink_file "$REPO_DIR/aerospace/aerospace.toml" "$HOME/.aerospace.toml"
+
+  info "AeroSpace: grant Accessibility permission in System Settings → Privacy & Security."
+}
+
+# === PASO 7E: SETUP FORGE (Linux GNOME only) ===
+setup_forge() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+  if ! command -v gsettings &>/dev/null || ! command -v gnome-extensions &>/dev/null; then
+    info "GNOME not detected, skipping Forge setup"
+    return 0
+  fi
+  info "Setting up Forge..."
+
+  local forge_uuid="forge@jmmaranan.com"
+  if gnome-extensions list 2>/dev/null | grep -q "$forge_uuid"; then
+    ok "Forge already installed"
+  else
+    # Best-effort install — distro package first, then gnome-extensions-cli (gext)
+    local pm
+    pm="$(detect_pkg_manager)"
+    case "$pm" in
+      dnf|yum)
+        info "Installing Forge via $pm..."
+        sudo "$pm" install -y gnome-shell-extension-forge >>"$LOG" 2>&1 \
+          && ok "Forge installed via $pm" || warn "Forge $pm install failed"
+        ;;
+      pacman)
+        info "Installing Forge via pacman..."
+        sudo pacman -S --noconfirm gnome-shell-extension-forge >>"$LOG" 2>&1 \
+          && ok "Forge installed via pacman" \
+          || warn "Forge not in repos — try AUR or install manually: https://extensions.gnome.org/extension/4481/forge/"
+        ;;
+      apt|*)
+        # No apt package; try gext via pipx
+        if command -v pipx &>/dev/null || sudo apt-get install -y pipx >>"$LOG" 2>&1; then
+          pipx install gnome-extensions-cli >>"$LOG" 2>&1 || true
+          if command -v gext &>/dev/null; then
+            info "Installing Forge via gext..."
+            gext install "$forge_uuid" >>"$LOG" 2>&1 \
+              && ok "Forge installed via gext" \
+              || warn "gext install failed — install manually: https://extensions.gnome.org/extension/4481/forge/"
+          else
+            warn "gext not available — install Forge manually: https://extensions.gnome.org/extension/4481/forge/"
+          fi
+        else
+          warn "Install Forge manually: https://extensions.gnome.org/extension/4481/forge/"
+        fi
+        ;;
+    esac
+  fi
+
+  # Enable extension (no-op if already enabled or not installed)
+  gnome-extensions enable "$forge_uuid" 2>/dev/null || true
+
+  # Apply user-provided gsettings configuration script
+  local forge_script="$REPO_DIR/forge/configure.sh"
+  if [[ -f "$forge_script" ]]; then
+    chmod +x "$forge_script"
+    if bash "$forge_script" >>"$LOG" 2>&1; then
+      ok "Forge gsettings applied"
+    else
+      warn "Forge gsettings script failed (extension may not be enabled yet — restart GNOME Shell and re-run)"
+    fi
+  fi
+}
+
 # === PASO 7: INSTALL DEV TOOLS ===
 install_dev_tools() {
   info "Dev Tools"
@@ -1088,11 +1254,33 @@ verify() {
   
   # Binarios
   local binaries=(
-    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "pnpm"
+    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "pnpm" "claude" "zed"
   )
-  
+
   if [[ "$PLATFORM" == "linux" ]]; then
     binaries+=("xclip" "copyq")
+  fi
+
+  # AeroSpace — macOS only (no CLI binary in PATH; check .app bundle)
+  if [[ "$PLATFORM" == "mac" ]]; then
+    total=$((total + 1))
+    if [[ -d "/Applications/AeroSpace.app" ]]; then
+      ok "AeroSpace"
+      ok_count=$((ok_count + 1))
+    else
+      error "AeroSpace"
+    fi
+  fi
+
+  # Forge — Linux GNOME only (skip silently on non-GNOME / non-Linux)
+  if [[ "$PLATFORM" == "linux" ]] && command -v gnome-extensions &>/dev/null; then
+    total=$((total + 1))
+    if gnome-extensions list 2>/dev/null | grep -q "forge@jmmaranan.com"; then
+      ok "Forge extension"
+      ok_count=$((ok_count + 1))
+    else
+      error "Forge extension"
+    fi
   fi
   
   # copyq on macOS is a .app bundle with no CLI binary in PATH by default;
@@ -1201,19 +1389,38 @@ verify() {
     fi
   fi
   
-  # Symlinks (standard)
+  # Symlinks (standard, cross-platform)
   local symlinks_to_check=(
     "$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf"
     "$HOME/.config/alacritty/alacritty.toml:$REPO_DIR/alacritty/alacritty.toml"
     "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
     "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
+    "$HOME/.claude/settings.json:$REPO_DIR/claude/settings.json"
+    "$HOME/.claude/CLAUDE.md:$REPO_DIR/claude/CLAUDE.md"
   )
-  
+
+  # Zed — path differs per platform
+  local zed_dir
+  if [[ "$PLATFORM" == "mac" ]]; then
+    zed_dir="$HOME/.zed"
+  else
+    zed_dir="$HOME/.config/zed"
+  fi
+  symlinks_to_check+=(
+    "$zed_dir/settings.json:$REPO_DIR/zed/settings.json"
+    "$zed_dir/keymap.json:$REPO_DIR/zed/keymap.json"
+  )
+
+  # AeroSpace symlink — macOS only
+  if [[ "$PLATFORM" == "mac" ]]; then
+    symlinks_to_check+=("$HOME/.aerospace.toml:$REPO_DIR/aerospace/aerospace.toml")
+  fi
+
   for symlink_check in "${symlinks_to_check[@]}"; do
     local target="${symlink_check%:*}"
     local expected="${symlink_check#*:}"
     total=$((total + 1))
-    
+
     if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$expected" ]]; then
       ok "✓ $(basename "$target") symlink"
       ok_count=$((ok_count + 1))
@@ -1307,13 +1514,25 @@ main() {
   
   setup_tpm
   echo ""
-  
-  setup_opencode
-  echo ""
-  
+
   install_dev_tools
   echo ""
-  
+
+  setup_opencode
+  echo ""
+
+  setup_claude_code
+  echo ""
+
+  setup_zed
+  echo ""
+
+  setup_aerospace
+  echo ""
+
+  setup_forge
+  echo ""
+
   create_symlinks
   echo ""
   
