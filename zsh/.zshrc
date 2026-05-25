@@ -3,6 +3,17 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
+# fnm (Fast Node Manager) - Node version manager
+FNM_PATH="/home/uplabsai/.local/share/fnm"
+if [ -d "$FNM_PATH" ]; then
+  export PATH="$FNM_PATH:$PATH"
+  eval "$(fnm env --shell zsh)"
+  # npm global bin (must be after fnm to override its PATH modifications)
+  if [ -d "$HOME/.local/npm-global/bin" ]; then
+    export PATH="$HOME/.local/npm-global/bin:$PATH"
+  fi
+fi
+
 # OS detection
 _PORTILLO_OS="$(uname -s)"
 if [[ "$_PORTILLO_OS" == "Darwin" ]]; then
@@ -49,11 +60,6 @@ source $ZSH/oh-my-zsh.sh
 
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-# Volta (Node/npm Version Manager) - replaces nvm
-# Volta is automatically initialized by the installer in ~/.bashrc / ~/.zshrc
-# No additional initialization needed here. Use `volta install` to manage tools globally
-# and `volta pin` in package.json for per-project versions.
 
 # SDKMAN (Java, Kotlin, Gradle) - manages JAVA_HOME automatically
 export SDKMAN_DIR="$HOME/.sdkman"
@@ -111,3 +117,4 @@ alias mkdir='mkdir -p'
 alias grep='grep --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
+
