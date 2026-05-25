@@ -43,7 +43,10 @@ plugins=(
   web-search
   zsh-autosuggestions
   zsh-syntax-highlighting
-  you-should-use
+  # you-should-use — disabled: reminds you to use aliases instead of full
+  # commands (e.g. "use gl instead of git pull"), which defeats the purpose
+  # of actually learning the real commands.
+  # you-should-use
   copyfile
   copypath
   fzf
@@ -61,6 +64,18 @@ source $ZSH/oh-my-zsh.sh
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+# fnm (Fast Node Manager)
+export PATH="$HOME/.local/share/fnm:$PATH"
+eval "$(fnm env --use-on-cd)"
+
+# pnpm — default JS package manager; npm is shimmed to pnpm via ~/.local/bin/npm
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME/bin:"*) ;;
+  *) export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH" ;;
+esac
+alias npm="pnpm"
+
 # SDKMAN (Java, Kotlin, Gradle) - manages JAVA_HOME automatically
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"
@@ -72,7 +87,7 @@ fi
 
 # uv (Python package manager)
 if [ -f "$HOME/.local/bin/uv" ]; then
-  export PATH="$HOME/.local/bin:$PATH"
+  : # binary lives in ~/.local/bin — added to PATH at the end of this file
 fi
 
 # bun
@@ -86,9 +101,6 @@ fi
 if [ -d "$HOME/.opencode/bin" ]; then
   export PATH="$HOME/.opencode/bin:$PATH"
 fi
-
-# General local bin
-export PATH="$HOME/.local/bin:$PATH"
 
 # tmux wrapper function for cross-platform session management
 function tm() {
@@ -118,3 +130,18 @@ alias grep='grep --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
 
+# fnm
+FNM_PATH="/opt/homebrew/opt/fnm/bin"
+if [ -d "$FNM_PATH" ]; then
+  eval "$(fnm env --shell zsh)"
+fi
+
+# ~/.local/bin — must come last so its shims (e.g. npm → pnpm) take priority
+# over anything node version managers (nvm/fnm) prepend to PATH above.
+export PATH="$HOME/.local/bin:$PATH"
+
+# fnm
+FNM_PATH="/opt/homebrew/opt/fnm/bin"
+if [ -d "$FNM_PATH" ]; then
+  eval "$(fnm env --shell zsh)"
+fi

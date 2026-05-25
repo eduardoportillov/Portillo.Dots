@@ -1,0 +1,121 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "sdd-orchestrator": {
+      "description": "Agent Teams Orchestrator - coordinates sub-agents, never does work inline",
+      "mode": "primary",
+      "model": "zai-coding-plan/glm-5.1",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "sdd-*": "allow"
+        }
+      },
+      "prompt": "# Agent Teams Lite — Orchestrator Instructions\n\nBind this to the dedicated `sdd-orchestrator` agent or rule only. Do NOT apply it to executor phase agents such as `sdd-apply` or `sdd-verify`.\n\n## Agent Teams Orchestrator\n\nYou are a COORDINATOR, not an executor. Maintain one thin conversation thread, delegate ALL real work to sub-agents, synthesize results.\n",
+      "tools": {
+        "bash": true,
+        "delegate": true,
+        "delegation_list": true,
+        "delegation_read": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    }
+  },
+  "mcp": {
+    "Vision-Zai": {
+      "command": [
+        "npx",
+        "-y",
+        "@z_ai/mcp-server@latest"
+      ],
+      "enabled": true,
+      "environment": {
+        "Z_AI_API_KEY": "{{Z_AI_API_KEY}}",
+        "Z_AI_MODE": "ZAI"
+      },
+      "type": "local"
+    },
+    "Web-Reader-Zai": {
+      "enabled": true,
+      "headers": {
+        "Authorization": "{{Z_AI_API_KEY}}"
+      },
+      "type": "remote",
+      "url": "https://api.z.ai/api/mcp/web_reader/mcp"
+    },
+    "Web-Search-Prime-Zai": {
+      "enabled": true,
+      "headers": {
+        "Authorization": "{{WEB_SEARCH_AUTH}}"
+      },
+      "type": "remote",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp"
+    },
+    "Zread-Zai": {
+      "enabled": true,
+      "headers": {
+        "Authorization": "{{ZREAD_AUTH}}"
+      },
+      "type": "remote",
+      "url": "https://api.z.ai/api/mcp/zread/mcp"
+    },
+    "context7": {
+      "enabled": true,
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "engram": {
+      "command": [
+        "engram",
+        "mcp",
+        "--tools=agent"
+      ],
+      "enabled": true,
+      "type": "local"
+    }
+  },
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "cargo *": "allow",
+      "docker *": "allow",
+      "docker compose *": "allow",
+      "git commit *": "ask",
+      "git push": "ask",
+      "git push *": "ask",
+      "git push --force *": "ask",
+      "git rebase *": "ask",
+      "git reset --hard *": "ask",
+      "make *": "allow",
+      "make build": "allow",
+      "make test": "allow",
+      "npm run build": "allow",
+      "npm run dev": "allow",
+      "npm test *": "allow",
+      "pip *": "allow",
+      "pipenv *": "allow",
+      "python *": "allow",
+      "yarn *": "allow",
+      "yarn build": "allow",
+      "yarn dev": "allow",
+      "yarn test": "allow"
+    },
+    "canvas_*": "allow",
+    "read": {
+      "*": "allow",
+      "**/.env": "deny",
+      "**/.env.*": "deny",
+      "**/credentials.json": "deny",
+      "**/secrets/**": "deny",
+      "*.env": "deny",
+      "*.env.*": "deny"
+    }
+  },
+  "plugin": [
+    "@franlol/opencode-md-table-formatter@0.0.3",
+    "@mohak34/opencode-notifier@latest",
+    "opencode-pty"
+  ]
+}

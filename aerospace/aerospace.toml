@@ -1,0 +1,136 @@
+# =====================================================================
+# CONFIGURACIÓN PERSONALIZADA DE AEROSPACE
+# =====================================================================
+
+# Ejecuta este comando al iniciar para asegurar que todos los espacios usen mosaico
+after-startup-command = [
+    'exec-and-forget aerospace layout tiles --all-workspaces'
+]
+
+# No iniciar automáticamente al hacer login
+start-at-login = false
+
+# --- NORMALIZACIONES ---
+# Aplana contenedores para evitar jerarquías innecesarias
+enable-normalization-flatten-containers = true
+# Fuerza orientaciones opuestas en contenedores anidados (Horizontal vs Vertical)
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# --- LAYOUT Y APARIENCIA ---
+# Tamaño del margen cuando se usa el modo acordeón (accordion)
+accordion-padding = 30
+
+# Layout por defecto al crear un espacio: tiles (mosaico)
+default-root-container-layout = 'tiles'
+
+# Orientación automática según el monitor (Horizontal si es ancho, Vertical si es alto)
+default-root-container-orientation = 'auto'
+
+# El mouse sigue automáticamente al foco cuando cambias de monitor
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+# Mantiene las apps visibles aunque macOS intente ocultarlas (Cmd+H)
+automatically-unhide-macos-hidden-apps = false
+
+[key-mapping]
+preset = 'qwerty'
+
+# --- GAPS (MÁRGENES) ---
+# Espacio de 3px entre ventanas y bordes de pantalla
+[gaps]
+inner.horizontal = 3
+inner.vertical   = 3
+outer.left       = 3
+outer.bottom     = 3
+outer.top        = 3
+outer.right      = 3
+
+# =====================================================================
+# MODO PRINCIPAL (MAIN)
+# =====================================================================
+[mode.main.binding]
+
+# --- CONTROL DE LAYOUT ---
+# Alt + / : Cambia entre mosaico horizontal y vertical
+alt-slash = 'layout tiles horizontal vertical'
+# Alt + , : Cambia al modo acordeón (tipo pestañas)
+alt-comma = 'layout accordion horizontal vertical'
+
+# --- NAVEGACIÓN (FOCO) ---
+# Alt + Ctrl + HJKL: Mover el foco entre ventanas (evita conflictos con tmux)
+alt-ctrl-h = 'focus left'
+alt-ctrl-j = 'focus down'
+alt-ctrl-k = 'focus up'
+alt-ctrl-l = 'focus right'
+
+# --- MOVIMIENTO ---
+# Alt + Shift + HJKL: Mover físicamente la ventana a otra posición
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+
+# --- REDIMENSIONAR ---
+# Alt + Menos/Igual: Achicar o agrandar la ventana de forma inteligente
+alt-minus = 'resize smart -50'
+alt-equal = 'resize smart +50'
+
+# --- WORKSPACES (ESPACIOS DE TRABAJO) ---
+# Alt + Número: Cambiar al espacio correspondiente
+alt-1 = 'workspace work'
+alt-2 = 'workspace dev-front'
+alt-3 = 'workspace dev-back'
+alt-4 = 'workspace others'
+alt-5 = 'workspace comodin'
+
+# Alt + Shift + Número: Enviar ventana actual a ese espacio
+alt-shift-1 = 'move-node-to-workspace work'
+alt-shift-2 = 'move-node-to-workspace dev-front'
+alt-shift-3 = 'move-node-to-workspace dev-back'
+alt-shift-4 = 'move-node-to-workspace others'
+alt-shift-5 = 'move-node-to-workspace comodin'
+
+# Alt + Shift + F: Pantalla completa
+alt-shift-f = "fullscreen"
+
+# Alt + Tab: Volver al último espacio utilizado
+alt-tab = 'workspace-back-and-forth'
+
+# Alt + Shift + Tab: Mover el espacio completo al siguiente monitor
+alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
+
+# Alt + Shift + Punto y coma: Entrar al MODO SERVICIO
+alt-shift-semicolon = 'mode service'
+
+# =====================================================================
+# MODO SERVICIO (SERVICE)
+# =====================================================================
+[mode.service.binding]
+# Esc: Recargar configuración y volver al modo principal
+esc = ['reload-config', 'mode main']
+
+# R: Resetear el layout del espacio actual (limpia errores visuales)
+r = ['flatten-workspace-tree', 'mode main']
+
+# F: Cambiar la ventana actual entre modo flotante y mosaico
+f = ['layout floating tiling', 'mode main']
+
+# Backspace: Cierra todas las ventanas excepto la actual
+backspace = ['close-all-windows-but-current', 'mode main']
+
+# Alt + Shift + HJKL: Unir la ventana actual con su vecina en esa dirección
+alt-shift-h = ['join-with left', 'mode main']
+alt-shift-j = ['join-with down', 'mode main']
+alt-shift-k = ['join-with up', 'mode main']
+alt-shift-l = ['join-with right', 'mode main']
+
+# Control de Volumen dentro del modo servicio
+down = 'volume down'
+up = 'volume up'
+shift-down = ['volume set 0', 'mode main']
+
+# --- REGLAS DE VENTANAS ---
+# Forzar que la aplicación Finder siempre se abra en modo flotante
+[[on-window-detected]]
+if.app-id = "com.apple.finder"
+run = "layout floating"

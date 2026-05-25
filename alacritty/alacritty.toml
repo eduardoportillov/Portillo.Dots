@@ -113,20 +113,11 @@ bindings = [
     # Abrir directorio actual en el gestor de archivos
     { key = "O", mods = "Control|Shift", chars = "xdg-open .\r" },
 
-    # Saltar palabras con Ctrl + Flecha Izquierda/Derecha
-    { key = "Left",  mods = "Control", chars = "\u001bb" },
-    { key = "Right", mods = "Control", chars = "\u001bf" },
+    # Saltar palabras con Alt + Flecha Izquierda/Derecha
+    { key = "Left",  mods = "Alt", chars = "\u001bb" },
+    { key = "Right", mods = "Alt", chars = "\u001bf" },
 
-    # Deshabilitar salto de palabra con Alt (redirigir a flecha simple)
-    { key = "Left",  mods = "Alt", chars = "\u001b[D" },
-    { key = "Right", mods = "Alt", chars = "\u001b[C" },
-
-    # Borrar palabra completa con Ctrl + Backspace / Ctrl + Delete
-    { key = "Back",   mods = "Control", chars = "\u001b\u007f" },
-    { key = "Delete", mods = "Control", chars = "\u001bd" },
-
-    # Deshabilitar borrado de palabra con Alt (redirigir a backspace/delete simple)
-    { key = "Back",   mods = "Alt", chars = "\u007f" },
-    { key = "Delete", mods = "Alt", chars = "\u001b[3~" },
+    # Borrar palabra completa con Alt + Backspace
+    { key = "Back",  mods = "Alt", chars = "\u001b\u007f" },
     { key = "Return", mods = "Shift", chars = "\u001B\r" },
 ]
