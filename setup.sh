@@ -9,6 +9,7 @@ BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
 LOG="$REPO_DIR/logs/setup.log"
 AUTO_YES=true
 CONFIG_ONLY=false
+APPLY_LINUX=false
 APT_UPDATED=false
 mkdir -p "$REPO_DIR/logs"
 # Asegurar que ~/.local/bin esté en PATH durante el setup (necesario en Linux para binarios locales como alacritty)
@@ -20,6 +21,7 @@ for arg in "$@"; do
     -y|--yes) AUTO_YES=true ;;
     -i|--interactive) AUTO_YES=false ;;
     --config-only) CONFIG_ONLY=true ;;
+    -L|--apply-linux) APPLY_LINUX=true ;;
     -h|--help) SHOW_HELP=true ;;
   esac
 done
@@ -36,6 +38,7 @@ OPTIONS:
   -h, --help          Show this help message and exit
   -i, --interactive   Prompt before each optional install (default: auto-yes)
   -y, --yes           Auto-accept all prompts (default)
+  -L, --apply-linux   Apply Linux hardware optimizations + service only (fast)
   --config-only       Sync dotfile symlinks and desktop settings only
 
 WHAT THIS SCRIPT DOES (in order):
@@ -707,6 +710,79 @@ setup_claude_config() {
   symlink_file "$REPO_DIR/claude/CLAUDE.md"     "$HOME/.claude/CLAUDE.md"
 }
 
+# Pin the pnpm global workspace version so we can find it again in other functions.
+readonly PNPM_GLOBAL_V11_DIR="$PNPM_HOME/global/v11"
+
+# Ensure the pnpm workspace yaml allows @anthropic-ai/claude-code's postinstall.
+# pnpm v11's allowBuilds can block lifecycle scripts — we need the postinstall
+# to download the native binary. Patches in-place so a subsequent re-run of the
+# setup script is idempotent.
+_claude_code_allow_postinstall() {
+  local ws_yaml="$PNPM_GLOBAL_V11_DIR/pnpm-workspace.yaml"
+  [[ ! -f "$ws_yaml" ]] && return 0
+
+  # readarray is not available in bash 3.2 (macOS). Use a temp file instead.
+  local tmp
+  tmp="$(mktemp)"
+  local patched=false
+  while IFS= read -r line; do
+    # Match the exact block that denies claude-code's build
+    if [[ "$line" =~ ^[[:space:]]*[\"\\']@anthropic-ai/claude-code[\"\\']:[[:space:]]*false ]]; then
+      local indent="${line%%[![:space:]]*}"
+      echo "${indent}'@anthropic-ai/claude-code': true" >> "$tmp"
+      patched=true
+    else
+      echo "$line" >> "$tmp"
+    fi
+  done < "$ws_yaml"
+
+  if [[ "$patched" == true ]]; then
+    mv "$tmp" "$ws_yaml"
+    info "Patched pnpm-workspace.yaml: allowed @anthropic-ai/claude-code postinstall"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# Fallback: run the postinstall manually if pnpm skipped it (e.g. allowBuilds
+# was false, or --ignore-scripts / --omit=optional was in effect).
+# Handles both pnpm v10 (pnpm root -g) and v11 (hash-based store layout).
+_claude_code_run_postinstall() {
+  local install_script
+
+  # Try pnpm root -g first (pnpm v10 and earlier)
+  install_script="$(pnpm root -g 2>/dev/null)/@anthropic-ai/claude-code/install.cjs"
+  if [[ -f "$install_script" ]]; then
+    info "Running claude-code postinstall manually..."
+    if node "$install_script" >> "$LOG" 2>&1; then
+      ok "Claude Code native binary placed"
+      return 0
+    fi
+    warn "Claude Code postinstall failed — run manually: node $install_script"
+    return 1
+  fi
+
+  # Fallback for pnpm v11: search hash-based store directories
+  local v11_root="$PNPM_HOME/global/v11"
+  if [[ -d "$v11_root" ]]; then
+    while IFS= read -r -d '' dir; do
+      install_script="$dir/node_modules/@anthropic-ai/claude-code/install.cjs"
+      if [[ -f "$install_script" ]]; then
+        info "Running claude-code postinstall manually (v11 store)..."
+        if node "$install_script" >> "$LOG" 2>&1; then
+          ok "Claude Code native binary placed"
+          return 0
+        fi
+        warn "Claude Code postinstall failed — run manually: node $install_script"
+        return 1
+      fi
+    done < <(find "$v11_root" -maxdepth 1 -type d -name '*-*' -print0 2>/dev/null)
+  fi
+
+  warn "Claude Code package not found for postinstall fallback"
+  return 1
+}
+
 setup_claude_code() {
   info "Setting up Claude Code..."
 
@@ -715,19 +791,31 @@ setup_claude_code() {
   export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
   export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
 
+  # Ensure the global v11 directory exists
+  mkdir -p "$PNPM_GLOBAL_V11_DIR"
+
+  # Unblock the postinstall before pnpm touches the package
+  _claude_code_allow_postinstall
+
   # No official brew tap for Claude Code today — always pnpm. Structure kept
   # parallel to setup_opencode so a future brew branch can slot in.
   if command -v pnpm &>/dev/null; then
     if command -v claude &>/dev/null; then
       info "Updating Claude Code via pnpm..."
       pnpm add -g @anthropic-ai/claude-code >>"$LOG" 2>&1 \
-        && ok "Claude Code updated ($(claude --version 2>/dev/null))" \
         || warn "Failed to update Claude Code via pnpm"
     else
       info "Installing Claude Code via pnpm..."
       pnpm add -g @anthropic-ai/claude-code >>"$LOG" 2>&1 \
-        && ok "Claude Code installed ($(claude --version 2>/dev/null))" \
         || warn "Failed to install Claude Code via pnpm"
+    fi
+
+    # Verify the native binary works; if not, run postinstall manually
+    if command -v claude &>/dev/null && claude --version &>/dev/null; then
+      ok "Claude Code installed ($(claude --version 2>/dev/null))"
+    else
+      warn "Claude native binary missing — attempting postinstall fallback"
+      _claude_code_run_postinstall
     fi
   else
     warn "pnpm not found, skipping Claude Code installation"
@@ -892,6 +980,11 @@ PY
   # Enable extension (no-op if already enabled or not installed)
   gnome-extensions enable "$forge_uuid" 2>/dev/null || true
 
+  # Ubuntu Tiling Assistant also manages windows and can conflict with Forge's auto-split behavior.
+  if gnome-extensions list 2>/dev/null | grep -qx "tiling-assistant@ubuntu.com"; then
+    gnome-extensions disable "tiling-assistant@ubuntu.com" 2>/dev/null || true
+  fi
+
   if gnome-extensions list --active 2>/dev/null | grep -qx "$forge_uuid"; then
     ok "Forge extension active"
   else
@@ -924,7 +1017,53 @@ PY
   fi
 }
 
-# === PASO 7F: GNOME SETTINGS ===
+# === PASO 7F: LINUX OPTIMIZATIONS ===
+setup_linux_optimizations() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+
+  local optimize_script="$REPO_DIR/linux/optimize.sh"
+  if [[ ! -f "$optimize_script" ]]; then
+    warn "Linux optimize script not found at $optimize_script, skipping"
+    return 0
+  fi
+
+  info "Applying Linux hardware optimizations..."
+
+  # 1. Apply settings (needs root)
+  sudo bash "$optimize_script" --apply
+
+  local install_path="/usr/local/bin/apply-linux-hardware-settings.sh"
+
+  # 2. Copy script to /usr/local/bin/ for systemd service
+  sudo cp "$optimize_script" "$install_path"
+  sudo chmod +x "$install_path"
+  ok "Copied to $install_path"
+
+  # 3. Create systemd service for persistence on boot
+  local service_file="/etc/systemd/system/apply-linux-hardware-settings.service"
+  sudo tee "$service_file" > /dev/null <<SERVICE
+[Unit]
+Description=Apply Linux hardware optimizations (CPU governor, swappiness, battery charge limit, fan policy)
+After=sysinit.target
+Before=multi-user.target
+ConditionPathExists=$install_path
+
+[Service]
+Type=oneshot
+ExecStart=$install_path --apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+  ok "Created $service_file"
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now apply-linux-hardware-settings
+  ok "Service enabled and started (will re-apply settings on boot)"
+}
+
+# === PASO 7G: GNOME SETTINGS ===
 setup_gnome() {
   [[ "$PLATFORM" != "linux" ]] && return 0
   command -v gsettings &>/dev/null || return 0
@@ -1372,7 +1511,7 @@ verify() {
   
   # Binarios
   local binaries=(
-    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "pnpm" "claude" "zed"
+    "nvim" "tmux" "git" "brew" "fzf" "rg" "fd" "bat" "lazygit" "lazydocker" "opencode" "pnpm" "zed"
   )
 
   if [[ "$PLATFORM" == "linux" ]]; then
@@ -1477,6 +1616,15 @@ verify() {
     ok_count=$((ok_count + 1))
   else
     error "alacritty"
+  fi
+  
+  # Claude Code — verifica que el binario nativo funcione, no solo que exista el stub
+  total=$((total + 1))
+  if command -v claude &>/dev/null && claude --version &>/dev/null; then
+    ok "claude"
+    ok_count=$((ok_count + 1))
+  else
+    error "claude"
   fi
   
   # Oh My Zsh
@@ -1643,6 +1791,9 @@ sync_configs_only() {
   setup_linux_default_terminal
   echo ""
 
+  setup_linux_optimizations
+  echo ""
+
   info "Setting up OpenCode config..."
   setup_opencode_config
   echo ""
@@ -1707,12 +1858,24 @@ main() {
   detect_os
   echo ""
 
+  # === APPLY-LINUX: fast path, solo optimizaciones + servicio ===
+  if [[ "$APPLY_LINUX" == true ]]; then
+    setup_linux_optimizations
+    echo ""
+    ok "Linux optimizations complete"
+    log "=== APPLY-LINUX COMPLETED ==="
+    return 0
+  fi
+
   setup_gnome
   echo ""
 
   setup_linux_default_terminal
   echo ""
-  
+
+  setup_linux_optimizations
+  echo ""
+
   setup_brew
   echo ""
   

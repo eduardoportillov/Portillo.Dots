@@ -237,6 +237,17 @@ deploy_configs() {
   ok "Dotfiles synced"
 }
 
+deploy_linux_optimizations() {
+  info "Applying Linux optimizations on $HOST..."
+  local result
+  result="$(ssh_cmd "bash ~/.portillo-remote/linux/optimize.sh --apply 2>&1" 2>/dev/null)" || true
+  if echo "$result" | grep -q "Optimization complete"; then
+    ok "Linux optimizations applied on $HOST"
+  else
+    info "Linux optimizations: auto-skipped (root may be needed for some settings)"
+  fi
+}
+
 deploy_bashrc() {
   info "Generating remote bashrc..."
   local rc_content
@@ -660,6 +671,7 @@ cmd_deploy() {
   check_prerequisites
   check_ssh_connection
   deploy_configs
+  deploy_linux_optimizations
   deploy_bashrc
   deploy_binaries
 
@@ -689,6 +701,7 @@ cmd_connect() {
   check_prerequisites
   check_ssh_connection
   deploy_configs
+  deploy_linux_optimizations
   deploy_bashrc
   deploy_binaries
 

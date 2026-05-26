@@ -35,7 +35,7 @@ gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-5 "['<Alt><Shif
 # Monitores y ventanas.
 gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "['<Alt><Shift>Tab']"
 gsettings set org.gnome.desktop.wm.keybindings toggle-fullscreen "[]"
-gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Ctrl><Alt>f']"
+gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Shift><Alt>f']"
 gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"
 gsettings set org.gnome.desktop.wm.keybindings begin-resize "[]"
 

@@ -1,12 +1,19 @@
 {
-  "vim_mode": true,
+  "ssh_connections": [
+    {
+      "host": "portillo-server",
+      "args": [],
+      "projects": []
+    }
+  ],
+  "vim_mode": false,
   "agent_servers": {
     "codex-acp": {
-      "type": "registry"
+      "type": "registry",
     },
     "claude-acp": {
-      "type": "registry"
-    }
+      "type": "registry",
+    },
   },
-  "base_keymap": "VSCode"
+  "base_keymap": "VSCode",
 }

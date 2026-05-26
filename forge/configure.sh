@@ -30,6 +30,10 @@ fi
 # ---------------------------------------------------------------------
 # 1. GAPS Y APARIENCIA (AeroSpace: 3px)
 # ---------------------------------------------------------------------
+gsettings set org.gnome.shell.extensions.forge tiling-mode-enabled true
+gsettings set org.gnome.shell.extensions.forge auto-split-enabled true
+gsettings set org.gnome.shell.extensions.forge primary-layout-mode "'tiling'"
+gsettings set org.gnome.shell.extensions.forge workspace-skip-tile "''"
 gsettings set org.gnome.shell.extensions.forge window-gap-size 3
 gsettings set org.gnome.shell.extensions.forge focus-border-toggle false
 gsettings set org.gnome.shell.extensions.forge split-border-toggle false
