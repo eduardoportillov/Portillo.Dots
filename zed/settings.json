@@ -3,7 +3,18 @@
     {
       "host": "portillo-server",
       "args": [],
-      "projects": []
+      "projects": [
+        {
+          "paths": [
+            "/home/eduardoportillo/server-infrastructure"
+          ]
+        },
+        {
+          "paths": [
+            "/home/eduardoportillo/storage-infrastructure"
+          ]
+        }
+      ]
     }
   ],
   "vim_mode": false,
