@@ -90,7 +90,7 @@ history = 10000
 multiplier = 3
 
 [terminal]
-shell = { program = "/bin/zsh", args = ["--login"] }
+shell = { program = "/home/linuxbrew/.linuxbrew/bin/zsh", args = ["--login"] }
 
 # --- BELL ---
 [bell]
