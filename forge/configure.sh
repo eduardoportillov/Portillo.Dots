@@ -31,6 +31,8 @@ fi
 # 1. GAPS Y APARIENCIA (AeroSpace: 3px)
 # ---------------------------------------------------------------------
 gsettings set org.gnome.shell.extensions.forge window-gap-size 3
+gsettings set org.gnome.shell.extensions.forge focus-border-toggle false
+gsettings set org.gnome.shell.extensions.forge split-border-toggle false
 
 # ---------------------------------------------------------------------
 # 2. NAVEGACIÓN (FOCO) - Identico a AeroSpace (Alt+Ctrl+HJKL)
@@ -50,25 +52,6 @@ gsettings set org.gnome.shell.extensions.forge.keybindings window-move-up "['<Al
 gsettings set org.gnome.shell.extensions.forge.keybindings window-move-right "['<Alt><Shift>l']"
 
 # ---------------------------------------------------------------------
-# 4. GESTIÓN DE WORKSPACES (Nombres y Atajos 1-4)
-# ---------------------------------------------------------------------
-gsettings set org.gnome.desktop.wm.preferences workspace-names "['work', 'dev-front', 'dev-back', 'others']"
-
-# Cambiar a Workspace (Alt + 1-4)
-gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-1 "['<Alt>1']"
-gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-2 "['<Alt>2']"
-gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-3 "['<Alt>3']"
-gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-4 "['<Alt>4']"
-gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-5 "['<Alt>5']"
-
-# Enviar ventana a Workspace (Alt + Shift + 1-4)
-gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-1 "['<Alt><Shift>1']"
-gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-2 "['<Alt><Shift>2']"
-gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-3 "['<Alt><Shift>3']"
-gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-4 "['<Alt><Shift>4']"
-gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-5 "['<Alt><Shift>5']"
-
-# ---------------------------------------------------------------------
 # 5. LAYOUTS, MONITORES Y VENTANA FLOTANTE (Identico a AeroSpace)
 # ---------------------------------------------------------------------
 # Cambiar entre mosaico horizontal/vertical (Alt + /)
@@ -77,15 +60,9 @@ gsettings set org.gnome.shell.extensions.forge.keybindings con-split-layout-togg
 # Cambiar a modo Tabulado/Acordeón (Alt + ,)
 gsettings set org.gnome.shell.extensions.forge.keybindings con-tabbed-layout-toggle "['<Alt>comma']"
 
-# Mover espacio al siguiente monitor (Alt + Shift + Tab) (no sirve)
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "['<Alt><Shift>Tab']"
-
 # Ventana Flotante (Alt + Shift + ;)
 # Nota: Usamos el inicio del Modo Servicio de tu Mac para ejecutar la acción directa.
 gsettings set org.gnome.shell.extensions.forge.keybindings window-toggle-float "['<Alt><Shift>semicolon']"
-
-# Pantalla completa (Alt + Shift + F)
-gsettings set org.gnome.desktop.wm.keybindings toggle-fullscreen "['<Alt><Shift>f']"
 
 # ---------------------------------------------------------------------
 # NO FUNCIONA TODAVIA - REDIMENSIONAR (Resize smart - Alt + Minus/Equal)
@@ -109,12 +86,7 @@ gsettings set org.gnome.shell.extensions.forge.keybindings window-resize-bottom-
 # Reset Layout / Botón de pánico (Equivalente a R en modo servicio)
 gsettings set org.gnome.shell.extensions.forge.keybindings prefs-tiling-toggle "['<Alt><Shift>r']"
 
-# Asegurar Terminal en Ctrl+Alt+T
-gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['<Control><Alt>t']"
-
-# Desactivar atajos de GNOME que causan lag o conflictos
-gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"
-gsettings set org.gnome.desktop.wm.keybindings begin-resize "[]"
+# Desactivar atajos de Forge que causan conflictos
 gsettings set org.gnome.shell.extensions.forge.keybindings window-snap-center "[]"
 
 echo "¡Hecho! Tu Linux ahora se comporta exactamente como tu Mac con AeroSpace."

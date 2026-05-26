@@ -104,6 +104,16 @@ After running `setup.sh`:
 - `~/.zshrc` → `$REPO/zsh/.zshrc`
 - `~/.p10k.zsh` → `$REPO/zsh/p10k.zsh`
 
+## Moving the Repo
+
+If you move the repo to a different path, symlinks will break because they use absolute paths. Fix them by running:
+
+```bash
+bash /nueva/ruta/Portillo.Dots/setup.sh --config-only
+```
+
+This recreates all symlinks to point to the new location without reinstalling packages.
+
 ## Customization
 
 - **Shell**: Edit `zsh/.zshrc` for environment variables, aliases, and tool setup

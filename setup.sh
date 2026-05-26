@@ -8,6 +8,7 @@ ARCH="$(uname -m)"
 BACKUP_DIR="$REPO_DIR/.backup/$(date +%Y%m%d-%H%M%S)"
 LOG="$REPO_DIR/logs/setup.log"
 AUTO_YES=true
+CONFIG_ONLY=false
 APT_UPDATED=false
 mkdir -p "$REPO_DIR/logs"
 # Asegurar que ~/.local/bin esté en PATH durante el setup (necesario en Linux para binarios locales como alacritty)
@@ -18,6 +19,7 @@ for arg in "$@"; do
   case "$arg" in
     -y|--yes) AUTO_YES=true ;;
     -i|--interactive) AUTO_YES=false ;;
+    --config-only) CONFIG_ONLY=true ;;
     -h|--help) SHOW_HELP=true ;;
   esac
 done
@@ -34,39 +36,42 @@ OPTIONS:
   -h, --help          Show this help message and exit
   -i, --interactive   Prompt before each optional install (default: auto-yes)
   -y, --yes           Auto-accept all prompts (default)
+  --config-only       Sync dotfile symlinks and desktop settings only
 
 WHAT THIS SCRIPT DOES (in order):
 
   1. Detect OS & architecture (macOS / Linux x86_64 / Linux arm64)
 
-  2. Homebrew — install if missing; run 'brew update' to refresh index
+  2. Linux desktop defaults — GNOME workspaces, screenshot shortcut, keyboard, Alacritty terminal
+
+  3. Homebrew — install if missing; run 'brew update' to refresh index
      macOS: /opt/homebrew | Linux: Linuxbrew at /home/linuxbrew
 
-  3. Core packages — install or upgrade if newer version available:
+  4. Core packages — install or upgrade if newer version available:
        git, curl, unzip, zip, tmux, neovim, ripgrep, fd, fzf, bat,
        lazygit, lazydocker, zsh, tree-sitter, zoxide, atuin, go
        Linux only: xclip
      Uses 'brew outdated' on systems with brew; apt/pacman/etc on others.
 
-  4. Alacritty terminal emulator
+  5. Alacritty terminal emulator
        macOS: brew cask (brew outdated --cask to detect updates)
        Linux: GitHub Releases binary → ~/.local/bin/alacritty
               (version-compared: only re-downloads if newer release exists)
 
-  5. Hack Nerd Font — installs if not found (no version check)
+  6. Hack Nerd Font — installs if not found (no version check)
 
-  6. Oh My Zsh — installs or 'git pull' to update
+  7. Oh My Zsh — installs or 'git pull' to update
      Plugins (always updated via git pull):
        zsh-autosuggestions, zsh-syntax-highlighting, you-should-use
      Theme: powerlevel10k (git pull)
 
-  7. Tmux Plugin Manager (TPM) — installs or 'git pull' to update
+  8. Tmux Plugin Manager (TPM) — installs or 'git pull' to update
 
-  8. OpenCode (AI coding agent)
+  9. OpenCode (AI coding agent)
        brew: brew outdated opencode → upgrade if newer
        npm fallback: npm update -g opencode
 
-  9. Dev tools (optional, auto-yes by default):
+  10. Dev tools (optional, auto-yes by default):
        fnm        Fast Node Manager — re-runs installer (self-version-aware)
                   + Node.js 22 LTS on first install
        SDKMAN     Java/Kotlin/Gradle — install only (run 'sdk selfupdate' to update)
@@ -76,16 +81,16 @@ WHAT THIS SCRIPT DOES (in order):
                   macOS: brew outdated --cask copyq
                   Linux: apt-get install --only-upgrade copyq
 
- 10. Dotfile symlinks — always recreated (backup of originals kept in .backup/):
-       ~/.zshrc, ~/.p10k.zsh, ~/.tmux.conf,
-       ~/.config/nvim, ~/.config/alacritty/alacritty.toml,
-       ~/.config/opencode/config.json
+  11. Dotfile symlinks — always recreated (backup of originals kept in .backup/):
+        ~/.zshrc, ~/.p10k.zsh, ~/.tmux.conf,
+        ~/.config/nvim, ~/.config/alacritty/alacritty.toml,
+        ~/.config/opencode/config.json, ~/.config/xdg-terminals.list
 
- 11. Set zsh as default shell
+  12. Set zsh as default shell
 
- 12. Install tmux plugins via TPM
+  13. Install tmux plugins via TPM
 
- 13. Verify installation — prints ✓/✗ for every component
+  14. Verify installation — prints ✓/✗ for every component
 
 LOG FILE: <repo>/logs/setup.log
 EOF
@@ -595,9 +600,7 @@ setup_tpm() {
 }
 
 # === PASO 7A: SETUP OPENCODE ===
-setup_opencode() {
-  info "Setting up OpenCode..."
-  
+setup_opencode_config() {
   local opencode_config_dir="$HOME/.config/opencode"
   local opencode_config_file="$opencode_config_dir/config.jsonc"
   local template_file="$REPO_DIR/opencode/opencode.template.jsonc"
@@ -666,6 +669,11 @@ setup_opencode() {
     ln -sf "$generated_config" "$opencode_config_file"
     ok "Created symlink for OpenCode config"
   fi
+}
+
+setup_opencode() {
+  info "Setting up OpenCode..."
+  setup_opencode_config
   
   # Install OpenCode via brew (preferred) — do NOT rely on command -v opencode
   # since it may find a Windows-mounted binary (e.g., /mnt/c/...) that won't work on Linux
@@ -690,6 +698,15 @@ setup_opencode() {
 }
 
 # === PASO 7B: SETUP CLAUDE CODE ===
+setup_claude_config() {
+  # Symlink user-level configs (settings.json + CLAUDE.md only).
+  # Do NOT symlink the whole ~/.claude/ directory — it also contains
+  # projects/, memory/, and .credentials.json which must NOT be in the repo.
+  mkdir -p "$HOME/.claude"
+  symlink_file "$REPO_DIR/claude/settings.json" "$HOME/.claude/settings.json"
+  symlink_file "$REPO_DIR/claude/CLAUDE.md"     "$HOME/.claude/CLAUDE.md"
+}
+
 setup_claude_code() {
   info "Setting up Claude Code..."
 
@@ -716,15 +733,23 @@ setup_claude_code() {
     warn "pnpm not found, skipping Claude Code installation"
   fi
 
-  # Symlink user-level configs (settings.json + CLAUDE.md only).
-  # Do NOT symlink the whole ~/.claude/ directory — it also contains
-  # projects/, memory/, and .credentials.json which must NOT be in the repo.
-  mkdir -p "$HOME/.claude"
-  symlink_file "$REPO_DIR/claude/settings.json" "$HOME/.claude/settings.json"
-  symlink_file "$REPO_DIR/claude/CLAUDE.md"     "$HOME/.claude/CLAUDE.md"
+  setup_claude_config
 }
 
 # === PASO 7C: SETUP ZED ===
+setup_zed_config() {
+  # Symlink configs — Zed uses different base dirs per platform
+  local zed_dir
+  if [[ "$PLATFORM" == "mac" ]]; then
+    zed_dir="$HOME/.zed"
+  else
+    zed_dir="$HOME/.config/zed"
+  fi
+  mkdir -p "$zed_dir"
+  symlink_file "$REPO_DIR/zed/settings.json" "$zed_dir/settings.json"
+  symlink_file "$REPO_DIR/zed/keymap.json"   "$zed_dir/keymap.json"
+}
+
 setup_zed() {
   info "Setting up Zed..."
 
@@ -749,19 +774,15 @@ setup_zed() {
     fi
   fi
 
-  # Symlink configs — Zed uses different base dirs per platform
-  local zed_dir
-  if [[ "$PLATFORM" == "mac" ]]; then
-    zed_dir="$HOME/.zed"
-  else
-    zed_dir="$HOME/.config/zed"
-  fi
-  mkdir -p "$zed_dir"
-  symlink_file "$REPO_DIR/zed/settings.json" "$zed_dir/settings.json"
-  symlink_file "$REPO_DIR/zed/keymap.json"   "$zed_dir/keymap.json"
+  setup_zed_config
 }
 
 # === PASO 7D: SETUP AEROSPACE (macOS only) ===
+setup_aerospace_config() {
+  [[ "$PLATFORM" != "mac" ]] && return 0
+  symlink_file "$REPO_DIR/aerospace/aerospace.toml" "$HOME/.aerospace.toml"
+}
+
 setup_aerospace() {
   [[ "$PLATFORM" != "mac" ]] && return 0
   info "Setting up AeroSpace..."
@@ -774,7 +795,7 @@ setup_aerospace() {
       && ok "AeroSpace installed" || warn "AeroSpace install failed"
   fi
 
-  symlink_file "$REPO_DIR/aerospace/aerospace.toml" "$HOME/.aerospace.toml"
+  setup_aerospace_config
 
   info "AeroSpace: grant Accessibility permission in System Settings → Privacy & Security."
 }
@@ -804,6 +825,9 @@ setup_forge() {
 
   if gnome-extensions list 2>/dev/null | grep -q "$forge_uuid"; then
     ok "Forge already installed"
+  elif [[ "$CONFIG_ONLY" == true ]]; then
+    warn "Forge not installed, skipping install in --config-only mode"
+    return 0
   else
     # Best-effort install — distro package first, then gnome-extensions-cli (gext)
     local pm
@@ -874,7 +898,15 @@ PY
     local forge_state
     forge_state="$(gnome-extensions info "$forge_uuid" 2>/dev/null | grep -E 'Estado|State' || true)"
     if [[ "$forge_state" == *"OUT OF DATE"* ]]; then
-      warn "Forge installed but not active: out of date for this GNOME Shell. Log out/in after metadata patch, then re-run setup."
+      warn "Forge installed but not active: out of date for this GNOME Shell"
+      info "Disabling GNOME extension version validation and retrying Forge..."
+      if gsettings set org.gnome.shell disable-extension-version-validation true 2>>"$LOG" \
+        && gnome-extensions enable "$forge_uuid" 2>>"$LOG" \
+        && gnome-extensions list --active 2>/dev/null | grep -qx "$forge_uuid"; then
+        ok "Forge extension active"
+      else
+        warn "Forge still not active. Log out/in and re-run setup if GNOME cached old metadata."
+      fi
     else
       warn "Forge installed but not active${forge_state:+ ($forge_state)}"
     fi
@@ -889,6 +921,41 @@ PY
     else
       warn "Forge gsettings script failed (extension may not be enabled yet — restart GNOME Shell and re-run)"
     fi
+  fi
+}
+
+# === PASO 7F: GNOME SETTINGS ===
+setup_gnome() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+  command -v gsettings &>/dev/null || return 0
+
+  info "Configuring GNOME settings..."
+  local gnome_script="$REPO_DIR/gnome/configure.sh"
+  if [[ -f "$gnome_script" ]]; then
+    chmod +x "$gnome_script"
+    if bash "$gnome_script" >>"$LOG" 2>&1; then
+      ok "GNOME settings applied"
+    else
+      warn "GNOME settings script failed"
+    fi
+  else
+    warn "GNOME config script not found, skipping"
+  fi
+}
+
+# === PASO 7G: LINUX DEFAULT TERMINAL ===
+setup_linux_default_terminal() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+
+  info "Configuring Linux default terminal..."
+
+  if command -v xdg-terminal-exec &>/dev/null; then
+    mkdir -p "$HOME/.config"
+    symlink_file "$REPO_DIR/alacritty/xdg-terminals.list" "$HOME/.config/xdg-terminals.list"
+    rm -f "$HOME/.cache/xdg-terminal-exec" 2>/dev/null || true
+    ok "Default terminal set to Alacritty"
+  else
+    warn "xdg-terminal-exec not found, skipping default terminal configuration"
   fi
 }
 
@@ -1333,7 +1400,53 @@ verify() {
       error "Forge extension"
     fi
   fi
-  
+
+  if [[ "$PLATFORM" == "linux" ]] && command -v gsettings &>/dev/null \
+    && gsettings list-schemas | grep -qx 'org.gnome.desktop.input-sources'; then
+    total=$((total + 1))
+    if [[ "$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null)" == "[('xkb', 'us+altgr-intl')]" ]]; then
+      ok "Linux keyboard layout"
+      ok_count=$((ok_count + 1))
+    else
+      error "Linux keyboard layout"
+    fi
+  fi
+
+  if [[ "$PLATFORM" == "linux" ]] && command -v gsettings &>/dev/null; then
+    total=$((total + 1))
+    local alacritty_binding_path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+    if [[ "$(gsettings get org.gnome.shell.keybindings show-screenshot-ui 2>/dev/null)" == "['<Super><Shift>s']" ]] \
+      && [[ "$(gsettings get org.gnome.mutter dynamic-workspaces 2>/dev/null)" == "false" ]] \
+      && [[ "$(gsettings get org.gnome.desktop.wm.preferences num-workspaces 2>/dev/null)" == "5" ]] \
+      && [[ "$(gsettings get org.gnome.mutter workspaces-only-on-primary 2>/dev/null)" == "false" ]] \
+      && [[ "$(gsettings get org.gnome.desktop.wm.preferences workspace-names 2>/dev/null)" == "['work', 'others', 'dev', 'dev-back', 'dev-front']" ]] \
+      && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys terminal 2>/dev/null)" == "@as []" ]] \
+      && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings 2>/dev/null)" == "['$alacritty_binding_path']" ]] \
+      && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$alacritty_binding_path" command 2>/dev/null)" == "'alacritty'" ]] \
+      && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$alacritty_binding_path" binding 2>/dev/null)" == "'<Control><Alt>t'" ]]; then
+      ok "GNOME desktop defaults"
+      ok_count=$((ok_count + 1))
+    else
+      error "GNOME desktop defaults"
+    fi
+  fi
+
+  if [[ "$PLATFORM" == "linux" ]] && command -v xdg-terminal-exec &>/dev/null; then
+    total=$((total + 1))
+    local xdg_term_config="$HOME/.config/xdg-terminals.list"
+    local expected_xdg_term_config="$REPO_DIR/alacritty/xdg-terminals.list"
+    local selected_terminal=""
+    selected_terminal="$(XTE_CACHE_ENABLED=0 xdg-terminal-exec --print-id 2>/dev/null || true)"
+    if [[ -L "$xdg_term_config" ]] \
+      && [[ "$(readlink "$xdg_term_config")" == "$expected_xdg_term_config" ]] \
+      && [[ "$selected_terminal" == "Alacritty.desktop" ]]; then
+      ok "Linux default terminal"
+      ok_count=$((ok_count + 1))
+    else
+      error "Linux default terminal"
+    fi
+  fi
+
   # copyq on macOS is a .app bundle with no CLI binary in PATH by default;
   # check the app directory the same way the install logic does.
   if [[ "$PLATFORM" == "mac" ]]; then
@@ -1517,9 +1630,55 @@ verify() {
   return 0
 }
 
+sync_configs_only() {
+  info "Config-only mode: syncing repo configs and desktop settings"
+  echo ""
+
+  detect_os
+  echo ""
+
+  setup_gnome
+  echo ""
+
+  setup_linux_default_terminal
+  echo ""
+
+  info "Setting up OpenCode config..."
+  setup_opencode_config
+  echo ""
+
+  info "Setting up Claude Code config..."
+  setup_claude_config
+  echo ""
+
+  info "Setting up Zed config..."
+  setup_zed_config
+  echo ""
+
+  setup_aerospace_config
+  echo ""
+
+  setup_forge
+  echo ""
+
+  create_symlinks
+  echo ""
+
+  verify
+  echo ""
+}
+
 # === MAIN ===
 main() {
   banner
+
+  if [[ "$CONFIG_ONLY" == true ]]; then
+    sync_configs_only
+    echo "Done! Configs synced from repo."
+    echo "Log file: $LOG"
+    log "=== CONFIG-ONLY COMPLETED ==="
+    return 0
+  fi
 
   # === SUDO: pedir contraseña UNA sola vez al inicio (Linux y macOS) ===
   # Se autentica con sudo -v (interactivo, una sola vez) y luego escribe una
@@ -1546,6 +1705,12 @@ main() {
   trap 'sudo rm -f "$_sudoers_tmp" 2>/dev/null' EXIT
 
   detect_os
+  echo ""
+
+  setup_gnome
+  echo ""
+
+  setup_linux_default_terminal
   echo ""
   
   setup_brew

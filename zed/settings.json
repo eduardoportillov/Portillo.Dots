@@ -1,1 +1,12 @@
-{}
+{
+  "vim_mode": true,
+  "agent_servers": {
+    "codex-acp": {
+      "type": "registry"
+    },
+    "claude-acp": {
+      "type": "registry"
+    }
+  },
+  "base_keymap": "VSCode"
+}

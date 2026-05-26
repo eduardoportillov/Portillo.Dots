@@ -127,3 +127,10 @@ alias ...='cd ../..'
 # ~/.local/bin — must come last so its shims (e.g. npm → pnpm) take priority
 # over anything node version managers (nvm/fnm) prepend to PATH above.
 export PATH="$HOME/.local/bin:$PATH"
+
+# fnm
+FNM_PATH="/home/eduardoportillo/.local/share/fnm"
+if [ -d "$FNM_PATH" ]; then
+  export PATH="$FNM_PATH:$PATH"
+  eval "$(fnm env --shell zsh)"
+fi
