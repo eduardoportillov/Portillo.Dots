@@ -789,6 +789,19 @@ setup_forge() {
   info "Setting up Forge..."
 
   local forge_uuid="forge@jmmaranan.com"
+  local forge_dir="$HOME/.local/share/gnome-shell/extensions/$forge_uuid"
+  local forge_metadata="$forge_dir/metadata.json"
+  local shell_version=""
+  local shell_major=""
+  if command -v gnome-shell &>/dev/null; then
+    shell_version="$(gnome-shell --version 2>/dev/null | grep -Eo '[0-9]+(\.[0-9]+)?' | sed -n '1p')"
+    if [[ "$shell_version" == 3.* ]]; then
+      shell_major="$shell_version"
+    else
+      shell_major="${shell_version%%.*}"
+    fi
+  fi
+
   if gnome-extensions list 2>/dev/null | grep -q "$forge_uuid"; then
     ok "Forge already installed"
   else
@@ -826,8 +839,46 @@ setup_forge() {
     esac
   fi
 
+  # extensions.gnome.org may lag behind Forge upstream metadata. If the code is
+  # installed but only blocked by the local shell-version list, add this shell.
+  if [[ -n "$shell_major" && -f "$forge_metadata" ]] \
+    && ! grep -q "\"$shell_major\"" "$forge_metadata"; then
+    warn "Forge metadata does not list GNOME Shell $shell_version; patching local metadata"
+    if command -v python3 &>/dev/null && python3 - "$forge_metadata" "$shell_major" "$shell_version" >>"$LOG" 2>&1 <<'PY'
+import json
+import sys
+from pathlib import Path
+
+metadata_path = Path(sys.argv[1])
+shell_versions = [version for version in sys.argv[2:] if version]
+metadata = json.loads(metadata_path.read_text())
+versions = metadata.setdefault("shell-version", [])
+for shell_version in shell_versions:
+    if shell_version not in versions:
+        versions.append(shell_version)
+metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
+PY
+    then
+      ok "Forge metadata patched for GNOME Shell $shell_version"
+    else
+      warn "Could not patch Forge metadata for GNOME Shell $shell_version"
+    fi
+  fi
+
   # Enable extension (no-op if already enabled or not installed)
   gnome-extensions enable "$forge_uuid" 2>/dev/null || true
+
+  if gnome-extensions list --active 2>/dev/null | grep -qx "$forge_uuid"; then
+    ok "Forge extension active"
+  else
+    local forge_state
+    forge_state="$(gnome-extensions info "$forge_uuid" 2>/dev/null | grep -E 'Estado|State' || true)"
+    if [[ "$forge_state" == *"OUT OF DATE"* ]]; then
+      warn "Forge installed but not active: out of date for this GNOME Shell. Log out/in after metadata patch, then re-run setup."
+    else
+      warn "Forge installed but not active${forge_state:+ ($forge_state)}"
+    fi
+  fi
 
   # Apply user-provided gsettings configuration script
   local forge_script="$REPO_DIR/forge/configure.sh"
@@ -1275,7 +1326,7 @@ verify() {
   # Forge — Linux GNOME only (skip silently on non-GNOME / non-Linux)
   if [[ "$PLATFORM" == "linux" ]] && command -v gnome-extensions &>/dev/null; then
     total=$((total + 1))
-    if gnome-extensions list 2>/dev/null | grep -q "forge@jmmaranan.com"; then
+    if gnome-extensions list --active 2>/dev/null | grep -qx "forge@jmmaranan.com"; then
       ok "Forge extension"
       ok_count=$((ok_count + 1))
     else

@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # =====================================================================
 # SCRIPT MAESTRO: CLONACIÓN AEROSPACE -> FORGE (LINUX)
@@ -7,6 +8,24 @@
 # Fuente de verdad: Configuración .toml de macOS.
 
 echo "Iniciando configuración maestra de Forge..."
+
+FORGE_UUID="${FORGE_UUID:-forge@jmmaranan.com}"
+FORGE_SCHEMA_DIR="${FORGE_SCHEMA_DIR:-$HOME/.local/share/gnome-shell/extensions/$FORGE_UUID/schemas}"
+
+if ! command -v gsettings >/dev/null 2>&1; then
+  echo "Error: gsettings no está disponible." >&2
+  exit 1
+fi
+
+if [[ -d "$FORGE_SCHEMA_DIR" ]]; then
+  export GSETTINGS_SCHEMA_DIR="$FORGE_SCHEMA_DIR"
+fi
+
+if ! gsettings list-schemas | grep -qx 'org.gnome.shell.extensions.forge'; then
+  echo "Error: no se encontró el schema org.gnome.shell.extensions.forge." >&2
+  echo "Ruta esperada: $FORGE_SCHEMA_DIR" >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------
 # 1. GAPS Y APARIENCIA (AeroSpace: 3px)
@@ -72,8 +91,8 @@ gsettings set org.gnome.desktop.wm.keybindings toggle-fullscreen "['<Alt><Shift>
 # NO FUNCIONA TODAVIA - REDIMENSIONAR (Resize smart - Alt + Minus/Equal)
 # ---------------------------------------------------------------------
 # Desactiva los atajos de Gaps que están robando el comando
-gsettings set org.gnome.shell.extensions.forge.keybindings window-gap-size-decrease "['']"
-gsettings set org.gnome.shell.extensions.forge.keybindings window-gap-size-increase "['']"
+gsettings set org.gnome.shell.extensions.forge.keybindings window-gap-size-decrease "[]"
+gsettings set org.gnome.shell.extensions.forge.keybindings window-gap-size-increase "[]"
 
 # AeroSpace: Alt + Minus (Achicar ventana)
 # Forzamos el decremento del tamaño del contenedor
@@ -88,14 +107,14 @@ gsettings set org.gnome.shell.extensions.forge.keybindings window-resize-bottom-
 # 7. EXTRAS Y LIMPIEZA DE CONFLICTOS
 # ---------------------------------------------------------------------
 # Reset Layout / Botón de pánico (Equivalente a R en modo servicio)
-gsettings set org.gnome.shell.extensions.forge.keybindings toggle-tiling "['<Alt><Shift>r']"
+gsettings set org.gnome.shell.extensions.forge.keybindings prefs-tiling-toggle "['<Alt><Shift>r']"
 
 # Asegurar Terminal en Ctrl+Alt+T
 gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['<Control><Alt>t']"
 
 # Desactivar atajos de GNOME que causan lag o conflictos
-gsettings set org.gnome.desktop.wm.keybindings begin-move "['']"
-gsettings set org.gnome.desktop.wm.keybindings begin-resize "['']"
-gsettings set org.gnome.shell.extensions.forge.keybindings window-snap-center "['']"
+gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"
+gsettings set org.gnome.desktop.wm.keybindings begin-resize "[]"
+gsettings set org.gnome.shell.extensions.forge.keybindings window-snap-center "[]"
 
 echo "¡Hecho! Tu Linux ahora se comporta exactamente como tu Mac con AeroSpace."

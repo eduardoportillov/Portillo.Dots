@@ -3,17 +3,6 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# fnm (Fast Node Manager) - Node version manager
-FNM_PATH="/home/uplabsai/.local/share/fnm"
-if [ -d "$FNM_PATH" ]; then
-  export PATH="$FNM_PATH:$PATH"
-  eval "$(fnm env --shell zsh)"
-  # npm global bin (must be after fnm to override its PATH modifications)
-  if [ -d "$HOME/.local/npm-global/bin" ]; then
-    export PATH="$HOME/.local/npm-global/bin:$PATH"
-  fi
-fi
-
 # OS detection
 _PORTILLO_OS="$(uname -s)"
 if [[ "$_PORTILLO_OS" == "Darwin" ]]; then
@@ -65,8 +54,13 @@ source $ZSH/oh-my-zsh.sh
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # fnm (Fast Node Manager)
-export PATH="$HOME/.local/share/fnm:$PATH"
-eval "$(fnm env --use-on-cd)"
+if [[ -d "$HOME/.local/share/fnm" ]]; then
+  export PATH="$HOME/.local/share/fnm:$PATH"
+fi
+
+if command -v fnm >/dev/null 2>&1; then
+  eval "$(fnm env --use-on-cd --shell zsh)"
+fi
 
 # pnpm — default JS package manager; npm is shimmed to pnpm via ~/.local/bin/npm
 export PNPM_HOME="$HOME/.local/share/pnpm"
@@ -130,18 +124,6 @@ alias grep='grep --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
 
-# fnm
-FNM_PATH="/opt/homebrew/opt/fnm/bin"
-if [ -d "$FNM_PATH" ]; then
-  eval "$(fnm env --shell zsh)"
-fi
-
 # ~/.local/bin — must come last so its shims (e.g. npm → pnpm) take priority
 # over anything node version managers (nvm/fnm) prepend to PATH above.
 export PATH="$HOME/.local/bin:$PATH"
-
-# fnm
-FNM_PATH="/opt/homebrew/opt/fnm/bin"
-if [ -d "$FNM_PATH" ]; then
-  eval "$(fnm env --shell zsh)"
-fi
