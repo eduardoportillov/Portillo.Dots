@@ -3,6 +3,17 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
+# fnm (Fast Node Manager) - Node version manager
+FNM_PATH="/home/uplabsai/.local/share/fnm"
+if [ -d "$FNM_PATH" ]; then
+  export PATH="$FNM_PATH:$PATH"
+  eval "$(fnm env --shell zsh)"
+  # npm global bin (must be after fnm to override its PATH modifications)
+  if [ -d "$HOME/.local/npm-global/bin" ]; then
+    export PATH="$HOME/.local/npm-global/bin:$PATH"
+  fi
+fi
+
 # OS detection
 _PORTILLO_OS="$(uname -s)"
 if [[ "$_PORTILLO_OS" == "Darwin" ]]; then
