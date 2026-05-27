@@ -91,6 +91,10 @@ multiplier = 3
 
 [terminal]
 shell = { program = "/home/linuxbrew/.linuxbrew/bin/zsh", args = ["--login"] }
+# Permite a TUIs (Claude Code, etc.) copiar al clipboard del sistema vía OSC 52
+# cuando seleccionas texto dentro de ellas. "OnlyCopy" es write-only (no lectura)
+# por seguridad: una app malintencionada no puede leer tu clipboard.
+osc52 = "onlycopy"
 
 # --- BELL ---
 [bell]

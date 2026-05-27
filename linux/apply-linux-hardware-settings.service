@@ -1,0 +1,17 @@
+[Unit]
+Description=Apply Linux hardware optimizations (CPU governor, swappiness, battery charge limit, fan policy)
+After=sysinit.target power-profiles-daemon.service
+Wants=power-profiles-daemon.service
+Before=multi-user.target
+ConditionPathExists=/usr/local/bin/apply-linux-hardware-settings.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/apply-linux-hardware-settings.sh --apply
+RemainAfterExit=yes
+# Safety net: si powerprofilesctl o cualquier comando se cuelga, abortamos
+# en lugar de bloquear el boot indefinidamente.
+TimeoutStartSec=20
+
+[Install]
+WantedBy=multi-user.target

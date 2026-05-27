@@ -9,7 +9,12 @@ set -euo pipefail
 
 # === CONFIGURATION ===
 CHARGE_LIMIT=60
+# Throttle policy: 0=Balanced (dynamic fans), 1=Turbo (loud), 2=Silent
+# Note: power-profiles-daemon overwrites this; use PPD_PROFILE instead.
 THROTTLE_POLICY=0
+# PPD profile drives throttle_thermal_policy on ASUS:
+#   balanced→0 (dynamic), performance→1 (loud), power-saver→2 (silent)
+PPD_PROFILE=balanced
 SWAPPINESS=10
 SYSCTL_FILE="/etc/sysctl.d/99-linux-hardware-settings.conf"
 
@@ -100,6 +105,35 @@ apply_cpu_epp() {
   [[ "$ok" == true ]] && ok "Energy Performance Preference → performance"
 }
 
+apply_ppd_profile() {
+  if ! command -v powerprofilesctl &>/dev/null; then
+    return 0
+  fi
+
+  # Timeout corto: si PPD aún no levantó (boot temprano), no colgamos el
+  # servicio 75s esperando dbus. La unit ya tiene After=power-profiles-daemon
+  # pero esto es defensa en profundidad.
+  local current
+  current="$(timeout 3 powerprofilesctl get 2>/dev/null || echo "")"
+
+  if [[ -z "$current" ]]; then
+    warn "power-profiles-daemon no responde (timeout). Skipping PPD profile."
+    return 0
+  fi
+
+  if [[ "$current" == "$PPD_PROFILE" ]]; then
+    ok "power-profiles-daemon already at $PPD_PROFILE"
+    return 0
+  fi
+
+  if timeout 3 powerprofilesctl set "$PPD_PROFILE" 2>/dev/null; then
+    ok "power-profiles-daemon → $PPD_PROFILE (throttle_thermal_policy mapped accordingly)"
+  else
+    warn "Failed to set PPD profile to $PPD_PROFILE (timeout o no permitido)"
+    return 1
+  fi
+}
+
 apply_asus_throttle() {
   if ! has_asus_throttle; then
     warn "ASUS throttle_thermal_policy not found"
@@ -166,10 +200,23 @@ apply_battery_charge_limit() {
     fi
   done
 
+  # ASUS charge_mode tiene PRECEDENCIA sobre charge_control_end_threshold:
+  #   0 = respeta el threshold (custom)  ← lo que queremos
+  #   1 = ignora el threshold, carga al 100% (full)
+  # Si no lo seteamos a 0, ASUS revierte el threshold internamente y la batería
+  # carga hasta 100% aunque el sysfs diga 60.
   if is_asus && has_asus_charge_mode; then
     local mode
     mode="$(cat /sys/devices/platform/asus-nb-wmi/charge_mode 2>/dev/null || echo "?")"
-    info "ASUS charge_mode: $mode (0=custom threshold, 1=full charge)"
+    if [[ "$mode" != "0" ]]; then
+      if echo 0 > /sys/devices/platform/asus-nb-wmi/charge_mode 2>/dev/null; then
+        ok "ASUS charge_mode → 0 (respeta threshold custom)"
+      else
+        warn "Failed to set ASUS charge_mode=0 (sin esto la batería ignora el límite de $CHARGE_LIMIT%)"
+      fi
+    else
+      ok "ASUS charge_mode already at 0 (custom threshold)"
+    fi
   fi
 
   [[ "$charge_ok" == false ]] && warn "No battery with charge control support found"
@@ -262,6 +309,10 @@ main() {
 
   print_summary
 
+  echo "━━━ Power Profile (PPD) ━━━"
+  apply_ppd_profile || true
+
+  echo ""
   echo "━━━ CPU Governor ━━━"
   apply_cpu_governor || true
 

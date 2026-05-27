@@ -889,130 +889,46 @@ setup_aerospace() {
 }
 
 # === PASO 7E: SETUP FORGE (Linux GNOME only) ===
+# Instala Forge desde el branch `main` del repo upstream (forge-ext/forge).
+# Razón: el último release oficial (v89) está roto en GNOME 50.1 con
+# "St.Icon already disposed". El main tiene los fixes pero no hay release.
+# El instalador real vive en forge/install.sh (auto-contenido en repo).
 setup_forge() {
   [[ "$PLATFORM" != "linux" ]] && return 0
   if ! command -v gsettings &>/dev/null || ! command -v gnome-extensions &>/dev/null; then
     info "GNOME not detected, skipping Forge setup"
     return 0
   fi
-  info "Setting up Forge..."
 
-  local forge_uuid="forge@jmmaranan.com"
-  local forge_dir="$HOME/.local/share/gnome-shell/extensions/$forge_uuid"
-  local forge_metadata="$forge_dir/metadata.json"
-  local shell_version=""
-  local shell_major=""
-  if command -v gnome-shell &>/dev/null; then
-    shell_version="$(gnome-shell --version 2>/dev/null | grep -Eo '[0-9]+(\.[0-9]+)?' | sed -n '1p')"
-    if [[ "$shell_version" == 3.* ]]; then
-      shell_major="$shell_version"
-    else
-      shell_major="${shell_version%%.*}"
-    fi
-  fi
+  info "Setting up Forge (from main branch)..."
 
-  if gnome-extensions list 2>/dev/null | grep -q "$forge_uuid"; then
-    ok "Forge already installed"
-  elif [[ "$CONFIG_ONLY" == true ]]; then
-    warn "Forge not installed, skipping install in --config-only mode"
+  local forge_install="$REPO_DIR/forge/install.sh"
+  local forge_configure="$REPO_DIR/forge/configure.sh"
+
+  if [[ ! -x "$forge_install" ]]; then
+    warn "Forge installer not found at $forge_install, skipping"
     return 0
-  else
-    # Best-effort install — distro package first, then gnome-extensions-cli (gext)
-    local pm
-    pm="$(detect_pkg_manager)"
-    case "$pm" in
-      dnf|yum)
-        info "Installing Forge via $pm..."
-        sudo "$pm" install -y gnome-shell-extension-forge >>"$LOG" 2>&1 \
-          && ok "Forge installed via $pm" || warn "Forge $pm install failed"
-        ;;
-      pacman)
-        info "Installing Forge via pacman..."
-        sudo pacman -S --noconfirm gnome-shell-extension-forge >>"$LOG" 2>&1 \
-          && ok "Forge installed via pacman" \
-          || warn "Forge not in repos — try AUR or install manually: https://extensions.gnome.org/extension/4481/forge/"
-        ;;
-      apt|*)
-        # No apt package; try gext via pipx
-        if command -v pipx &>/dev/null || sudo apt-get install -y pipx >>"$LOG" 2>&1; then
-          pipx install gnome-extensions-cli >>"$LOG" 2>&1 || true
-          if command -v gext &>/dev/null; then
-            info "Installing Forge via gext..."
-            gext install "$forge_uuid" >>"$LOG" 2>&1 \
-              && ok "Forge installed via gext" \
-              || warn "gext install failed — install manually: https://extensions.gnome.org/extension/4481/forge/"
-          else
-            warn "gext not available — install Forge manually: https://extensions.gnome.org/extension/4481/forge/"
-          fi
-        else
-          warn "Install Forge manually: https://extensions.gnome.org/extension/4481/forge/"
-        fi
-        ;;
-    esac
   fi
 
-  # extensions.gnome.org may lag behind Forge upstream metadata. If the code is
-  # installed but only blocked by the local shell-version list, add this shell.
-  if [[ -n "$shell_major" && -f "$forge_metadata" ]] \
-    && ! grep -q "\"$shell_major\"" "$forge_metadata"; then
-    warn "Forge metadata does not list GNOME Shell $shell_version; patching local metadata"
-    if command -v python3 &>/dev/null && python3 - "$forge_metadata" "$shell_major" "$shell_version" >>"$LOG" 2>&1 <<'PY'
-import json
-import sys
-from pathlib import Path
-
-metadata_path = Path(sys.argv[1])
-shell_versions = [version for version in sys.argv[2:] if version]
-metadata = json.loads(metadata_path.read_text())
-versions = metadata.setdefault("shell-version", [])
-for shell_version in shell_versions:
-    if shell_version not in versions:
-        versions.append(shell_version)
-metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
-PY
-    then
-      ok "Forge metadata patched for GNOME Shell $shell_version"
+  # En --config-only NO reinstalamos Forge (operación costosa de red/build).
+  # Solo aplicamos configure.sh si Forge ya está instalado.
+  if [[ "$CONFIG_ONLY" != true ]]; then
+    if bash "$forge_install" >>"$LOG" 2>&1; then
+      ok "Forge installed/up-to-date from main"
     else
-      warn "Could not patch Forge metadata for GNOME Shell $shell_version"
+      warn "Forge installer failed (revisar $LOG)"
     fi
-  fi
-
-  # Enable extension (no-op if already enabled or not installed)
-  gnome-extensions enable "$forge_uuid" 2>/dev/null || true
-
-  # Ubuntu Tiling Assistant also manages windows and can conflict with Forge's auto-split behavior.
-  if gnome-extensions list 2>/dev/null | grep -qx "tiling-assistant@ubuntu.com"; then
-    gnome-extensions disable "tiling-assistant@ubuntu.com" 2>/dev/null || true
-  fi
-
-  if gnome-extensions list --active 2>/dev/null | grep -qx "$forge_uuid"; then
-    ok "Forge extension active"
   else
-    local forge_state
-    forge_state="$(gnome-extensions info "$forge_uuid" 2>/dev/null | grep -E 'Estado|State' || true)"
-    if [[ "$forge_state" == *"OUT OF DATE"* ]]; then
-      warn "Forge installed but not active: out of date for this GNOME Shell"
-      info "Disabling GNOME extension version validation and retrying Forge..."
-      if gsettings set org.gnome.shell disable-extension-version-validation true 2>>"$LOG" \
-        && gnome-extensions enable "$forge_uuid" 2>>"$LOG" \
-        && gnome-extensions list --active 2>/dev/null | grep -qx "$forge_uuid"; then
-        ok "Forge extension active"
-      else
-        warn "Forge still not active. Log out/in and re-run setup if GNOME cached old metadata."
-      fi
-    else
-      warn "Forge installed but not active${forge_state:+ ($forge_state)}"
-    fi
+    info "--config-only mode: skip Forge install, only apply config"
   fi
 
-  # Apply user-provided gsettings configuration script
-  local forge_script="$REPO_DIR/forge/configure.sh"
-  if [[ -f "$forge_script" ]]; then
-    chmod +x "$forge_script"
-    if bash "$forge_script" >>"$LOG" 2>&1; then
+  # Aplicar gsettings de Forge (idempotente)
+  if [[ -f "$forge_configure" ]]; then
+    chmod +x "$forge_configure"
+    if bash "$forge_configure" >>"$LOG" 2>&1; then
       ok "Forge gsettings applied"
     else
-      warn "Forge gsettings script failed (extension may not be enabled yet — restart GNOME Shell and re-run)"
+      warn "Forge gsettings script failed (¿extensión no activa? logout+login y re-correr)"
     fi
   fi
 }
@@ -1034,29 +950,22 @@ setup_linux_optimizations() {
 
   local install_path="/usr/local/bin/apply-linux-hardware-settings.sh"
 
-  # 2. Copy script to /usr/local/bin/ for systemd service
-  sudo cp "$optimize_script" "$install_path"
-  sudo chmod +x "$install_path"
-  ok "Copied to $install_path"
+  # 2. Symlink script in /usr/local/bin/ for systemd service.
+  #    Repo es fuente única de verdad; cambios en optimize.sh se reflejan
+  #    sin re-ejecutar setup.sh (solo systemctl restart del servicio).
+  sudo ln -sfn "$optimize_script" "$install_path"
+  sudo chmod +x "$optimize_script"
+  ok "Symlinked $install_path → $optimize_script"
 
-  # 3. Create systemd service for persistence on boot
+  # 3. Install systemd service template from repo (single source of truth)
   local service_file="/etc/systemd/system/apply-linux-hardware-settings.service"
-  sudo tee "$service_file" > /dev/null <<SERVICE
-[Unit]
-Description=Apply Linux hardware optimizations (CPU governor, swappiness, battery charge limit, fan policy)
-After=sysinit.target
-Before=multi-user.target
-ConditionPathExists=$install_path
-
-[Service]
-Type=oneshot
-ExecStart=$install_path --apply
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-  ok "Created $service_file"
+  local service_src="$REPO_DIR/linux/apply-linux-hardware-settings.service"
+  if [[ ! -f "$service_src" ]]; then
+    error "Service template not found: $service_src"
+    return 1
+  fi
+  sudo install -m 0644 "$service_src" "$service_file"
+  ok "Installed $service_file (from $service_src)"
 
   sudo systemctl daemon-reload
   sudo systemctl enable --now apply-linux-hardware-settings
@@ -1079,6 +988,39 @@ setup_gnome() {
     fi
   else
     warn "GNOME config script not found, skipping"
+  fi
+}
+
+# === PASO 7H: GNOME USER SYSTEMD SERVICE (restore keybindings + Forge on login) ===
+setup_gnome_user_service() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+  command -v systemctl &>/dev/null || return 0
+
+  info "Installing GNOME keybinding restore user service..."
+
+  local src_unit="$REPO_DIR/linux/restore-gnome-keybindings.service"
+  local src_script="$REPO_DIR/linux/restore-gnome-keybindings.sh"
+  local unit_dir="$HOME/.config/systemd/user"
+  local dst_unit="$unit_dir/restore-gnome-keybindings.service"
+
+  if [[ ! -f "$src_unit" || ! -f "$src_script" ]]; then
+    warn "restore-gnome-keybindings files missing in repo, skipping"
+    return 0
+  fi
+
+  chmod +x "$src_script"
+  mkdir -p "$unit_dir"
+
+  # Sustituye __REPO__ por la ruta real del repo en el unit instalado.
+  # El template es la fuente de verdad en repo; este archivo derivado se
+  # regenera cada vez que se ejecuta setup.sh (idempotente).
+  sed "s|__REPO__|$REPO_DIR|g" "$src_unit" > "$dst_unit"
+
+  systemctl --user daemon-reload >>"$LOG" 2>&1 || true
+  if systemctl --user enable --now restore-gnome-keybindings.service >>"$LOG" 2>&1; then
+    ok "restore-gnome-keybindings.service enabled (runs on login)"
+  else
+    warn "Failed to enable restore-gnome-keybindings.service (check: systemctl --user status restore-gnome-keybindings.service)"
   fi
 }
 
@@ -1462,43 +1404,67 @@ install_alacritty() {
           ok "alacritty up to date (managed externally)"
           ;;
       esac
-      return 0
+    else
+      # Fresh install
+      local installed_alacritty=false
+      case "$pm_alacritty" in
+        apt)
+          info "Installing alacritty via apt (Ubuntu 22.04+ universe)..."
+          if sudo apt-get install -y alacritty >>"$LOG" 2>&1; then
+            ok "alacritty installed"
+            installed_alacritty=true
+          else
+            warn "alacritty not found in apt (Ubuntu 22.04+ with universe enabled required)"
+          fi
+          ;;
+        pacman)
+          info "Installing alacritty via pacman..."
+          sudo pacman -S --noconfirm alacritty >>"$LOG" 2>&1 \
+            && ok "alacritty installed" && installed_alacritty=true \
+            || warn "alacritty pacman install failed, continuing..."
+          ;;
+        dnf|yum)
+          info "Installing alacritty via $pm_alacritty..."
+          sudo "$pm_alacritty" install -y alacritty >>"$LOG" 2>&1 \
+            && ok "alacritty installed" && installed_alacritty=true \
+            || warn "alacritty $pm_alacritty install failed, continuing..."
+          ;;
+        *)
+          warn "No supported package manager for alacritty on this distro"
+          ;;
+      esac
+
+      if [[ "$installed_alacritty" == false ]]; then
+        warn "Could not install alacritty automatically."
+        warn "Manual install: https://github.com/alacritty/alacritty/blob/master/INSTALL.md"
+      fi
     fi
 
-    # Fresh install
-    local installed_alacritty=false
-    case "$pm_alacritty" in
-      apt)
-        info "Installing alacritty via apt (Ubuntu 22.04+ universe)..."
-        if sudo apt-get install -y alacritty >>"$LOG" 2>&1; then
-          ok "alacritty installed"
-          installed_alacritty=true
-        else
-          warn "alacritty not found in apt (Ubuntu 22.04+ with universe enabled required)"
-        fi
-        ;;
-      pacman)
-        info "Installing alacritty via pacman..."
-        sudo pacman -S --noconfirm alacritty >>"$LOG" 2>&1 \
-          && ok "alacritty installed" && installed_alacritty=true \
-          || warn "alacritty pacman install failed, continuing..."
-        ;;
-      dnf|yum)
-        info "Installing alacritty via $pm_alacritty..."
-        sudo "$pm_alacritty" install -y alacritty >>"$LOG" 2>&1 \
-          && ok "alacritty installed" && installed_alacritty=true \
-          || warn "alacritty $pm_alacritty install failed, continuing..."
-        ;;
-      *)
-        warn "No supported package manager for alacritty on this distro"
-        ;;
-    esac
-
-    if [[ "$installed_alacritty" == false ]]; then
-      warn "Could not install alacritty automatically."
-      warn "Manual install: https://github.com/alacritty/alacritty/blob/master/INSTALL.md"
-    fi
+    install_wayland_clipboard
   fi
+}
+
+# wl-clipboard: requerido en Wayland para que OSC 52 (copy desde TUIs como
+# Claude Code) escriba al system clipboard. Sin esto, alacritty cae silente.
+# Idempotente: skip si ya está, sin op si NO es Wayland.
+install_wayland_clipboard() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+  [[ "${XDG_SESSION_TYPE:-}" != "wayland" ]] && return 0
+
+  if command -v wl-copy &>/dev/null; then
+    ok "wl-clipboard already installed"
+    return 0
+  fi
+
+  info "Installing wl-clipboard (required for OSC 52 on Wayland)..."
+  local pm
+  pm="$(detect_pkg_manager)"
+  case "$pm" in
+    apt)    sudo apt-get install -y wl-clipboard >>"$LOG" 2>&1 && ok "wl-clipboard installed" || warn "wl-clipboard install failed" ;;
+    pacman) sudo pacman -S --noconfirm wl-clipboard >>"$LOG" 2>&1 && ok "wl-clipboard installed" || warn "wl-clipboard install failed" ;;
+    dnf|yum) sudo "$pm" install -y wl-clipboard >>"$LOG" 2>&1 && ok "wl-clipboard installed" || warn "wl-clipboard install failed" ;;
+    *) warn "No supported package manager for wl-clipboard install" ;;
+  esac
 }
 
 # === PASO 12: VERIFY INSTALLATION ===
@@ -1791,6 +1757,9 @@ sync_configs_only() {
   setup_linux_default_terminal
   echo ""
 
+  install_wayland_clipboard
+  echo ""
+
   setup_linux_optimizations
   echo ""
 
@@ -1810,6 +1779,9 @@ sync_configs_only() {
   echo ""
 
   setup_forge
+  echo ""
+
+  setup_gnome_user_service
   echo ""
 
   create_symlinks
@@ -1912,9 +1884,12 @@ main() {
   setup_forge
   echo ""
 
+  setup_gnome_user_service
+  echo ""
+
   create_symlinks
   echo ""
-  
+
   configure_default_shell
   echo ""
   

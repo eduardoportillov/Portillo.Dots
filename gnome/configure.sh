@@ -33,7 +33,11 @@ gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-4 "['<Alt><Shif
 gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-5 "['<Alt><Shift>5']"
 
 # Monitores y ventanas.
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "['<Alt><Shift>Tab']"
+# move-to-monitor-right intencionalmente NO bindeado: el binding Alt+Shift+Tab
+# trae más problemas que beneficios (colisión con switch-windows-backward).
+# Si necesitas mover ventana entre monitores, usa drag con mouse o Alt+Shift+H/L
+# de Forge para mover dentro del árbol de tiling.
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "[]"
 gsettings set org.gnome.desktop.wm.keybindings toggle-fullscreen "[]"
 gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Shift><Alt>f']"
 gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"

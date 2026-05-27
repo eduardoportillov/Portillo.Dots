@@ -64,9 +64,11 @@ gsettings set org.gnome.shell.extensions.forge.keybindings con-split-layout-togg
 # Cambiar a modo Tabulado/Acordeón (Alt + ,)
 gsettings set org.gnome.shell.extensions.forge.keybindings con-tabbed-layout-toggle "['<Alt>comma']"
 
-# Ventana Flotante (Alt + Shift + ;)
-# Nota: Usamos el inicio del Modo Servicio de tu Mac para ejecutar la acción directa.
-gsettings set org.gnome.shell.extensions.forge.keybindings window-toggle-float "['<Alt><Shift>semicolon']"
+# window-toggle-float DESHABILITADO: hace toggle "one-shot" pero no respeta
+# always-float, lo cual confunde (ventana queda float sin poder volver). El
+# binding correcto para float/tile es window-toggle-always-float (Shift+Super+C),
+# que es sticky y siempre alterna bien.
+gsettings set org.gnome.shell.extensions.forge.keybindings window-toggle-float "[]"
 
 # ---------------------------------------------------------------------
 # NO FUNCIONA TODAVIA - REDIMENSIONAR (Resize smart - Alt + Minus/Equal)
@@ -87,10 +89,60 @@ gsettings set org.gnome.shell.extensions.forge.keybindings window-resize-bottom-
 # ---------------------------------------------------------------------
 # 7. EXTRAS Y LIMPIEZA DE CONFLICTOS
 # ---------------------------------------------------------------------
-# Reset Layout / Botón de pánico (Equivalente a R en modo servicio)
-gsettings set org.gnome.shell.extensions.forge.keybindings prefs-tiling-toggle "['<Alt><Shift>r']"
+# prefs-tiling-toggle DESHABILITADO: dispara un bug en lib/extension/indicator.js:125
+# de Forge main (commit 0319a712): "Object St.Icon already disposed". El listener
+# del indicator no se desconecta al destruirse y cualquier cambio de la setting
+# tiling-mode-enabled lo activa, dejando ventanas en estado inconsistente
+# (modo acordeón residual). Al re-habilitar el binding cuando upstream haga
+# release con el fix, restaurar a "['<Alt><Shift>r']".
+gsettings set org.gnome.shell.extensions.forge.keybindings prefs-tiling-toggle "[]"
 
 # Desactivar atajos de Forge que causan conflictos
 gsettings set org.gnome.shell.extensions.forge.keybindings window-snap-center "[]"
 
+# ---------------------------------------------------------------------
+# 8. RE-ASERCIÓN DEFENSIVA DEL TILING AUTOMÁTICO
+# ---------------------------------------------------------------------
+# Si una sesión previa o un toggle accidental dejó el tiling apagado, lo
+# forzamos de vuelta al final. El gsetting es el último estado conocido —
+# Forge lo lee al iniciar la sesión y al cambiar de workspace.
+gsettings set org.gnome.shell.extensions.forge tiling-mode-enabled true
+gsettings set org.gnome.shell.extensions.forge auto-split-enabled true
+gsettings set org.gnome.shell.extensions.forge primary-layout-mode "'tiling'"
+gsettings set org.gnome.shell.extensions.forge workspace-skip-tile "''"
+
+# ---------------------------------------------------------------------
+# 9. LIMPIAR OVERRIDES ACCIDENTALES EN windows.json
+# ---------------------------------------------------------------------
+# Forge persiste en ~/.config/forge/config/windows.json cuando el usuario
+# hace Shift+Super+C sobre una ventana. Limpiamos overrides de apps que
+# SIEMPRE deben tilearse en este setup (alacritty, terminales, browsers).
+FORGE_WINDOWS_JSON="$HOME/.config/forge/config/windows.json"
+if [[ -f "$FORGE_WINDOWS_JSON" ]] && command -v python3 >/dev/null 2>&1; then
+  python3 - "$FORGE_WINDOWS_JSON" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+cfg = Path(sys.argv[1])
+data = json.loads(cfg.read_text())
+# Clases que NUNCA deben ser flotantes en este setup
+NEVER_FLOAT = {"Alacritty", "alacritty"}
+before = len(data.get("overrides", []))
+data["overrides"] = [
+    o for o in data.get("overrides", [])
+    if not (o.get("wmClass") in NEVER_FLOAT and "wmTitle" not in o)
+]
+after = len(data["overrides"])
+if before != after:
+    cfg.write_text(json.dumps(data, indent=4))
+    print(f"forge/configure: removidos {before - after} overrides de always-float (alacritty)")
+PY
+fi
+
 echo "¡Hecho! Tu Linux ahora se comporta exactamente como tu Mac con AeroSpace."
+echo ""
+echo "Para float/tile usa: Shift+Super+C (toggle always-float, único confiable)"
+echo "Alt+Shift+; y Alt+Shift+R deshabilitados:"
+echo "  - Alt+Shift+; (toggle-float): no respeta always-float, deja stuck en float"
+echo "  - Alt+Shift+R (prefs-tiling-toggle): dispara bug del St.Icon en Forge main"
