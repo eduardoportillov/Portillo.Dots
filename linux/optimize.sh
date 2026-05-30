@@ -8,7 +8,11 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════
 
 # === CONFIGURATION ===
-CHARGE_LIMIT=60
+# NOTA: el límite de carga de batería NO se maneja acá. Es responsabilidad
+# exclusiva de la regla udev linux/99-battery-charge-threshold.rules (se dispara
+# en boot, suspensión y hotplug). Antes esto escribía charge_control_end_threshold
+# y charge_mode, pero era redundante con udev y la lógica de charge_mode era
+# incorrecta (es un atributo de solo-lectura). Ver TODO.md.
 # Throttle policy: 0=Balanced (dynamic fans), 1=Turbo (loud), 2=Silent
 # Note: power-profiles-daemon overwrites this; use PPD_PROFILE instead.
 THROTTLE_POLICY=0
@@ -53,10 +57,6 @@ has_charge_control() {
 
 has_asus_throttle() {
   [[ -f /sys/devices/platform/asus-nb-wmi/throttle_thermal_policy ]]
-}
-
-has_asus_charge_mode() {
-  [[ -f /sys/devices/platform/asus-nb-wmi/charge_mode ]]
 }
 
 has_dgpu_disable() {
@@ -163,65 +163,6 @@ apply_asus_throttle() {
   fi
 }
 
-apply_battery_charge_limit() {
-  if ! has_battery; then
-    info "No battery detected, skipping charge limit"
-    return 0
-  fi
-
-  if ! is_root; then
-    warn "Need root to set battery charge limit (try with sudo)"
-    return 1
-  fi
-
-  local charge_ok=false
-
-  for bat in /sys/class/power_supply/BAT*; do
-    [[ -d "$bat" ]] || continue
-
-    if [[ -f "$bat/charge_control_end_threshold" ]]; then
-      local current
-      current="$(cat "$bat/charge_control_end_threshold" 2>/dev/null || echo "0")"
-      local bat_name
-      bat_name="$(basename "$bat")"
-
-      if [[ "$current" == "$CHARGE_LIMIT" ]]; then
-        ok "$bat_name: charge limit already at $CHARGE_LIMIT%"
-        charge_ok=true
-        continue
-      fi
-
-      if echo "$CHARGE_LIMIT" > "$bat/charge_control_end_threshold" 2>/dev/null; then
-        ok "$bat_name: charge limit set to $CHARGE_LIMIT%"
-        charge_ok=true
-      else
-        warn "$bat_name: failed to set charge limit"
-      fi
-    fi
-  done
-
-  # ASUS charge_mode tiene PRECEDENCIA sobre charge_control_end_threshold:
-  #   0 = respeta el threshold (custom)  ← lo que queremos
-  #   1 = ignora el threshold, carga al 100% (full)
-  # Si no lo seteamos a 0, ASUS revierte el threshold internamente y la batería
-  # carga hasta 100% aunque el sysfs diga 60.
-  if is_asus && has_asus_charge_mode; then
-    local mode
-    mode="$(cat /sys/devices/platform/asus-nb-wmi/charge_mode 2>/dev/null || echo "?")"
-    if [[ "$mode" != "0" ]]; then
-      if echo 0 > /sys/devices/platform/asus-nb-wmi/charge_mode 2>/dev/null; then
-        ok "ASUS charge_mode → 0 (respeta threshold custom)"
-      else
-        warn "Failed to set ASUS charge_mode=0 (sin esto la batería ignora el límite de $CHARGE_LIMIT%)"
-      fi
-    else
-      ok "ASUS charge_mode already at 0 (custom threshold)"
-    fi
-  fi
-
-  [[ "$charge_ok" == false ]] && warn "No battery with charge control support found"
-}
-
 apply_swappiness() {
   if ! is_root; then
     warn "Need root to set swappiness (try with sudo)"
@@ -322,7 +263,7 @@ main() {
 
   echo ""
   echo "━━━ Battery & Charging ━━━"
-  apply_battery_charge_limit || true
+  info "Límite de carga gestionado por udev (99-battery-charge-threshold.rules), no por este script"
 
   echo ""
   echo "━━━ ASUS Hardware ━━━"

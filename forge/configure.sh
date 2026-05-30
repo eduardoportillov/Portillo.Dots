@@ -115,8 +115,11 @@ gsettings set org.gnome.shell.extensions.forge workspace-skip-tile "''"
 # 9. LIMPIAR OVERRIDES ACCIDENTALES EN windows.json
 # ---------------------------------------------------------------------
 # Forge persiste en ~/.config/forge/config/windows.json cuando el usuario
-# hace Shift+Super+C sobre una ventana. Limpiamos overrides de apps que
-# SIEMPRE deben tilearse en este setup (alacritty, terminales, browsers).
+# hace Shift+Super+C sobre una ventana. Limpiamos overrides always-float de
+# apps que SIEMPRE deben tilearse en este setup (alacritty, browsers).
+# Solo removemos overrides SIN wmTitle (los always-float de toda la app);
+# los overrides con wmTitle específico (splashes, diálogos "About …",
+# Calculator, etc.) se respetan porque flotar esos SÍ es deseado.
 FORGE_WINDOWS_JSON="$HOME/.config/forge/config/windows.json"
 if [[ -f "$FORGE_WINDOWS_JSON" ]] && command -v python3 >/dev/null 2>&1; then
   python3 - "$FORGE_WINDOWS_JSON" <<'PY'
@@ -126,8 +129,12 @@ from pathlib import Path
 
 cfg = Path(sys.argv[1])
 data = json.loads(cfg.read_text())
-# Clases que NUNCA deben ser flotantes en este setup
-NEVER_FLOAT = {"Alacritty", "alacritty"}
+# Clases que NUNCA deben ser flotantes en este setup (terminales y browsers).
+# Incluimos variantes de wmClass que reporta Chrome/Chromium según versión.
+NEVER_FLOAT = {
+    "Alacritty", "alacritty",
+    "google-chrome", "Google-chrome", "google-chrome-stable", "Google-chrome-stable",
+}
 before = len(data.get("overrides", []))
 data["overrides"] = [
     o for o in data.get("overrides", [])
@@ -136,7 +143,7 @@ data["overrides"] = [
 after = len(data["overrides"])
 if before != after:
     cfg.write_text(json.dumps(data, indent=4))
-    print(f"forge/configure: removidos {before - after} overrides de always-float (alacritty)")
+    print(f"forge/configure: removidos {before - after} overrides de always-float (terminales/browsers)")
 PY
 fi
 

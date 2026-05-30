@@ -82,15 +82,50 @@ Está **encadenada con el problema #1**: si Alacritty no acepta OSC 52, tmux no 
 
 ## Bugs de Forge upstream (no fixables localmente)
 
-### St.Icon already disposed
-`lib/extension/indicator.js:125` no desconecta el listener al desactivarse, lo que causa crashes cuando un setting de Forge cambia.
+### Corrupción del window-stack de Mutter (causa raíz de terminal/screenshot/tiling rotos)
+**Síntoma**: tras reiniciar todo anda; con el tiempo se degrada. Ctrl+Alt+T deja
+de abrir terminal (la ventana de Chrome se encoge y queda un hueco, pero no aparece
+terminal), Win+Shift+S no saca screenshot, y ventanas nuevas (Chrome) no tilean.
+
+**Diagnóstico (2026-05-30, capturado con el bug activo)**: la config NO se pierde
+(los gsettings de los atajos siguen intactos). Es un problema de runtime: Forge
+corrompe el window-stacking de Mutter. Evidencia en `journalctl -b _COMM=gnome-shell`:
+```
+meta_window_set_stack_position_no_sync: assertion 'window->stack_position >= 0' failed
+JS ERROR: TypeError: can't access property "clone", record is undefined  @ workspaceAnimation.js:135 (_syncStacking)
+"Can't update stage views actor ... needs an allocation"  (torrente)
+```
+Con el stack corrupto, las ventanas NUEVAS se lanzan como proceso pero nunca reciben
+allocation → quedan invisibles/tamaño 0 (se observó un `alacritty` vivo 17 min sin
+ventana). En Wayland el dispatch de atajos del shell también se atasca → fallan
+Ctrl+Alt+T y Win+Shift+S a la vez.
+
+**Disparador**: el toggle forzado `tiling-mode-enabled` off→on al login llamaba a
+`renderTree()` sobre ventanas ya stackeadas.
 
 **Mitigación aplicada**:
+- ✅ Removido (de verdad) el toggle off→on de `tiling-mode-enabled` en
+  `restore-gnome-keybindings.sh`. (Versiones previas de este TODO lo daban por
+  removido pero el código aún lo tenía — corregido el 2026-05-30.)
+- ✅ Forge pineado a un commit reproducible en `forge/install.sh` (`FORGE_COMMIT`)
+  para no flotar en `main` y traer regresiones.
+- ✅ Helpers instalados como comandos por `./setup.sh` (en `~/.local/bin`):
+  `dots-fix-tiling` (recupera sin logout: disable→enable Forge) y
+  `dots-diag` (captura la firma del bug cuando se rompe).
+
+**Próximos pasos**: si la corrupción reaparece tras quitar el toggle, correr
+`dots-diag` con el bug activo, reportar issue en
+https://github.com/forge-ext/forge/issues, y evaluar bump de `FORGE_COMMIT` a un
+main más reciente o una extensión de tiling alternativa.
+
+### St.Icon already disposed (ya mitigado, distinto del anterior)
+`lib/extension/indicator.js` no desconecta el listener al desactivarse, lo que
+causaba crashes cuando un setting de Forge cambiaba. Mitigado con el patch
+`forge/patches/apply-patches.sh` (guard try/catch) y removiendo bindings:
 - Removido binding de `prefs-tiling-toggle` (Alt+Shift+R)
 - Removido binding de `window-toggle-float` (Alt+Shift+;)
-- Removido toggle off→on de `tiling-mode-enabled` en `restore-gnome-keybindings.sh`
 
-**Próximos pasos**: Reportar issue en https://github.com/forge-ext/forge/issues. Cuando se publique release con el fix, re-habilitar bindings en `forge/configure.sh`.
+Cuando upstream publique release con el fix, re-habilitar bindings en `forge/configure.sh`.
 
 ---
 

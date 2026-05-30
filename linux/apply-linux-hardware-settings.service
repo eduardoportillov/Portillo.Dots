@@ -1,8 +1,11 @@
 [Unit]
-Description=Apply Linux hardware optimizations (CPU governor, swappiness, battery charge limit, fan policy)
+Description=Apply Linux hardware optimizations (CPU governor, swappiness, fan policy)
+# NO usar Before=multi-user.target: combinado con After=power-profiles-daemon
+# (que multi-user.target ya pulls-in) crea un ordering cycle y systemd BORRA el
+# job de este servicio en el boot ("Found ordering cycle ... Job ... deleted").
+# Sin Before=multi-user.target el servicio corre después de PPD, sin ciclo.
 After=sysinit.target power-profiles-daemon.service
 Wants=power-profiles-daemon.service
-Before=multi-user.target
 ConditionPathExists=/usr/local/bin/apply-linux-hardware-settings.sh
 
 [Service]

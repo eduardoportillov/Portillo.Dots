@@ -970,6 +970,29 @@ setup_linux_optimizations() {
   sudo systemctl daemon-reload
   sudo systemctl enable --now apply-linux-hardware-settings
   ok "Service enabled and started (will re-apply settings on boot)"
+
+  # 4. Install udev rule for battery charge limit (config dura, primario).
+  #    El threshold de carga es lo que más se "pierde" (suspensión, hotplug) y
+  #    el servicio oneshot solo corre en boot. La regla udev re-aplica el límite
+  #    cada vez que aparece/cambia la batería — independiente del servicio.
+  local udev_src="$REPO_DIR/linux/99-battery-charge-threshold.rules"
+  local udev_dst="/etc/udev/rules.d/99-battery-charge-threshold.rules"
+  if [[ -f "$udev_src" ]]; then
+    sudo install -m 0644 "$udev_src" "$udev_dst"
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger -s power_supply
+    ok "Installed udev battery rule → $udev_dst (applied via udevadm trigger)"
+  else
+    warn "udev battery rule not found: $udev_src"
+  fi
+
+  # 5. Helpers de recuperación/diagnóstico de Forge como comandos en ~/.local/bin
+  #    (mismo patrón que el shim de npm; ~/.local/bin ya está en PATH).
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$REPO_DIR/linux/dots-fix-tiling.sh" "$HOME/.local/bin/dots-fix-tiling"
+  ln -sfn "$REPO_DIR/linux/dots-diag.sh"       "$HOME/.local/bin/dots-diag"
+  chmod +x "$REPO_DIR/linux/dots-fix-tiling.sh" "$REPO_DIR/linux/dots-diag.sh"
+  ok "Helpers disponibles como comandos: dots-fix-tiling, dots-diag"
 }
 
 # === PASO 7G: GNOME SETTINGS ===
@@ -1533,6 +1556,22 @@ verify() {
       ok_count=$((ok_count + 1))
     else
       error "GNOME desktop defaults"
+    fi
+  fi
+
+  # Battery charge limit — solo si el hardware soporta charge_control (laptops)
+  if [[ "$PLATFORM" == "linux" ]]; then
+    local bat_threshold_file
+    bat_threshold_file="$(echo /sys/class/power_supply/BAT*/charge_control_end_threshold 2>/dev/null | awk '{print $1}')"
+    if [[ -f "$bat_threshold_file" ]]; then
+      total=$((total + 1))
+      local udev_rule="/etc/udev/rules.d/99-battery-charge-threshold.rules"
+      if [[ -f "$udev_rule" ]] && [[ "$(cat "$bat_threshold_file" 2>/dev/null)" == "60" ]]; then
+        ok "Battery charge limit (60% via udev)"
+        ok_count=$((ok_count + 1))
+      else
+        error "Battery charge limit (esperado 60% via udev; revisar $udev_rule)"
+      fi
     fi
   fi
 

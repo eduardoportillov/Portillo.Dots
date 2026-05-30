@@ -55,24 +55,11 @@ if [[ -x "$REPO_DIR/gnome/configure.sh" ]]; then
   bash "$REPO_DIR/gnome/configure.sh" >>"$LOG_FILE" 2>&1 || log "WARN: gnome/configure.sh falló"
 fi
 
+# NO re-renderizar el árbol de Forge con un toggle de tiling-mode-enabled: corrompe
+# el window-stack de Mutter y deja las ventanas nuevas invisibles. Ver TODO.md.
 if [[ -d "$FORGE_DIR" && -x "$REPO_DIR/forge/configure.sh" ]]; then
   log "Aplicando forge/configure.sh"
   bash "$REPO_DIR/forge/configure.sh" >>"$LOG_FILE" 2>&1 || log "WARN: forge/configure.sh falló"
-
-  # Forzar re-render del árbol para que Forge re-evalúe las ventanas autostart
-  # que nacieron ANTES de que la extensión estuviera lista. Sin esto, abren
-  # flotantes en el centro hasta que el usuario presione Shift+Super+C.
-  # El toggle off→on dispara renderTree() en Forge (window.js:1186).
-  # Requiere el patch fix-indicator-disposed (forge/patches/apply-patches.sh)
-  # para no crashear el listener fantasma del indicator.
-  log "Forzando re-render del árbol de Forge (toggle off→on)"
-  sleep 2
-  if [[ -d "$FORGE_DIR/schemas" ]]; then
-    export GSETTINGS_SCHEMA_DIR="$FORGE_DIR/schemas"
-  fi
-  gsettings set org.gnome.shell.extensions.forge tiling-mode-enabled false 2>>"$LOG_FILE" || true
-  sleep 0.5
-  gsettings set org.gnome.shell.extensions.forge tiling-mode-enabled true 2>>"$LOG_FILE" || true
 fi
 
 log "=== Fin ==="

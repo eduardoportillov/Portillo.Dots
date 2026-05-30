@@ -134,6 +134,31 @@ This recreates all symlinks to point to the new location without reinstalling pa
 | Quieres unificación de prompt               | ✅ Sí    |
 | Solo usas Zsh y p10k te funciona bien       | ❌ No    |
 
+## Troubleshooting (Linux / GNOME)
+
+### El tiling se degrada / Ctrl+Alt+T o Win+Shift+S dejan de funcionar
+Forge (git main sobre GNOME 50.1) corrompe con el tiempo el window-stacking de
+Mutter; las ventanas nuevas se lanzan pero quedan invisibles y los atajos del
+shell se atascan. La config NO se pierde — es un problema de runtime de Forge.
+
+- **Recuperar sin logout:** `dots-fix-tiling` (disable→enable Forge).
+  Si no alcanza, **logout + login** resetea todo.
+- **Capturar evidencia cuando esté roto:** `dots-diag` → guarda la
+  firma del bug en `~/.local/state/dots-diag-*.txt`.
+- (`dots-fix-tiling` y `dots-diag` se instalan como comandos en `~/.local/bin`
+  al correr `./setup.sh`.)
+- Forge está pineado a un commit reproducible en `forge/install.sh` (`FORGE_COMMIT`).
+  Para bumpear: cambiar el valor, `bash forge/install.sh --force`, logout+login.
+
+### La batería carga al 100% (debería limitarse al 60%)
+El límite se aplica **únicamente** vía regla udev (`linux/99-battery-charge-threshold.rules`
+→ `/etc/udev/rules.d/`), que se dispara en boot, al volver de suspensión y al
+reconectar batería. `linux/optimize.sh` ya **no** toca la batería (era redundante).
+Se instala con `./setup.sh`. Verificar:
+`cat /sys/class/power_supply/BAT1/charge_control_end_threshold` debe decir `60`.
+Nota: el límite topea cargas **futuras**; si la batería ya está al 100% no baja
+sola, se queda ahí hasta descargarse y recargar (que parará en 60%).
+
 ## Feedback & Issues
 
 Report issues or suggest improvements at: https://github.com/eduardoportillov/Portillo.Dots/issues

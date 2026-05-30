@@ -20,10 +20,19 @@ set -euo pipefail
 # Variables:
 #   FORGE_REPO       URL del repo (default: https://github.com/forge-ext/forge.git)
 #   FORGE_BRANCH     Branch (default: main)
+#   FORGE_COMMIT     Commit a fijar (default: known-good pineado abajo).
+#                    Vacío ("") = flota en el HEAD del branch (NO recomendado).
 #   FORGE_UUID       UUID de la extensión (default: forge@jmmaranan.com)
+#
+# PIN DE COMMIT: Forge main es bleeding edge y ha regresionado el manejo de
+# window-stacking de Mutter en GNOME 50.1 (ventanas nuevas sin allocation,
+# tiling/atajos que se degradan con el tiempo). Fijamos un commit reproducible
+# para no traer un main distinto en cada setup. Para actualizar a un main más
+# nuevo: cambiar FORGE_COMMIT, `bash forge/install.sh --force`, logout+login.
 
 FORGE_REPO="${FORGE_REPO:-https://github.com/forge-ext/forge.git}"
 FORGE_BRANCH="${FORGE_BRANCH:-main}"
+FORGE_COMMIT="${FORGE_COMMIT:-0319a7125db1088556b159a69bbec77e111afca7}"
 FORGE_UUID="${FORGE_UUID:-forge@jmmaranan.com}"
 
 FORCE=false
@@ -91,6 +100,15 @@ echo "Clonando $FORGE_REPO ($FORGE_BRANCH) en $TMPDIR..."
 git clone --depth 1 --branch "$FORGE_BRANCH" "$FORGE_REPO" "$TMPDIR/forge"
 
 cd "$TMPDIR/forge"
+
+# Fijar el commit pineado (si FORGE_COMMIT no está vacío y difiere del HEAD).
+# Usamos fetch shallow del commit puntual para no clonar todo el historial.
+if [[ -n "$FORGE_COMMIT" ]] && [[ "$(git rev-parse HEAD)" != "$FORGE_COMMIT" ]]; then
+  echo "Fijando commit pineado $FORGE_COMMIT..."
+  git fetch --depth 1 origin "$FORGE_COMMIT"
+  git checkout --quiet "$FORGE_COMMIT"
+fi
+
 COMMIT="$(git rev-parse HEAD)"
 
 echo "Compilando e instalando (make build install)..."
