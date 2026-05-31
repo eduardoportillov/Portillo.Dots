@@ -136,19 +136,28 @@ This recreates all symlinks to point to the new location without reinstalling pa
 
 ## Troubleshooting (Linux / GNOME)
 
-### El tiling se degrada / Ctrl+Alt+T o Win+Shift+S dejan de funcionar
-Forge (git main sobre GNOME 50.1) corrompe con el tiempo el window-stacking de
-Mutter; las ventanas nuevas se lanzan pero quedan invisibles y los atajos del
-shell se atascan. La config NO se pierde — es un problema de runtime de Forge.
+### Tiling: Tiling Shell (migrado desde Forge)
+El tiling lo provee **Tiling Shell** (`tilingshell@ferrarodomenico.com`), instalado
+y configurado por `./setup.sh` (scripts en `tilingshell/`). Tiling BSP automático,
+navegación Alt+Ctrl+HJKL (foco) / Alt+Shift+HJKL (mover), float con Shift+Super+C,
+ciclar layout con Alt+/. En Wayland: **logout + login** tras instalar para que cargue.
 
-- **Recuperar sin logout:** `dots-fix-tiling` (disable→enable Forge).
+> Se migró desde Forge el 2026-05-31: Forge quedó sin maintainer e incompatible con
+> GNOME 50.1 — corrompía el window-stack de Mutter en multi-monitor (bug #303),
+> dejando ventanas nuevas invisibles y atascando los atajos.
+
+### El tiling se degrada / Ctrl+Alt+T o Win+Shift+S dejan de funcionar
+La config de atajos NO se pierde (es un problema de runtime de la extensión de tiling).
+
+- **Recuperar sin logout:** `dots-fix-tiling` (disable→enable Tiling Shell).
   Si no alcanza, **logout + login** resetea todo.
 - **Capturar evidencia cuando esté roto:** `dots-diag` → guarda la
   firma del bug en `~/.local/state/dots-diag-*.txt`.
 - (`dots-fix-tiling` y `dots-diag` se instalan como comandos en `~/.local/bin`
   al correr `./setup.sh`.)
-- Forge está pineado a un commit reproducible en `forge/install.sh` (`FORGE_COMMIT`).
-  Para bumpear: cambiar el valor, `bash forge/install.sh --force`, logout+login.
+- Tiling Shell está pineada a una versión reproducible en `tilingshell/install.sh`
+  (`TILINGSHELL_VERSION_TAG`). Para actualizar: cambiar el valor (o vaciarlo para la
+  última), `bash tilingshell/install.sh --force`, logout+login.
 
 ### La batería carga al 100% (debería limitarse al 60%)
 El límite se aplica **únicamente** vía regla udev (`linux/99-battery-charge-threshold.rules`

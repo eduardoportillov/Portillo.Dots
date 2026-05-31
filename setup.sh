@@ -888,47 +888,47 @@ setup_aerospace() {
   info "AeroSpace: grant Accessibility permission in System Settings → Privacy & Security."
 }
 
-# === PASO 7E: SETUP FORGE (Linux GNOME only) ===
-# Instala Forge desde el branch `main` del repo upstream (forge-ext/forge).
-# Razón: el último release oficial (v89) está roto en GNOME 50.1 con
-# "St.Icon already disposed". El main tiene los fixes pero no hay release.
-# El instalador real vive en forge/install.sh (auto-contenido en repo).
-setup_forge() {
+# === PASO 7E: SETUP TILING SHELL (Linux GNOME only) ===
+# Instala Tiling Shell (domferr) desde extensions.gnome.org y desmonta Forge.
+# Razón: Forge quedó sin maintainer e incompatible con GNOME 50.1 — corrompía
+# el window-stack de Mutter en multi-monitor (bug #303) rompiendo atajos y
+# dejando ventanas nuevas invisibles. Tiling Shell hace tiling BSP automático,
+# está mantenido y soporta shell 45–50. Scripts auto-contenidos en tilingshell/.
+setup_tilingshell() {
   [[ "$PLATFORM" != "linux" ]] && return 0
   if ! command -v gsettings &>/dev/null || ! command -v gnome-extensions &>/dev/null; then
-    info "GNOME not detected, skipping Forge setup"
+    info "GNOME not detected, skipping Tiling Shell setup"
     return 0
   fi
 
-  info "Setting up Forge (from main branch)..."
+  info "Setting up Tiling Shell..."
 
-  local forge_install="$REPO_DIR/forge/install.sh"
-  local forge_configure="$REPO_DIR/forge/configure.sh"
+  local ts_install="$REPO_DIR/tilingshell/install.sh"
+  local ts_configure="$REPO_DIR/tilingshell/configure.sh"
 
-  if [[ ! -x "$forge_install" ]]; then
-    warn "Forge installer not found at $forge_install, skipping"
+  if [[ ! -x "$ts_install" ]]; then
+    warn "Tiling Shell installer not found at $ts_install, skipping"
     return 0
   fi
 
-  # En --config-only NO reinstalamos Forge (operación costosa de red/build).
-  # Solo aplicamos configure.sh si Forge ya está instalado.
+  # En --config-only NO reinstalamos (operación de red). Solo config si ya está.
   if [[ "$CONFIG_ONLY" != true ]]; then
-    if bash "$forge_install" >>"$LOG" 2>&1; then
-      ok "Forge installed/up-to-date from main"
+    if bash "$ts_install" >>"$LOG" 2>&1; then
+      ok "Tiling Shell installed/up-to-date"
     else
-      warn "Forge installer failed (revisar $LOG)"
+      warn "Tiling Shell installer failed (revisar $LOG)"
     fi
   else
-    info "--config-only mode: skip Forge install, only apply config"
+    info "--config-only mode: skip Tiling Shell install, only apply config"
   fi
 
-  # Aplicar gsettings de Forge (idempotente)
-  if [[ -f "$forge_configure" ]]; then
-    chmod +x "$forge_configure"
-    if bash "$forge_configure" >>"$LOG" 2>&1; then
-      ok "Forge gsettings applied"
+  # Aplicar gsettings de Tiling Shell (idempotente)
+  if [[ -f "$ts_configure" ]]; then
+    chmod +x "$ts_configure"
+    if bash "$ts_configure" >>"$LOG" 2>&1; then
+      ok "Tiling Shell gsettings applied"
     else
-      warn "Forge gsettings script failed (¿extensión no activa? logout+login y re-correr)"
+      warn "Tiling Shell gsettings script failed (¿extensión no activa? logout+login y re-correr)"
     fi
   fi
 }
@@ -1518,14 +1518,15 @@ verify() {
     fi
   fi
 
-  # Forge — Linux GNOME only (skip silently on non-GNOME / non-Linux)
+  # Tiling Shell — Linux GNOME only (skip silently on non-GNOME / non-Linux)
+  # OJO: en Wayland la extensión recién aparece como --active tras logout+login.
   if [[ "$PLATFORM" == "linux" ]] && command -v gnome-extensions &>/dev/null; then
     total=$((total + 1))
-    if gnome-extensions list --active 2>/dev/null | grep -qx "forge@jmmaranan.com"; then
-      ok "Forge extension"
+    if gnome-extensions list 2>/dev/null | grep -qx "tilingshell@ferrarodomenico.com"; then
+      ok "Tiling Shell extension (instalada; activá tras logout+login)"
       ok_count=$((ok_count + 1))
     else
-      error "Forge extension"
+      error "Tiling Shell extension"
     fi
   fi
 
@@ -1817,7 +1818,7 @@ sync_configs_only() {
   setup_aerospace_config
   echo ""
 
-  setup_forge
+  setup_tilingshell
   echo ""
 
   setup_gnome_user_service
@@ -1920,7 +1921,7 @@ main() {
   setup_aerospace
   echo ""
 
-  setup_forge
+  setup_tilingshell
   echo ""
 
   setup_gnome_user_service

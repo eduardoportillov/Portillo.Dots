@@ -2,12 +2,12 @@
 set -uo pipefail
 
 # =====================================================================
-# dots-diag — captura la firma del bug de Forge/stacking
+# dots-diag — captura la firma del bug de stacking del WM/tiling
 # =====================================================================
 # Corré ESTO cuando el sistema esté ROTO (Ctrl+Alt+T no abre terminal,
 # Win+Shift+S no anda, o el tiling se degradó). Vuelca toda la evidencia a
 # un archivo para confirmar la causa raíz y, si hace falta, reportarla
-# upstream a forge-ext/forge.
+# upstream (Tiling Shell: github.com/domferr/tilingshell).
 #
 # Uso:  bash dots-diag.sh   (imprime y guarda en ~/.local/state/)
 
@@ -15,15 +15,15 @@ OUT_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
 mkdir -p "$OUT_DIR"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
 OUT="$OUT_DIR/dots-diag-$STAMP.txt"
-FORGE_UUID="${FORGE_UUID:-forge@jmmaranan.com}"
-FORGE_SCHEMAS="$HOME/.local/share/gnome-shell/extensions/$FORGE_UUID/schemas"
+TS_UUID="${TS_UUID:-tilingshell@ferrarodomenico.com}"
+TS_SCHEMAS="$HOME/.local/share/gnome-shell/extensions/$TS_UUID/schemas"
 
 {
   echo "===== dots-diag $STAMP ====="
   echo
 
   echo "===== [1] Corrupción de window-stack de Mutter (firma del bug) ====="
-  echo "(si aparecen líneas aquí, Forge corrompió el stack → ventanas nuevas invisibles)"
+  echo "(si aparecen líneas aquí, la extensión de tiling corrompió el stack → ventanas nuevas invisibles)"
   journalctl -b _COMM=gnome-shell --no-pager 2>/dev/null \
     | grep -iE "stack_position|_syncStacking|needs an allocation|can't access property .clone" \
     | tail -40
@@ -31,7 +31,7 @@ FORGE_SCHEMAS="$HOME/.local/share/gnome-shell/extensions/$FORGE_UUID/schemas"
 
   echo "===== [2] Errores JS recientes de gnome-shell (30 min) ====="
   journalctl --since "30 min ago" _COMM=gnome-shell --no-pager 2>/dev/null \
-    | grep -iE "JS ERROR|forge|disposed|exception" | tail -30
+    | grep -iE "JS ERROR|tilingshell|disposed|exception" | tail -30
   echo
 
   echo "===== [3] Procesos alacritty (¿fantasmas sin ventana?) ====="
@@ -45,16 +45,16 @@ FORGE_SCHEMAS="$HOME/.local/share/gnome-shell/extensions/$FORGE_UUID/schemas"
   echo -n "screenshot UI      : "; gsettings get org.gnome.shell.keybindings show-screenshot-ui 2>&1
   echo
 
-  echo "===== [5] Forge: estado y uptime de gnome-shell ====="
-  [[ -d "$FORGE_SCHEMAS" ]] && export GSETTINGS_SCHEMA_DIR="$FORGE_SCHEMAS"
-  echo -n "tiling-mode-enabled: "; gsettings get org.gnome.shell.extensions.forge tiling-mode-enabled 2>&1
-  echo -n "forge habilitada   : "; gnome-extensions list --enabled 2>/dev/null | grep -qx "$FORGE_UUID" && echo "sí" || echo "NO"
+  echo "===== [5] Tiling Shell: estado y uptime de gnome-shell ====="
+  [[ -d "$TS_SCHEMAS" ]] && export GSETTINGS_SCHEMA_DIR="$TS_SCHEMAS"
+  echo -n "enable-autotiling  : "; gsettings get org.gnome.shell.extensions.tilingshell enable-autotiling 2>&1
+  echo -n "tilingshell activa : "; gnome-extensions list --enabled 2>/dev/null | grep -qx "$TS_UUID" && echo "sí" || echo "NO"
   echo "gnome-shell:"; ps -o pid,etime,%cpu,%mem,rss,cmd -C gnome-shell 2>&1
   echo
 
   echo "===== Interpretación ====="
   echo "Si [1] tiene líneas y [3] muestra un alacritty viejo sin ventana, mientras"
-  echo "[4] sigue intacto → es la corrupción de stack de Forge (no la config)."
+  echo "[4] sigue intacto → es corrupción de stack de la extensión de tiling (no la config)."
   echo "Recuperá con: bash dots-fix-tiling.sh  (o logout+login)."
 } | tee "$OUT"
 

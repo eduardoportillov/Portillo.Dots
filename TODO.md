@@ -80,52 +80,31 @@ Está **encadenada con el problema #1**: si Alacritty no acepta OSC 52, tmux no 
 
 ---
 
-## Bugs de Forge upstream (no fixables localmente)
+## Migración de Forge → Tiling Shell (2026-05-31)
 
-### Corrupción del window-stack de Mutter (causa raíz de terminal/screenshot/tiling rotos)
-**Síntoma**: tras reiniciar todo anda; con el tiempo se degrada. Ctrl+Alt+T deja
-de abrir terminal (la ventana de Chrome se encoge y queda un hueco, pero no aparece
-terminal), Win+Shift+S no saca screenshot, y ventanas nuevas (Chrome) no tilean.
-
-**Diagnóstico (2026-05-30, capturado con el bug activo)**: la config NO se pierde
-(los gsettings de los atajos siguen intactos). Es un problema de runtime: Forge
-corrompe el window-stacking de Mutter. Evidencia en `journalctl -b _COMM=gnome-shell`:
+**Por qué**: Forge (`forge@jmmaranan.com`) quedó sin maintainer e incompatible con
+GNOME 50.1. Corrompía el window-stack de Mutter en setups multi-monitor (bug upstream
+[forge-ext/forge#303](https://github.com/forge-ext/forge/issues/303)), dejando las
+ventanas nuevas sin allocation (invisibles) y atascando el dispatch de atajos del
+shell — rompía Ctrl+Alt+T y Win+Shift+S a la vez. Firma en `journalctl -b _COMM=gnome-shell`:
 ```
 meta_window_set_stack_position_no_sync: assertion 'window->stack_position >= 0' failed
 JS ERROR: TypeError: can't access property "clone", record is undefined  @ workspaceAnimation.js:135 (_syncStacking)
-"Can't update stage views actor ... needs an allocation"  (torrente)
 ```
-Con el stack corrupto, las ventanas NUEVAS se lanzan como proceso pero nunca reciben
-allocation → quedan invisibles/tamaño 0 (se observó un `alacritty` vivo 17 min sin
-ventana). En Wayland el dispatch de atajos del shell también se atasca → fallan
-Ctrl+Alt+T y Win+Shift+S a la vez.
+El commit instalado ya era el HEAD de `main` → no había a dónde actualizar. Quitar el
+toggle de re-render ayudó pero NO eliminó la corrupción (ocurre al abrir ventanas).
 
-**Disparador**: el toggle forzado `tiling-mode-enabled` off→on al login llamaba a
-`renderTree()` sobre ventanas ya stackeadas.
+**Solución aplicada**: migrado a **Tiling Shell** (`tilingshell@ferrarodomenico.com`),
+tiling BSP automático, mantenido y compatible con shell 45–50. Scripts en `tilingshell/`
+(`install.sh` desde EGO con versión pineada, `configure.sh` con gsettings). `setup.sh`
+desmonta Forge e instala/configura Tiling Shell. Atajos replicados (Alt+Ctrl/Shift+HJKL).
 
-**Mitigación aplicada**:
-- ✅ Removido (de verdad) el toggle off→on de `tiling-mode-enabled` en
-  `restore-gnome-keybindings.sh`. (Versiones previas de este TODO lo daban por
-  removido pero el código aún lo tenía — corregido el 2026-05-30.)
-- ✅ Forge pineado a un commit reproducible en `forge/install.sh` (`FORGE_COMMIT`)
-  para no flotar en `main` y traer regresiones.
-- ✅ Helpers instalados como comandos por `./setup.sh` (en `~/.local/bin`):
-  `dots-fix-tiling` (recupera sin logout: disable→enable Forge) y
-  `dots-diag` (captura la firma del bug cuando se rompe).
-
-**Próximos pasos**: si la corrupción reaparece tras quitar el toggle, correr
-`dots-diag` con el bug activo, reportar issue en
-https://github.com/forge-ext/forge/issues, y evaluar bump de `FORGE_COMMIT` a un
-main más reciente o una extensión de tiling alternativa.
-
-### St.Icon already disposed (ya mitigado, distinto del anterior)
-`lib/extension/indicator.js` no desconecta el listener al desactivarse, lo que
-causaba crashes cuando un setting de Forge cambiaba. Mitigado con el patch
-`forge/patches/apply-patches.sh` (guard try/catch) y removiendo bindings:
-- Removido binding de `prefs-tiling-toggle` (Alt+Shift+R)
-- Removido binding de `window-toggle-float` (Alt+Shift+;)
-
-Cuando upstream publique release con el fix, re-habilitar bindings en `forge/configure.sh`.
+**Pendiente / a observar**:
+- Si reaparece corrupción de stack: `dots-diag` con el bug activo; reportar a
+  [domferr/tilingshell](https://github.com/domferr/tilingshell); evaluar bump de
+  `TILINGSHELL_VERSION_TAG`.
+- Tiling Shell no tiene lista de float por-app (no hay equivalente a `windows.json`):
+  los diálogos/transients flotan solos; apps normales auto-tilean.
 
 ---
 
@@ -135,17 +114,4 @@ Cuando upstream publique release con el fix, re-habilitar bindings en `forge/con
 |---|---|---|---|
 | Alacritty | 0.16.1 (apt) | 0.17.0 | ❌ No (apt Ubuntu no tiene 0.17 todavía) — ver TODO #1 |
 | tmux | 3.6b (brew) | 3.6b | ✅ Sí |
-| Forge | main `0319a712` | mismo | ❌ Skip si ya instalado — usar `bash forge/install.sh --force` para forzar |
-
-### Mejora pendiente en `forge/install.sh`
-Agregar check de "is HEAD up-to-date" para auto-actualizar Forge cuando upstream tenga commits nuevos sin requerir `--force`:
-
-```bash
-# Comparar commit local vs HEAD remoto
-local_commit=$(grep ^commit "$MARKER" | cut -d= -f2 | head -c8)
-remote_commit=$(git ls-remote "$FORGE_REPO" "$FORGE_BRANCH" | cut -c1-8)
-if [[ "$local_commit" != "$remote_commit" ]]; then
-  echo "Forge desactualizado: $local_commit → $remote_commit. Reinstalando."
-  # ... continuar con install normal
-fi
-```
+| Tiling Shell | EGO v76 (shell 50) | mismo | ❌ Skip si ya instalado — `bash tilingshell/install.sh --force` para forzar |
