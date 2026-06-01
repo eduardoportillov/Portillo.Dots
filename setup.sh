@@ -1300,6 +1300,7 @@ create_symlinks() {
   local symlinks=(
     "tmux/tmux.conf:$HOME/.tmux.conf"
     "alacritty/alacritty.toml:$HOME/.config/alacritty/alacritty.toml"
+    "alacritty/themes/kanagawa_dragon.toml:$HOME/.config/alacritty/themes/kanagawa_dragon.toml"
     "zsh/.zshrc:$HOME/.zshrc"
     "zsh/p10k.zsh:$HOME/.p10k.zsh"
   )
@@ -1711,6 +1712,7 @@ verify() {
   local symlinks_to_check=(
     "$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf"
     "$HOME/.config/alacritty/alacritty.toml:$REPO_DIR/alacritty/alacritty.toml"
+    "$HOME/.config/alacritty/themes/kanagawa_dragon.toml:$REPO_DIR/alacritty/themes/kanagawa_dragon.toml"
     "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
     "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
     "$HOME/.claude/settings.json:$REPO_DIR/claude/settings.json"

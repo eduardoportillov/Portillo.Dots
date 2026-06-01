@@ -2,6 +2,10 @@
 #   ALACRITTY CONFIG — Linux
 # =============================================================
 
+# --- TEMA ---
+[general]
+import = ["~/.config/alacritty/themes/kanagawa_dragon.toml"]
+
 # --- VENTANA Y ESTÉTICA ---
 [window]
 padding = { x = 12, y = 12 }
@@ -35,35 +39,6 @@ style = "Bold Italic"
 [cursor]
 style = { shape = "Beam", blinking = "On" }
 blink_timeout = 10
-
-# --- COLORES (Tokyo Night Storm) ---
-[colors.primary]
-background = "#17171b"
-foreground = "#e6eef6"
-
-[colors.selection]
-background = "#2b2f35"
-text = "#e6eef6"
-
-[colors.normal]
-black =   "#0f1114"
-red =     "#ff7b92"
-green =   "#9ef08a"
-yellow =  "#ffd580"
-blue =    "#7aa2ff"
-magenta = "#c79bff"
-cyan =    "#6be7e0"
-white =   "#cfd8ea"
-
-[colors.bright]
-black =   "#5a6574"
-red =     "#ff92b0"
-green =   "#b4f09a"
-yellow =  "#ffe6a0"
-blue =    "#89b4ff"
-magenta = "#d6b8ff"
-cyan =    "#8fefff"
-white =   "#e8f0ff"
 
 # --- SELECCIÓN ---
 [selection]
