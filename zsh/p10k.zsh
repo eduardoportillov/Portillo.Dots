@@ -361,6 +361,15 @@
   typeset -g POWERLEVEL9K_VCS_CONFLICTED_BACKGROUND='#3d2b2b'
   typeset -g POWERLEVEL9K_VCS_LOADING_BACKGROUND='#282727'
 
+  # VCS foreground (icon + unformatted text) per state — Dragon palette.
+  # Without these, p10k falls back to _p9k_color1 which is black in Rainbow style,
+  # making the visual identifier invisible on Dragon's dark VCS backgrounds.
+  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND='#c5c9c5'
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND='#c5c9c5'
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND='#c5c9c5'
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_FOREGROUND='#c5c9c5'
+  typeset -g POWERLEVEL9K_VCS_LOADING_FOREGROUND='#c5c9c5'
+
   # Branch icon. Set this parameter to '\UE0A0 ' for the popular Powerline branch icon.
   typeset -g POWERLEVEL9K_VCS_BRANCH_ICON='\uF126 '
 
