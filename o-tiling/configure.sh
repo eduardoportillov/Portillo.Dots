@@ -47,20 +47,35 @@ gsettings set $S focus-up    "['<Alt><Control>k']"
 gsettings set $S focus-right "['<Alt><Control>l']"
 
 # ---------------------------------------------------------------------
-# 3. MOVER/SWAP VENTANAS — Alt+Shift+HJKL (global, sin modo)
+# 3. MOVER/REPOSICIONAR VENTANAS — Alt+Shift+HJKL (global, sin modo)
+# tile-move-*-global = mover la ventana en el árbol (equivalente al "move" de
+# Forge). OJO: NO usar tile-swap-* (eso solo intercambia con la vecina y confunde).
 # ---------------------------------------------------------------------
-gsettings set $S tile-swap-left  "['<Alt><Shift>h']"
-gsettings set $S tile-swap-down  "['<Alt><Shift>j']"
-gsettings set $S tile-swap-up    "['<Alt><Shift>k']"
-gsettings set $S tile-swap-right "['<Alt><Shift>l']"
+gsettings set $S tile-move-left-global  "['<Alt><Shift>h']"
+gsettings set $S tile-move-down-global  "['<Alt><Shift>j']"
+gsettings set $S tile-move-up-global    "['<Alt><Shift>k']"
+gsettings set $S tile-move-right-global "['<Alt><Shift>l']"
+# Liberar swap para que no colisione con las teclas de mover.
+gsettings set $S tile-swap-left  "[]" 2>/dev/null || true
+gsettings set $S tile-swap-down  "[]" 2>/dev/null || true
+gsettings set $S tile-swap-up    "[]" 2>/dev/null || true
+gsettings set $S tile-swap-right "[]" 2>/dev/null || true
 
 # ---------------------------------------------------------------------
-# 4. FLOAT
+# 4. PASAR VENTANA AL OTRO MONITOR — Alt+Shift+Ctrl+HJKL
+# ---------------------------------------------------------------------
+gsettings set $S pop-monitor-left  "['<Alt><Shift><Control>h']"
+gsettings set $S pop-monitor-down  "['<Alt><Shift><Control>j']"
+gsettings set $S pop-monitor-up    "['<Alt><Shift><Control>k']"
+gsettings set $S pop-monitor-right "['<Alt><Shift><Control>l']"
+
+# ---------------------------------------------------------------------
+# 5. FLOAT
 # ---------------------------------------------------------------------
 gsettings set $S toggle-floating "['<Shift><Super>c']"
 
 # ---------------------------------------------------------------------
-# 5. EVITAR LA RUTA DEL CRASH (stacking)
+# 6. EVITAR LA RUTA DEL CRASH (stacking)
 # ---------------------------------------------------------------------
 # El modo stacking/tabbed es la ruta del crash de stack en pop-shell (#647).
 # Lo dejamos SIN bindear para no dispararlo accidentalmente.
