@@ -80,31 +80,36 @@ Está **encadenada con el problema #1**: si Alacritty no acepta OSC 52, tmux no 
 
 ---
 
-## Migración de Forge → Tiling Shell (2026-05-31)
+## Migración de tiling: Forge → Tiling Shell → o-tiling (2026)
 
-**Por qué**: Forge (`forge@jmmaranan.com`) quedó sin maintainer e incompatible con
-GNOME 50.1. Corrompía el window-stack de Mutter en setups multi-monitor (bug upstream
+**Por qué se fue Forge**: `forge@jmmaranan.com` quedó sin maintainer e incompatible con
+GNOME 50.1. Corrompía el window-stack de Mutter en multi-monitor (bug upstream
 [forge-ext/forge#303](https://github.com/forge-ext/forge/issues/303)), dejando las
 ventanas nuevas sin allocation (invisibles) y atascando el dispatch de atajos del
-shell — rompía Ctrl+Alt+T y Win+Shift+S a la vez. Firma en `journalctl -b _COMM=gnome-shell`:
+shell — rompía Ctrl+Alt+T y Win+Shift+S a la vez. Firma:
 ```
 meta_window_set_stack_position_no_sync: assertion 'window->stack_position >= 0' failed
 JS ERROR: TypeError: can't access property "clone", record is undefined  @ workspaceAnimation.js:135 (_syncStacking)
 ```
-El commit instalado ya era el HEAD de `main` → no había a dónde actualizar. Quitar el
-toggle de re-render ayudó pero NO eliminó la corrupción (ocurre al abrir ventanas).
 
-**Solución aplicada**: migrado a **Tiling Shell** (`tilingshell@ferrarodomenico.com`),
-tiling BSP automático, mantenido y compatible con shell 45–50. Scripts en `tilingshell/`
-(`install.sh` desde EGO con versión pineada, `configure.sh` con gsettings). `setup.sh`
-desmonta Forge e instala/configura Tiling Shell. Atajos replicados (Alt+Ctrl/Shift+HJKL).
+**Tiling Shell (intermedio, descartado)**: estable en 50.1 pero usa layouts/zonas
+fijas (FancyZones), no splits dinámicos — no replica el feel de Forge/AeroSpace.
 
-**Pendiente / a observar**:
-- Si reaparece corrupción de stack: `dots-diag` con el bug activo; reportar a
-  [domferr/tilingshell](https://github.com/domferr/tilingshell); evaluar bump de
-  `TILINGSHELL_VERSION_TAG`.
-- Tiling Shell no tiene lista de float por-app (no hay equivalente a `windows.json`):
-  los diálogos/transients flotan solos; apps normales auto-tilean.
+**Solución actual: o-tiling** (`o-tiling@oliwebd.github.com`, fork de Pop Shell):
+tiling BSP **dinámico** estilo Forge, soporta shell 48/49/50, atajos globales directos.
+Scripts en `o-tiling/` (`install.sh` desde release ZIP de GitHub con `OTILING_VERSION`
+pineado, `configure.sh` con gsettings). `setup.sh` y `restore-gnome-keybindings.sh`
+desmontan Tiling Shell e instalan/habilitan o-tiling. Atajos: Alt+Ctrl/Shift+HJKL.
+
+**Riesgo conocido / a observar**:
+- o-tiling es fork de Pop Shell → el bug `stack_position` es de Pop Shell (pop-os/shell#647),
+  ligado a **stacking + multi-monitor**. Mitigación: dejamos el modo stacking SIN bindear.
+  Si reaparece corrupción: `dots-diag` con el bug activo, reportar a
+  [oliwebd/o-tiling](https://github.com/oliwebd/o-tiling), y si no hay fix, volver a
+  Tiling Shell (zonas, estable).
+- **Solo UN tiler activo a la vez** — dos corrompen el stack (lección aprendida: el
+  servicio de login re-habilitaba Tiling Shell y convivía con o-tiling → 224 assertions).
+- o-tiling auto-floata diálogos; tiene "floating exceptions" para apps puntuales.
 
 ---
 
@@ -114,4 +119,4 @@ desmonta Forge e instala/configura Tiling Shell. Atajos replicados (Alt+Ctrl/Shi
 |---|---|---|---|
 | Alacritty | 0.16.1 (apt) | 0.17.0 | ❌ No (apt Ubuntu no tiene 0.17 todavía) — ver TODO #1 |
 | tmux | 3.6b (brew) | 3.6b | ✅ Sí |
-| Tiling Shell | EGO v76 (shell 50) | mismo | ❌ Skip si ya instalado — `bash tilingshell/install.sh --force` para forzar |
+| o-tiling | v2.8.8 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar |

@@ -85,7 +85,7 @@ WHAT THIS SCRIPT DOES (in order):
                   Linux: apt-get install --only-upgrade copyq
 
   11. Dotfile symlinks — always recreated (backup of originals kept in .backup/):
-        ~/.zshrc, ~/.p10k.zsh, ~/.tmux.conf,
+        ~/.zshrc, ~/.p10k.zsh, ~/.tmux.conf, ~/.markdownlint.jsonc,
         ~/.config/nvim, ~/.config/alacritty/alacritty.toml,
         ~/.config/opencode/config.json, ~/.config/xdg-terminals.list
 
@@ -888,47 +888,46 @@ setup_aerospace() {
   info "AeroSpace: grant Accessibility permission in System Settings → Privacy & Security."
 }
 
-# === PASO 7E: SETUP TILING SHELL (Linux GNOME only) ===
-# Instala Tiling Shell (domferr) desde extensions.gnome.org y desmonta Forge.
-# Razón: Forge quedó sin maintainer e incompatible con GNOME 50.1 — corrompía
-# el window-stack de Mutter en multi-monitor (bug #303) rompiendo atajos y
-# dejando ventanas nuevas invisibles. Tiling Shell hace tiling BSP automático,
-# está mantenido y soporta shell 45–50. Scripts auto-contenidos en tilingshell/.
-setup_tilingshell() {
+# === PASO 7E: SETUP O-TILING (Linux GNOME only) ===
+# Instala o-tiling (fork de Pop Shell, tiling BSP dinámico) y desmonta Tiling Shell.
+# Razón: el usuario quiere splits dinámicos estilo Forge/AeroSpace; Tiling Shell
+# usa zonas fijas. o-tiling es la única extensión viva con BSP dinámico para
+# GNOME 50. Scripts auto-contenidos en o-tiling/.
+setup_otiling() {
   [[ "$PLATFORM" != "linux" ]] && return 0
   if ! command -v gsettings &>/dev/null || ! command -v gnome-extensions &>/dev/null; then
-    info "GNOME not detected, skipping Tiling Shell setup"
+    info "GNOME not detected, skipping o-tiling setup"
     return 0
   fi
 
-  info "Setting up Tiling Shell..."
+  info "Setting up o-tiling..."
 
-  local ts_install="$REPO_DIR/tilingshell/install.sh"
-  local ts_configure="$REPO_DIR/tilingshell/configure.sh"
+  local ot_install="$REPO_DIR/o-tiling/install.sh"
+  local ot_configure="$REPO_DIR/o-tiling/configure.sh"
 
-  if [[ ! -x "$ts_install" ]]; then
-    warn "Tiling Shell installer not found at $ts_install, skipping"
+  if [[ ! -x "$ot_install" ]]; then
+    warn "o-tiling installer not found at $ot_install, skipping"
     return 0
   fi
 
   # En --config-only NO reinstalamos (operación de red). Solo config si ya está.
   if [[ "$CONFIG_ONLY" != true ]]; then
-    if bash "$ts_install" >>"$LOG" 2>&1; then
-      ok "Tiling Shell installed/up-to-date"
+    if bash "$ot_install" >>"$LOG" 2>&1; then
+      ok "o-tiling installed/up-to-date"
     else
-      warn "Tiling Shell installer failed (revisar $LOG)"
+      warn "o-tiling installer failed (revisar $LOG)"
     fi
   else
-    info "--config-only mode: skip Tiling Shell install, only apply config"
+    info "--config-only mode: skip o-tiling install, only apply config"
   fi
 
-  # Aplicar gsettings de Tiling Shell (idempotente)
-  if [[ -f "$ts_configure" ]]; then
-    chmod +x "$ts_configure"
-    if bash "$ts_configure" >>"$LOG" 2>&1; then
-      ok "Tiling Shell gsettings applied"
+  # Aplicar gsettings de o-tiling (idempotente)
+  if [[ -f "$ot_configure" ]]; then
+    chmod +x "$ot_configure"
+    if bash "$ot_configure" >>"$LOG" 2>&1; then
+      ok "o-tiling gsettings applied"
     else
-      warn "Tiling Shell gsettings script failed (¿extensión no activa? logout+login y re-correr)"
+      warn "o-tiling gsettings script failed (¿extensión no activa? logout+login y re-correr)"
     fi
   fi
 }
@@ -1303,6 +1302,7 @@ create_symlinks() {
     "alacritty/themes/kanagawa_dragon.toml:$HOME/.config/alacritty/themes/kanagawa_dragon.toml"
     "zsh/.zshrc:$HOME/.zshrc"
     "zsh/p10k.zsh:$HOME/.p10k.zsh"
+    ".markdownlint.jsonc:$HOME/.markdownlint.jsonc"
   )
   
   for symlink_spec in "${symlinks[@]}"; do
@@ -1519,15 +1519,15 @@ verify() {
     fi
   fi
 
-  # Tiling Shell — Linux GNOME only (skip silently on non-GNOME / non-Linux)
+  # o-tiling — Linux GNOME only (skip silently on non-GNOME / non-Linux)
   # OJO: en Wayland la extensión recién aparece como --active tras logout+login.
   if [[ "$PLATFORM" == "linux" ]] && command -v gnome-extensions &>/dev/null; then
     total=$((total + 1))
-    if gnome-extensions list 2>/dev/null | grep -qx "tilingshell@ferrarodomenico.com"; then
-      ok "Tiling Shell extension (instalada; activá tras logout+login)"
+    if gnome-extensions list 2>/dev/null | grep -qx "o-tiling@oliwebd.github.com"; then
+      ok "o-tiling extension (instalada; activá tras logout+login)"
       ok_count=$((ok_count + 1))
     else
-      error "Tiling Shell extension"
+      error "o-tiling extension"
     fi
   fi
 
@@ -1715,6 +1715,7 @@ verify() {
     "$HOME/.config/alacritty/themes/kanagawa_dragon.toml:$REPO_DIR/alacritty/themes/kanagawa_dragon.toml"
     "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
     "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
+    "$HOME/.markdownlint.jsonc:$REPO_DIR/.markdownlint.jsonc"
     "$HOME/.claude/settings.json:$REPO_DIR/claude/settings.json"
     "$HOME/.claude/CLAUDE.md:$REPO_DIR/claude/CLAUDE.md"
   )
@@ -1820,7 +1821,7 @@ sync_configs_only() {
   setup_aerospace_config
   echo ""
 
-  setup_tilingshell
+  setup_otiling
   echo ""
 
   setup_gnome_user_service
@@ -1923,7 +1924,7 @@ main() {
   setup_aerospace
   echo ""
 
-  setup_tilingshell
+  setup_otiling
   echo ""
 
   setup_gnome_user_service
