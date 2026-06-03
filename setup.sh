@@ -1549,7 +1549,7 @@ verify() {
       && [[ "$(gsettings get org.gnome.mutter dynamic-workspaces 2>/dev/null)" == "false" ]] \
       && [[ "$(gsettings get org.gnome.desktop.wm.preferences num-workspaces 2>/dev/null)" == "5" ]] \
       && [[ "$(gsettings get org.gnome.mutter workspaces-only-on-primary 2>/dev/null)" == "false" ]] \
-      && [[ "$(gsettings get org.gnome.desktop.wm.preferences workspace-names 2>/dev/null)" == "['work', 'others', 'dev', 'dev-back', 'dev-front']" ]] \
+      && [[ "$(gsettings get org.gnome.desktop.wm.preferences workspace-names 2>/dev/null)" == "['work', 'dev-front', 'dev-back', 'others', 'comodin']" ]] \
       && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys terminal 2>/dev/null)" == "@as []" ]] \
       && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings 2>/dev/null)" == "['$alacritty_binding_path']" ]] \
       && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$alacritty_binding_path" command 2>/dev/null)" == "'alacritty'" ]] \

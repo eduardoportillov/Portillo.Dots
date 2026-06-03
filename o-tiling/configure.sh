@@ -62,12 +62,13 @@ gsettings set $S tile-swap-up    "[]" 2>/dev/null || true
 gsettings set $S tile-swap-right "[]" 2>/dev/null || true
 
 # ---------------------------------------------------------------------
-# 4. PASAR VENTANA AL OTRO MONITOR — Alt+Shift+Ctrl+HJKL
+# 4. ORIENTACIÓN DEL LAYOUT — Alt+/ (sinónimo de AeroSpace alt-slash)
+# Alterna entre mosaico horizontal y vertical.
 # ---------------------------------------------------------------------
-gsettings set $S pop-monitor-left  "['<Alt><Shift><Control>h']"
-gsettings set $S pop-monitor-down  "['<Alt><Shift><Control>j']"
-gsettings set $S pop-monitor-up    "['<Alt><Shift><Control>k']"
-gsettings set $S pop-monitor-right "['<Alt><Shift><Control>l']"
+gsettings set $S tile-orientation "['<Alt>slash']"
+# NOTA: NO bindeamos pop-monitor-* (pasar al otro monitor). tile-move-*-global
+# (Alt+Shift+HJKL) ya cruza al monitor contiguo al llegar al borde, así que un
+# atajo dedicado de monitor es redundante. Queda en su default (Super+Shift+Ctrl).
 
 # ---------------------------------------------------------------------
 # 5. FLOAT

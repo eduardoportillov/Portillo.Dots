@@ -16,7 +16,9 @@ gsettings set org.gnome.shell.keybindings show-screenshot-ui "['<Super><Shift>s'
 gsettings set org.gnome.mutter dynamic-workspaces false
 gsettings set org.gnome.desktop.wm.preferences num-workspaces 5
 gsettings set org.gnome.mutter workspaces-only-on-primary false
-gsettings set org.gnome.desktop.wm.preferences workspace-names "['work', 'others', 'dev', 'dev-back', 'dev-front']"
+# Nombres y orden de workspaces sinónimos de AeroSpace (aerospace/aerospace.toml):
+# Alt+1=work, Alt+2=dev-front, Alt+3=dev-back, Alt+4=others, Alt+5=comodin.
+gsettings set org.gnome.desktop.wm.preferences workspace-names "['work', 'dev-front', 'dev-back', 'others', 'comodin']"
 
 # Cambiar a workspace (Alt + 1-5).
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-1 "['<Alt>1']"
