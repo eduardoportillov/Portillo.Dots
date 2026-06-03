@@ -149,6 +149,31 @@ monitor). En Wayland: **logout + login** tras instalar para que cargue.
 > hace BSP dinámico estilo Forge/AeroSpace. Solo puede haber UN tiler activo: tener
 > dos a la vez corrompe el window-stack de Mutter.
 
+#### Atajos de o-tiling (sinónimos de AeroSpace)
+| Acción | Atajo |
+|---|---|
+| Foco entre ventanas | `Alt+Ctrl+H/J/K/L` |
+| Mover/reposicionar ventana (cruza monitor en el borde) | `Alt+Shift+H/J/K/L` |
+| Orientación del split horizontal ↔ vertical | `Alt+/` |
+| Float / unfloat ventana | `Shift+Super+C` |
+| Toggle auto-tiling on/off | `Super+T` |
+| Workspaces (GNOME) | `Alt+1..5` cambiar · `Alt+Shift+1..5` mover ventana |
+
+**Cómo apilar ventanas en VERTICAL** (arriba/abajo en el mismo monitor):
+o-tiling es BSP: `Alt+Shift+J/K` mueve entre tiles *que ya existan* en ese eje; **no
+crea** el split vertical solo. El eje lo decide **`Alt+/`**: enfocá una ventana, apretá
+`Alt+/` para poner el contenedor en vertical, y las ventanas se apilan arriba/abajo.
+(Con layout horizontal, `J/K` sin tile arriba/abajo se va al otro monitor — es esperado.)
+
+**Cómo redimensionar con teclado** (que una ventana sea más grande que otra):
+o-tiling redimensiona en su "modo gestión": **`Super+Return`** (entrar) → **`Shift+H/L`**
+(o `Shift+J/K`) para agrandar/achicar → **`Return`** para confirmar (`Escape` cancela).
+No hay resize de una sola tecla (es el diseño de o-tiling; no `tile-resize-*-global`).
+
+> Diferencias con AeroSpace sin equivalente: acordeón (`Alt+,` = stacking, desactivado
+> por el bug de crash), resize de una tecla, `Alt+Tab` back-and-forth y mover workspace
+> a otro monitor. Para un i3/AeroSpace 100% idéntico haría falta Sway (otro compositor).
+
 ### El tiling se degrada / Ctrl+Alt+T o Win+Shift+S dejan de funcionar
 La config de atajos NO se pierde (es un problema de runtime de la extensión de tiling).
 
