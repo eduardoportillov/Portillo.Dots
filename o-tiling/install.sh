@@ -96,6 +96,12 @@ fi
 gsettings set org.gnome.shell disable-extension-version-validation true 2>/dev/null || true
 gnome-extensions enable "$OTILING_UUID" 2>/dev/null || true
 
+# === Aplicar patches locales (fixes sobre el código instalado) ===
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+if [[ -x "$SCRIPT_DIR/patches/apply-patches.sh" ]]; then
+  bash "$SCRIPT_DIR/patches/apply-patches.sh" "$EXT_DIR" || echo "⚠ Algún patch de o-tiling falló (revisar arriba)"
+fi
+
 # === Marker idempotencia ===
 mkdir -p "$EXT_DIR"
 echo "version=${OTILING_VERSION}" > "$MARKER"

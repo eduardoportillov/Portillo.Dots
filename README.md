@@ -153,17 +153,23 @@ monitor). En Wayland: **logout + login** tras instalar para que cargue.
 | Acción | Atajo |
 |---|---|
 | Foco entre ventanas | `Alt+Ctrl+H/J/K/L` |
-| Mover/reposicionar ventana (cruza monitor en el borde) | `Alt+Shift+H/J/K/L` |
+| Mover horizontal (cruza al otro monitor en el borde) | `Alt+Shift+H/L` |
+| Mover vertical (reacomoda en el MISMO monitor, no salta) | `Alt+Shift+J/K` |
 | Orientación del split horizontal ↔ vertical | `Alt+/` |
 | Float / unfloat ventana | `Shift+Super+C` |
 | Toggle auto-tiling on/off | `Super+T` |
 | Workspaces (GNOME) | `Alt+1..5` cambiar · `Alt+Shift+1..5` mover ventana |
 
+Gaps de tiling = **1px** (`gap-inner`/`gap-outer`).
+
+**Mover H/L vs J/K** (parche local `o-tiling/patches/apply-patches.sh`):
+- `Alt+Shift+H/L` (horizontal): si no hay ventana al lado, cruza al **otro monitor** (deseado, monitores lado a lado).
+- `Alt+Shift+J/K` (vertical): reacomoda arriba/abajo **solo en el mismo monitor**; si no hay vecina, no hace nada (patcheado para NO saltar de monitor — el `move_up/move_down` upstream caía al monitor).
+
 **Cómo apilar ventanas en VERTICAL** (arriba/abajo en el mismo monitor):
-o-tiling es BSP: `Alt+Shift+J/K` mueve entre tiles *que ya existan* en ese eje; **no
-crea** el split vertical solo. El eje lo decide **`Alt+/`**: enfocá una ventana, apretá
-`Alt+/` para poner el contenedor en vertical, y las ventanas se apilan arriba/abajo.
-(Con layout horizontal, `J/K` sin tile arriba/abajo se va al otro monitor — es esperado.)
+o-tiling es BSP: el eje lo decide **`Alt+/`**. Enfocá una ventana, apretá `Alt+/` para
+poner el contenedor en vertical, y las ventanas se apilan arriba/abajo; ahí
+`Alt+Shift+J/K` las reacomoda.
 
 **Cómo redimensionar con teclado** (que una ventana sea más grande que otra):
 o-tiling redimensiona en su "modo gestión": **`Super+Return`** (entrar) → **`Shift+H/L`**

@@ -35,8 +35,8 @@ fi
 # 1. TILING AUTOMÁTICO + GAPS
 # ---------------------------------------------------------------------
 gsettings set $S tile-by-default true     # ventanas NUEVAS se auto-tilean (BSP)
-gsettings set $S gap-inner 3
-gsettings set $S gap-outer 3
+gsettings set $S gap-inner 1
+gsettings set $S gap-outer 1
 
 # ---------------------------------------------------------------------
 # 2. NAVEGACIÓN (FOCO) — Alt+Ctrl+HJKL (global, sin modo)
