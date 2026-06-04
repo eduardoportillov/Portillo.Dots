@@ -591,14 +591,30 @@ setup_oh_my_zsh() {
 # === PASO 6: SETUP TPM ===
 setup_tpm() {
   info "Setting up Tmux Plugin Manager (TPM)..."
-  
+
   local tpm_dir="$HOME/.tmux/plugins/tpm"
-  
+
   if [[ -d "$tpm_dir" ]]; then
     safe_git_update "$tpm_dir" "TPM"
   else
     info "Installing TPM..."
     git clone -q https://github.com/tmux-plugins/tpm "$tpm_dir"
+  fi
+
+  # Drop-in de PATH para el tmux.service que genera tmux-continuum
+  # (@continuum-boot 'on'). El servicio arranca con un PATH sin
+  # /home/linuxbrew/.linuxbrew/bin, donde TPM no encuentra el binario `tmux`
+  # de Homebrew y falla → sin tema ni auto-restore. El drop-in inyecta el PATH
+  # correcto y sobrevive a que continuum regenere su unit.
+  if [[ "$PLATFORM" == "linux" ]] && command -v systemctl &>/dev/null; then
+    local dropin_src="$REPO_DIR/linux/tmux.service.d/10-path.conf"
+    local dropin_dir="$HOME/.config/systemd/user/tmux.service.d"
+    if [[ -f "$dropin_src" ]]; then
+      mkdir -p "$dropin_dir"
+      cp "$dropin_src" "$dropin_dir/10-path.conf"
+      systemctl --user daemon-reload >>"$LOG" 2>&1 || true
+      ok "tmux.service PATH drop-in instalado (autoboot de continuum)"
+    fi
   fi
 }
 
