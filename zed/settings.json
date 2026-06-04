@@ -1,4 +1,7 @@
 {
+  "git": {
+    "disable_git": false
+  },
   "ssh_connections": [
     {
       "host": "portillo-server",
