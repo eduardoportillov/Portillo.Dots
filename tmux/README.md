@@ -41,20 +41,23 @@ Otros ajustes activos: modo de teclas `vi` en copy-mode, ratón habilitado, barr
 
 ## Persistencia de sesiones (resurrect + continuum)
 
-Cómo sobreviven las sesiones a un reinicio:
+Cómo sobreviven las sesiones a un reinicio, sin intervención manual:
 
-1. **continuum** auto-guarda el estado cada **1 minuto** (llama al motor de resurrect).
-2. Tras reiniciar, **al abrir tmux en tu terminal**, continuum **auto-restaura** la última foto
-   automáticamente (`@continuum-restore 'on'`).
+1. **continuum** auto-guarda el estado cada **1 minuto** (llama al motor de resurrect), y también
+   re-lanza programas listados en `@resurrect-processes` (opencode, claude; nvim ya por defecto).
+2. **Al iniciar sesión**, continuum levanta tmux mediante un servicio systemd de usuario que él
+   mismo genera y habilita (`@continuum-boot 'on'` → `~/.config/systemd/user/tmux.service`).
+3. Al arrancar el servidor, continuum **auto-restaura** la última foto (`@continuum-restore 'on'`).
 
 Fallback manual si algo no restaura solo: `Ctrl-a` + `Ctrl-r`.
 
-> **NO usar `@continuum-boot 'on'`.** El servicio systemd que genera arranca tmux con
-> `tmux new-session -d` en un PATH mínimo que **no incluye** `/home/linuxbrew/.linuxbrew/bin`
-> (donde vive el binario `tmux` de Homebrew). TPM llama a `tmux` por nombre, no lo encuentra y
-> **falla**, así que ni el tema (kanagawa) ni continuum se inicializan → server a medio arrancar,
-> sin tema y sin auto-restore. Por eso la restauración se hace al abrir tmux (entorno completo →
-> TPM carga bien), no al boot.
+> **`@continuum-boot 'on'` REQUIERE el drop-in `linux/tmux.service.d/10-path.conf`** (desplegado
+> por `setup.sh`). El servicio systemd arranca tmux con un PATH que **no incluye**
+> `/home/linuxbrew/.linuxbrew/bin` (donde vive el `tmux` de Homebrew); TPM llama a `tmux` por
+> nombre, no lo encuentra y **falla** → ni kanagawa ni continuum se inicializan (server sin tema y
+> sin auto-restore). El drop-in inyecta `Environment=PATH=...` con linuxbrew y lo arregla; además
+> sobrevive a que continuum regenere su unit. Verificar: `systemctl --user show tmux.service -p Environment`
+> debe incluir linuxbrew.
 
 > **Orden de carga importante:** `tmux-continuum` debe declararse **después** del tema
 > `tmux-kanagawa`. continuum engancha su auto-guardado anteponiéndolo a `status-right`, y el tema
