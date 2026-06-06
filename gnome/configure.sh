@@ -45,11 +45,19 @@ gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Shift><Alt>f
 gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"
 gsettings set org.gnome.desktop.wm.keybindings begin-resize "[]"
 
-# Ctrl+Alt+T debe abrir Alacritty directamente, sin depender del terminal por defecto de GNOME.
+# Custom keybindings:
+#   custom0 = Ctrl+Alt+T → Alacritty (sin depender del terminal por defecto de GNOME)
+#   custom1 = Super+Shift+R → dots-fix-tiling (reinicia o-tiling cuando se corrompe el stack)
 gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "[]"
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name 'Alacritty'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command 'alacritty'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding '<Control><Alt>t'
+CK_PATH=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
+CK0=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/
+CK1=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CK0', '$CK1']"
+gsettings set "$CK_PATH:$CK0" name 'Alacritty'
+gsettings set "$CK_PATH:$CK0" command 'alacritty'
+gsettings set "$CK_PATH:$CK0" binding '<Control><Alt>t'
+gsettings set "$CK_PATH:$CK1" name 'Reset o-tiling'
+gsettings set "$CK_PATH:$CK1" command "$HOME/.local/bin/dots-fix-tiling"
+gsettings set "$CK_PATH:$CK1" binding '<Super><Shift>r'
 
 echo "GNOME configurado."

@@ -65,6 +65,11 @@ subprocess.run(["gsettings","set","org.gnome.shell","enabled-extensions", str(ls
 PY
 fi
 
+# Desactivar ding (íconos del escritorio): en Wayland le roba el foco/input a las
+# ventanas tileadas (aparece el rubber-band del escritorio al seleccionar). En un
+# flujo de tiling no se usan iconos del escritorio.
+gnome-extensions disable ding@rastersoft.com 2>/dev/null || true
+
 # === Skip si ya está la versión pineada (idempotente) ===
 if [[ "$FORCE" != true ]] && [[ -f "$MARKER" ]] \
   && [[ "$(cat "$MARKER" 2>/dev/null)" == "version=${OTILING_VERSION}" ]]; then

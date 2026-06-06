@@ -64,11 +64,27 @@ Toma efecto tras **logout/login** (Wayland recarga el JS de la extensión).
 Para un i3/AeroSpace 100% idéntico haría falta un compositor nativo (Sway/Hyprland), que
 implica salir de GNOME — se decidió quedarse en GNOME con o-tiling.
 
+## ⚠️ Caveat conocido: corrupción de stack (heredada de Pop Shell)
+
+o-tiling **a veces corrompe el window-stack de Mutter** (`stack_position`, bug de Pop Shell
+pop-os/shell#647 — el mismo que tenía Forge). No es constante: anda bien y se degrada con el
+uso. **Síntoma típico:** al cerrar una ventana el tiling **no reacomoda** y cuenta la cerrada
+como abierta. Se decidió quedarse con o-tiling (BSP) y **resetear cuando pase**.
+
 ## Recuperación
 
-- `dots-fix-tiling` — disable→enable o-tiling sin logout (si el tiling se degrada).
-- `dots-diag` — captura la firma del bug de stacking si algo se rompe.
+- **`Super+Shift+R`** (atajo) o **`dots-fix-tiling`** (comando) — disable→enable o-tiling sin
+  logout: re-arma el árbol y vuelve a la normalidad. **Es el reset cuando el tiling se rompe.**
+- Si no alcanza: **logout/login**.
+- `dots-diag` — captura la firma del bug de stacking si algo se rompe (para reportar upstream).
 - Solo puede haber **UN tiler activo** — dos a la vez corrompen el window-stack de Mutter.
+
+## ding (íconos del escritorio) — DESACTIVADO
+
+`ding@rastersoft.com` se deja **apagado** (`install.sh` lo desactiva). En Wayland le robaba el
+foco/input a las ventanas tileadas: la ventana se veía pero el escritorio recibía el input
+(aparecía el rubber-band de íconos al intentar seleccionar). En tiling no se usan iconos del
+escritorio. Para reactivarlo (no recomendado): `gnome-extensions enable ding@rastersoft.com`.
 
 ## Archivos
 

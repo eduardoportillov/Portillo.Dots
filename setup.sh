@@ -1567,7 +1567,7 @@ verify() {
       && [[ "$(gsettings get org.gnome.mutter workspaces-only-on-primary 2>/dev/null)" == "false" ]] \
       && [[ "$(gsettings get org.gnome.desktop.wm.preferences workspace-names 2>/dev/null)" == "['work', 'dev-front', 'dev-back', 'others', 'comodin']" ]] \
       && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys terminal 2>/dev/null)" == "@as []" ]] \
-      && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings 2>/dev/null)" == "['$alacritty_binding_path']" ]] \
+      && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings 2>/dev/null)" == "['$alacritty_binding_path', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']" ]] \
       && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$alacritty_binding_path" command 2>/dev/null)" == "'alacritty'" ]] \
       && [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$alacritty_binding_path" binding 2>/dev/null)" == "'<Control><Alt>t'" ]]; then
       ok "GNOME desktop defaults"
