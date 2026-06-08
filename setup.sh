@@ -601,19 +601,23 @@ setup_tpm() {
     git clone -q https://github.com/tmux-plugins/tpm "$tpm_dir"
   fi
 
-  # Drop-in de PATH para el tmux.service que genera tmux-continuum
-  # (@continuum-boot 'on'). El servicio arranca con un PATH sin
-  # /home/linuxbrew/.linuxbrew/bin, donde TPM no encuentra el binario `tmux`
-  # de Homebrew y falla → sin tema ni auto-restore. El drop-in inyecta el PATH
-  # correcto y sobrevive a que continuum regenere su unit.
+  # Drop-in para el tmux.service que genera tmux-continuum (@continuum-boot 'on').
+  # Dos arreglos: (1) inyecta /home/linuxbrew/.linuxbrew/bin en el PATH (sin él
+  # TPM no encuentra el binario `tmux` de Homebrew → sin tema ni auto-restore);
+  # (2) ExecStartPre que espera a la sincronización del reloj antes de arrancar
+  # (evita que un salto de reloj al boot rompa el auto-restore de continuum).
+  # Sobrevive a que continuum regenere su unit (nunca toca el directorio .d/).
   if [[ "$PLATFORM" == "linux" ]] && command -v systemctl &>/dev/null; then
-    local dropin_src="$REPO_DIR/linux/tmux.service.d/10-path.conf"
+    local dropin_name="continuum-autoboot-fixes.conf"
+    local dropin_src="$REPO_DIR/linux/tmux.service.d/$dropin_name"
     local dropin_dir="$HOME/.config/systemd/user/tmux.service.d"
     if [[ -f "$dropin_src" ]]; then
       mkdir -p "$dropin_dir"
-      cp "$dropin_src" "$dropin_dir/10-path.conf"
+      # Limpiar nombres legacy para que re-correr setup no deje huérfanos.
+      rm -f "$dropin_dir/10-path.conf" "$dropin_dir/10-continuum-autoboot-fixes.conf"
+      cp "$dropin_src" "$dropin_dir/$dropin_name"
       systemctl --user daemon-reload >>"$LOG" 2>&1 || true
-      ok "tmux.service PATH drop-in instalado (autoboot de continuum)"
+      ok "tmux.service drop-in instalado (autoboot de continuum: PATH + espera de reloj)"
     fi
   fi
 }

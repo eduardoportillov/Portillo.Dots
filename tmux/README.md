@@ -51,13 +51,19 @@ Cómo sobreviven las sesiones a un reinicio, sin intervención manual:
 
 Fallback manual si algo no restaura solo: `Ctrl-a` + `Ctrl-r`.
 
-> **`@continuum-boot 'on'` REQUIERE el drop-in `linux/tmux.service.d/10-path.conf`** (desplegado
-> por `setup.sh`). El servicio systemd arranca tmux con un PATH que **no incluye**
-> `/home/linuxbrew/.linuxbrew/bin` (donde vive el `tmux` de Homebrew); TPM llama a `tmux` por
-> nombre, no lo encuentra y **falla** → ni kanagawa ni continuum se inicializan (server sin tema y
-> sin auto-restore). El drop-in inyecta `Environment=PATH=...` con linuxbrew y lo arregla; además
-> sobrevive a que continuum regenere su unit. Verificar: `systemctl --user show tmux.service -p Environment`
-> debe incluir linuxbrew.
+> **`@continuum-boot 'on'` REQUIERE el drop-in `linux/tmux.service.d/continuum-autoboot-fixes.conf`**
+> (desplegado por `setup.sh`). Hace dos arreglos:
+> 1. **PATH:** el servicio systemd arranca tmux con un PATH que **no incluye**
+>    `/home/linuxbrew/.linuxbrew/bin` (donde vive el `tmux` de Homebrew); TPM llama a `tmux` por
+>    nombre, no lo encuentra y **falla** → ni kanagawa ni continuum se inicializan (server sin tema
+>    y sin auto-restore). El drop-in inyecta `Environment=PATH=...` con linuxbrew.
+> 2. **Reloj (`ExecStartPre`):** espera (máx 60s) a que el reloj esté sincronizado antes de arrancar.
+>    Si el RTC arranca desfasado y chronyd da un `makestep` grande *después* de que tmux ya arrancó,
+>    continuum ve el server "iniciado hace días" → su ventana `@continuum-restore-max-delay` falla y
+>    **no auto-restaura**. Esperando al sync, tmux arranca ya con la hora correcta.
+>
+> Sobrevive a que continuum regenere su unit (nunca toca el directorio `.d/`). Verificar:
+> `systemctl --user show tmux.service -p Environment -p ExecStartPre`.
 
 > **Orden de carga importante:** `tmux-continuum` debe declararse **después** del tema
 > `tmux-kanagawa`. continuum engancha su auto-guardado anteponiéndolo a `status-right`, y el tema
