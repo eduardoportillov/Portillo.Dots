@@ -96,9 +96,10 @@ bindings = [
     { key = "Left",  mods = "Control", chars = "\u001bb" },
     { key = "Right", mods = "Control", chars = "\u001bf" },
 
-    # Deshabilitar salto de palabra con Alt (redirigir a flecha simple)
-    { key = "Left",  mods = "Alt", chars = "\u001b[D" },
-    { key = "Right", mods = "Alt", chars = "\u001b[C" },
+    # Alt+←/→: 2×ESC para que tmux reconozca M-Left/M-Right (swap-window).
+    # Ctrl+←/→ sigue siendo el word-jump (\u001bb/\u001bf). Alt no activa word-jump.
+    { key = "Left",  mods = "Alt", chars = "\u001b\u001b[D" },
+    { key = "Right", mods = "Alt", chars = "\u001b\u001b[C" },
 
     # Borrar palabra completa con Ctrl + Backspace / Ctrl + Delete
     { key = "Back",   mods = "Control", chars = "\u001b\u007f" },
