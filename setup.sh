@@ -1146,11 +1146,22 @@ install_dev_tools() {
 
   # npm shim — redirect every bare `npm` call to pnpm
   local npm_shim="$HOME/.local/bin/npm"
-  if [[ ! -f "$npm_shim" ]] || ! grep -q 'exec pnpm' "$npm_shim" 2>/dev/null; then
+  if [[ ! -f "$npm_shim" ]] || ! grep -q 'prefer-online' "$npm_shim" 2>/dev/null; then
     mkdir -p "$HOME/.local/bin"
     cat > "$npm_shim" <<'EOF'
 #!/usr/bin/env sh
 # npm shim — transparently delegates to pnpm
+# Strips npm-only flags that pnpm doesn't recognize (e.g. claude upgrade
+# calls `npm view ... --prefer-online` which makes pnpm error out).
+n=$#
+while [ $n -gt 0 ]; do
+  case "$1" in
+    --prefer-online|--prefer-offline) ;;
+    *) set -- "$@" "$1" ;;
+  esac
+  shift
+  n=$((n-1))
+done
 exec pnpm "$@"
 EOF
     chmod +x "$npm_shim"
