@@ -1,4 +1,5 @@
 {
+  "cli_default_open_behavior": "existing_window",
   "git": {
     "disable_git": false
   },
@@ -16,6 +17,22 @@
           "paths": [
             "/home/eduardoportillo/storage-infrastructure"
           ]
+        },
+        {
+          "paths": [
+            "/home/pbx"
+          ]
+        }
+      ]
+    },
+    {
+      "host": "uplabs-ai-production",
+      "args": [],
+      "projects": [
+        {
+          "paths": [
+            "/home/pbx/Documents/GitHub/uplabs/santaCruzBienesRaices"
+          ]
         }
       ]
     }
@@ -26,6 +43,11 @@
       "type": "registry",
     },
     "claude-acp": {
+      "default_config_options": {
+        "mode": "plan",
+        "effort": "max",
+        "model": "opus"
+      },
       "type": "registry",
     },
   },
