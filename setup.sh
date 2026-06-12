@@ -730,117 +730,62 @@ setup_claude_config() {
   symlink_file "$REPO_DIR/claude/CLAUDE.md"     "$HOME/.claude/CLAUDE.md"
 }
 
-# Pin the pnpm global workspace version so we can find it again in other functions.
-readonly PNPM_GLOBAL_V11_DIR="$PNPM_HOME/global/v11"
+# Legacy cleanup (pre-native era): Claude Code used to be installed via pnpm
+# global, but its auto-updater only speaks npm/native, so updates always
+# failed. Remove the pnpm-managed install and the claude-code entries it
+# left behind in the global pnpm-workspace.yaml.
+_claude_code_purge_legacy_pnpm() {
+  command -v pnpm &>/dev/null || return 0
 
-# Ensure the pnpm workspace yaml allows @anthropic-ai/claude-code's postinstall.
-# pnpm v11's allowBuilds can block lifecycle scripts — we need the postinstall
-# to download the native binary. Patches in-place so a subsequent re-run of the
-# setup script is idempotent.
-_claude_code_allow_postinstall() {
-  local ws_yaml="$PNPM_GLOBAL_V11_DIR/pnpm-workspace.yaml"
-  [[ ! -f "$ws_yaml" ]] && return 0
-
-  # readarray is not available in bash 3.2 (macOS). Use a temp file instead.
-  local tmp
-  tmp="$(mktemp)"
-  local patched=false
-  while IFS= read -r line; do
-    # Match the exact block that denies claude-code's build
-    if [[ "$line" =~ ^[[:space:]]*[\"\\']@anthropic-ai/claude-code[\"\\']:[[:space:]]*false ]]; then
-      local indent="${line%%[![:space:]]*}"
-      echo "${indent}'@anthropic-ai/claude-code': true" >> "$tmp"
-      patched=true
+  if pnpm ls -g 2>/dev/null | grep -q '@anthropic-ai/claude-code'; then
+    info "Removing legacy pnpm install of Claude Code..."
+    if pnpm remove -g @anthropic-ai/claude-code >>"$LOG" 2>&1; then
+      pnpm store prune >>"$LOG" 2>&1 || true
+      ok "Legacy pnpm Claude Code removed"
     else
-      echo "$line" >> "$tmp"
+      warn "Could not remove pnpm claude-code — run: pnpm remove -g @anthropic-ai/claude-code"
     fi
-  done < "$ws_yaml"
-
-  if [[ "$patched" == true ]]; then
-    mv "$tmp" "$ws_yaml"
-    info "Patched pnpm-workspace.yaml: allowed @anthropic-ai/claude-code postinstall"
-  else
-    rm -f "$tmp"
   fi
-}
 
-# Fallback: run the postinstall manually if pnpm skipped it (e.g. allowBuilds
-# was false, or --ignore-scripts / --omit=optional was in effect).
-# Handles both pnpm v10 (pnpm root -g) and v11 (hash-based store layout).
-_claude_code_run_postinstall() {
-  local install_script
-
-  # Try pnpm root -g first (pnpm v10 and earlier)
-  install_script="$(pnpm root -g 2>/dev/null)/@anthropic-ai/claude-code/install.cjs"
-  if [[ -f "$install_script" ]]; then
-    info "Running claude-code postinstall manually..."
-    if node "$install_script" >> "$LOG" 2>&1; then
-      ok "Claude Code native binary placed"
-      return 0
+  local ws_yaml="${PNPM_HOME:-$HOME/.local/share/pnpm}/global/v11/pnpm-workspace.yaml"
+  if [[ -f "$ws_yaml" ]] && grep -q 'claude-code' "$ws_yaml"; then
+    local tmp
+    tmp="$(mktemp)"
+    # Drop claude-code entries, then any top-level key left without children;
+    # delete the file outright if nothing remains.
+    grep -v 'claude-code' "$ws_yaml" | awk '
+      /^[^[:space:]#].*:[[:space:]]*$/ { key = $0; next }
+      { if (key != "") { print key; key = "" } print }
+    ' > "$tmp"
+    if [[ -s "$tmp" ]]; then
+      mv "$tmp" "$ws_yaml"
+    else
+      rm -f "$tmp" "$ws_yaml"
     fi
-    warn "Claude Code postinstall failed — run manually: node $install_script"
-    return 1
+    ok "Cleaned claude-code entries from global pnpm-workspace.yaml"
   fi
-
-  # Fallback for pnpm v11: search hash-based store directories
-  local v11_root="$PNPM_HOME/global/v11"
-  if [[ -d "$v11_root" ]]; then
-    while IFS= read -r -d '' dir; do
-      install_script="$dir/node_modules/@anthropic-ai/claude-code/install.cjs"
-      if [[ -f "$install_script" ]]; then
-        info "Running claude-code postinstall manually (v11 store)..."
-        if node "$install_script" >> "$LOG" 2>&1; then
-          ok "Claude Code native binary placed"
-          return 0
-        fi
-        warn "Claude Code postinstall failed — run manually: node $install_script"
-        return 1
-      fi
-    done < <(find "$v11_root" -maxdepth 1 -type d -name '*-*' -print0 2>/dev/null)
-  fi
-
-  warn "Claude Code package not found for postinstall fallback"
-  return 1
 }
 
 setup_claude_code() {
   info "Setting up Claude Code..."
 
-  # Ensure pnpm PATH is active (install_dev_tools exports these but re-export
-  # defensively so this function is self-contained)
-  export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
-  export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH"
-
-  # Ensure the global v11 directory exists
-  mkdir -p "$PNPM_GLOBAL_V11_DIR"
-
-  # Unblock the postinstall before pnpm touches the package
-  _claude_code_allow_postinstall
-
-  # No official brew tap for Claude Code today — always pnpm. Structure kept
-  # parallel to setup_opencode so a future brew branch can slot in.
-  if command -v pnpm &>/dev/null; then
-    if command -v claude &>/dev/null; then
-      info "Updating Claude Code via pnpm..."
-      pnpm add -g @anthropic-ai/claude-code >>"$LOG" 2>&1 \
-        || warn "Failed to update Claude Code via pnpm"
-    else
-      info "Installing Claude Code via pnpm..."
-      pnpm add -g @anthropic-ai/claude-code >>"$LOG" 2>&1 \
-        || warn "Failed to install Claude Code via pnpm"
-    fi
-
-    # Verify the native binary works; if not, run postinstall manually
-    if command -v claude &>/dev/null && claude --version &>/dev/null; then
-      ok "Claude Code installed ($(claude --version 2>/dev/null))"
-    else
-      warn "Claude native binary missing — attempting postinstall fallback"
-      _claude_code_run_postinstall
-    fi
+  # Native installer — self-updating binary in ~/.local/bin, no node/npm/pnpm
+  # involved. (pnpm installs can't auto-update: the updater only speaks
+  # npm/native, so it died with "npm global folder isn't writable".)
+  local native_bin="$HOME/.local/bin/claude"
+  if [[ -x "$native_bin" ]] && "$native_bin" --version &>/dev/null; then
+    ok "Claude Code (native) already installed ($("$native_bin" --version 2>/dev/null))"
   else
-    warn "pnpm not found, skipping Claude Code installation"
+    info "Installing Claude Code via native installer..."
+    if curl -fsSL https://claude.ai/install.sh 2>>"$LOG" | bash >>"$LOG" 2>&1 \
+       && [[ -x "$native_bin" ]]; then
+      ok "Claude Code installed ($("$native_bin" --version 2>/dev/null))"
+    else
+      warn "Claude Code native install failed — see $LOG"
+    fi
   fi
 
+  _claude_code_purge_legacy_pnpm
   setup_claude_config
 }
 
@@ -1151,8 +1096,8 @@ install_dev_tools() {
     cat > "$npm_shim" <<'EOF'
 #!/usr/bin/env sh
 # npm shim — transparently delegates to pnpm
-# Strips npm-only flags that pnpm doesn't recognize (e.g. claude upgrade
-# calls `npm view ... --prefer-online` which makes pnpm error out).
+# Strips npm-only flags that pnpm doesn't recognize, so tools that shell
+# out to `npm` with flags like --prefer-online don't make pnpm error out.
 n=$#
 while [ $n -gt 0 ]; do
   case "$1" in
