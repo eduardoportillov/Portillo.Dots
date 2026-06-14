@@ -1,3 +1,7 @@
 {
-  "MD013": false
+  // MD013/line-length: maximo por defecto 80 chars por linea; desactivada para permitir URLs, parrafos y texto largo.
+  "MD013": false,
+
+  // MD060/table-column-style: exige estilo consistente en tablas; ej. prefiere "| --- |" sobre "|---|" en estilo compact.
+  "MD060": false
 }
