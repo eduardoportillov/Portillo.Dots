@@ -2,6 +2,12 @@
   // MD013/line-length: maximo por defecto 80 chars por linea; desactivada para permitir URLs, parrafos y texto largo.
   "MD013": false,
 
+  // MD022/blanks-around-headings: exige linea en blanco antes/despues de titulos; desactivada para permitir secciones compactas.
+  "MD022": false,
+
+  // MD032/blanks-around-lists: exige linea en blanco antes/despues de listas; desactivada para permitir listas pegadas al contexto.
+  "MD032": false,
+
   // MD060/table-column-style: exige estilo consistente en tablas; ej. prefiere "| --- |" sobre "|---|" en estilo compact.
   "MD060": false
 }
