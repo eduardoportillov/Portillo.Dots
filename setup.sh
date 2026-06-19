@@ -726,8 +726,10 @@ setup_claude_config() {
   # Do NOT symlink the whole ~/.claude/ directory — it also contains
   # projects/, memory/, and .credentials.json which must NOT be in the repo.
   mkdir -p "$HOME/.claude"
+  mkdir -p "$HOME/.claude/themes"
   symlink_file "$REPO_DIR/claude/settings.json" "$HOME/.claude/settings.json"
   symlink_file "$REPO_DIR/claude/CLAUDE.md"     "$HOME/.claude/CLAUDE.md"
+  symlink_file "$REPO_DIR/claude/themes/kanagawa-dragon.json" "$HOME/.claude/themes/kanagawa-dragon.json"
 }
 
 # Legacy cleanup (pre-native era): Claude Code used to be installed via pnpm

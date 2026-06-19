@@ -3,7 +3,12 @@
 
 # Claude local config
 /.claude/
-/claude/
+/claude/*
+!/claude/settings.json
+!/claude/CLAUDE.md
+!/claude/themes/
+/claude/themes/*
+!/claude/themes/kanagawa-dragon.json
 
 # Logs
 *.log

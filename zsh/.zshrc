@@ -124,6 +124,26 @@ alias grep='grep --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
 
+# Top processes by resident memory. Usage: memtop [count], defaults to 10.
+function memtop() {
+  local limit="${1:-10}"
+
+  if ! [[ "$limit" =~ ^[0-9]+$ ]] || [[ "$limit" -lt 1 ]]; then
+    print -u2 "usage: memtop [count]"
+    return 2
+  fi
+
+  ps -eo pid,rss,comm --sort=-rss | awk -v limit="$limit" '
+    NR == 1 {
+      printf "%-8s %8s %s\n", "PID", "MB", "CMD"
+      next
+    }
+    NR <= limit + 1 {
+      printf "%-8s %8.1f %s\n", $1, $2 / 1024, $3
+    }
+  '
+}
+
 # ~/.local/bin — must come last so its shims (e.g. npm → pnpm) take priority
 # over anything node version managers (nvm/fnm) prepend to PATH above.
 export PATH="$HOME/.local/bin:$PATH"
