@@ -1,8 +1,0 @@
-{
-  "name": "Kanagawa Dragon",
-  "base": "dark-ansi",
-  "overrides": {
-    "claude": "#d98692",
-    "claudeShimmer": "#e6a1aa"
-  }
-}
