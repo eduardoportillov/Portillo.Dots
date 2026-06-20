@@ -7,15 +7,6 @@ end
 
 return {
   {
-    "stevearc/conform.nvim",
-    optional = true,
-    opts = function(_, opts)
-      opts.formatters = opts.formatters or {}
-      opts.formatters["markdownlint-cli2"] = opts.formatters["markdownlint-cli2"] or {}
-      opts.formatters["markdownlint-cli2"].args = { "--config", markdownlint_config, "--fix", "$FILENAME" }
-    end,
-  },
-  {
     "mfussenegger/nvim-lint",
     optional = true,
     opts = {

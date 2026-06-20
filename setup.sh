@@ -1091,11 +1091,22 @@ install_dev_tools() {
 
   # npm shim — redirect every bare `npm` call to pnpm
   local npm_shim="$HOME/.local/bin/npm"
-  if [[ ! -f "$npm_shim" ]] || ! grep -q 'prefer-online' "$npm_shim" 2>/dev/null; then
+  if [[ ! -f "$npm_shim" ]] || ! grep -q 'Mason/npm init compatibility' "$npm_shim" 2>/dev/null; then
     mkdir -p "$HOME/.local/bin"
     cat > "$npm_shim" <<'EOF'
 #!/usr/bin/env sh
 # npm shim — transparently delegates to pnpm
+# Mason compatibility: Mason expects npm semantics for package scaffolding and
+# installs. Delegate those cases to Node's bundled npm instead of pnpm.
+case "$1" in
+  init|install|i|add|exec|x)
+  dir=$(dirname "$(command -v node)")
+  if [ -x "$dir/npm" ]; then
+    exec "$dir/npm" "$@"
+  fi
+  ;;
+esac
+
 # Strips npm-only flags that pnpm doesn't recognize, so tools that shell
 # out to `npm` with flags like --prefer-online don't make pnpm error out.
 n=$#

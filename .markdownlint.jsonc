@@ -1,4 +1,7 @@
 {
+  // MD012/no-multiple-blanks: exige maximo una linea en blanco consecutiva; desactivada para evitar conflictos con Prettier.
+  "MD012": false,
+
   // MD013/line-length: maximo por defecto 80 chars por linea; desactivada para permitir URLs, parrafos y texto largo.
   "MD013": false,
 
@@ -7,6 +10,9 @@
 
   // MD032/blanks-around-lists: exige linea en blanco antes/despues de listas; desactivada para permitir listas pegadas al contexto.
   "MD032": false,
+
+  // MD049/emphasis-style: exige un unico estilo de enfasis; desactivada para permitir _..._ editorial junto a **...** fuerte.
+  "MD049": false,
 
   // MD060/table-column-style: exige estilo consistente en tablas; ej. prefiere "| --- |" sobre "|---|" en estilo compact.
   "MD060": false
