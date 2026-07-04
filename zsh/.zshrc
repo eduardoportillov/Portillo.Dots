@@ -115,6 +115,13 @@ function tm() {
 # Shell options
 setopt ignoreeof
 
+# Fix unreadable colors for world-writable dirs (ow/tw/st): default LS_COLORS
+# paints them with a green background that clashes with dark terminal themes
+# (e.g. Kanagawa Dragon). Keep the security warning but as bold bright-red
+# text (Kanagawa Dragon's bright red, #e46876) with no background, so it
+# stays legible while still standing out from normal directories.
+export LS_COLORS="${LS_COLORS}:ow=01;38;2;228;104;118:tw=01;38;2;228;104;118:st=01;38;2;228;104;118"
+
 # Useful aliases
 alias ll='ls -lah'
 alias la='ls -lah'

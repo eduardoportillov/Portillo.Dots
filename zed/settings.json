@@ -39,17 +39,7 @@
   ],
   "vim_mode": false,
   "agent_servers": {
-    "codex-acp": {
-      "type": "registry",
-    },
-    "claude-acp": {
-      "default_config_options": {
-        "mode": "plan",
-        "effort": "max",
-        "model": "opus"
-      },
-      "type": "registry",
-    },
+    
   },
   "base_keymap": "VSCode",
 }
