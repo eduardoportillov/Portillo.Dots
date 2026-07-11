@@ -44,7 +44,8 @@ Otros ajustes activos: modo de teclas `vi` en copy-mode, ratón habilitado, barr
 Cómo sobreviven las sesiones a un reinicio, sin intervención manual:
 
 1. **continuum** auto-guarda el estado cada **1 minuto** (llama al motor de resurrect), y también
-   re-lanza programas listados en `@resurrect-processes` (opencode, claude; nvim ya por defecto).
+   re-lanza programas listados en `@resurrect-processes` con `claude -c` / `opencode -c`
+   (estrategia inline `->`) para reanudar la última sesión; nvim ya por defecto.
 2. **Al iniciar sesión**, continuum levanta tmux mediante un servicio systemd de usuario que él
    mismo genera y habilita (`@continuum-boot 'on'` → `~/.config/systemd/user/tmux.service`).
 3. Al arrancar el servidor, continuum **auto-restaura** la última foto (`@continuum-restore 'on'`).

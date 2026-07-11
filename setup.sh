@@ -412,7 +412,7 @@ install_brew_packages() {
   
   local packages=(
     "git" "curl" "unzip" "zip" "tmux" "neovim" "ripgrep" "fd" "fzf" "bat"
-    "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin" "go"
+    "lazygit" "lazydocker" "zsh" "tree-sitter" "zoxide" "atuin" "go" "ffmpeg"
   )
 
   # Linux-only packages
@@ -1189,6 +1189,26 @@ EOF
         warn "uv installation failed, continuing..."
       fi
     fi
+  fi
+
+  # MarkItDown (Microsoft) — convierte documentos (PDF, Office, HTML, etc.) a
+  # Markdown. No existe en Homebrew; se instala como herramienta aislada con
+  # 'uv tool install', que ya usamos como gestor de paquetes Python (evita
+  # sumar pipx como dependencia nueva).
+  if command -v uv &>/dev/null || [[ -f "$HOME/.local/bin/uv" ]]; then
+    local uv_bin="uv"
+    command -v uv &>/dev/null || uv_bin="$HOME/.local/bin/uv"
+    if "$uv_bin" tool list 2>/dev/null | grep -q '^markitdown'; then
+      info "Updating markitdown..."
+      "$uv_bin" tool upgrade markitdown >>"$LOG" 2>&1 && ok "markitdown up to date" || warn "markitdown update failed, continuing..."
+    else
+      if ask_yn "Install MarkItDown (convert docs to Markdown)?" "y"; then
+        info "Installing markitdown..."
+        "$uv_bin" tool install 'markitdown[all]' >>"$LOG" 2>&1 && ok "markitdown installed" || warn "markitdown installation failed, continuing..."
+      fi
+    fi
+  else
+    warn "uv not available, skipping markitdown installation"
   fi
 
   # copyq
