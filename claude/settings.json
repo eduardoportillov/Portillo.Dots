@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "model": "opus[1m]",
+  "model": "sonnet",
   "effortLevel": "high",
   "theme": "dark",
   "inputNeededNotifEnabled": true,
