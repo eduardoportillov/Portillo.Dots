@@ -1,4 +1,8 @@
 {
+  "diff_view_style": "split",
+  "project_panel": {
+    "hide_gitignore": false
+  },
   "cli_default_open_behavior": "existing_window",
   "git": {
     "disable_git": false
