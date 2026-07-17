@@ -4,7 +4,7 @@ Extensión de tiling para GNOME Shell 50.1, estilo i3/AeroSpace. Fork de Pop She
 Instalada y configurada por `./setup.sh` (scripts en esta carpeta).
 
 - **UUID:** `o-tiling@oliwebd.github.com`
-- **Versión pineada:** `OTILING_VERSION` en `install.sh` (actual `v2.8.8`)
+- **Versión pineada:** `OTILING_VERSION` en `install.sh` (actual `v2.9.12`)
 - **Instalar/actualizar:** `bash o-tiling/install.sh --force` → **logout + login** (Wayland)
 
 ## Atajos

@@ -17,11 +17,11 @@ set -euo pipefail
 # Uso:   bash o-tiling/install.sh [--force]
 # Vars:
 #   OTILING_UUID      (default: o-tiling@oliwebd.github.com)
-#   OTILING_VERSION   tag del release a fijar (default: v2.8.8, build para shell 50)
+#   OTILING_VERSION   tag del release a fijar (default: v2.9.12, build para shell 50)
 #   TS_UUID           Tiling Shell a desmontar (default: tilingshell@ferrarodomenico.com)
 
 OTILING_UUID="${OTILING_UUID:-o-tiling@oliwebd.github.com}"
-OTILING_VERSION="${OTILING_VERSION:-v2.8.8}"
+OTILING_VERSION="${OTILING_VERSION:-v2.9.12}"
 TS_UUID="${TS_UUID:-tilingshell@ferrarodomenico.com}"
 
 FORCE=false

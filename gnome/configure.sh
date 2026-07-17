@@ -45,6 +45,16 @@ gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Shift><Alt>f
 gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"
 gsettings set org.gnome.desktop.wm.keybindings begin-resize "[]"
 
+# Tiling nativo de Mutter: DESHABILITADO. o-tiling (BSP) es el único tiler;
+# dejar Super+Left/Right activo hace que Mutter y o-tiling gestionen la misma
+# ventana en paralelo, lo que puede contribuir a la corrupción de stack_position
+# (ver o-tiling/README.md, "Caveat conocido"). edge-tiling (drag-to-edge) y
+# focus-change-on-pointer-rest (crashes conocidos en Wayland) también fuera.
+gsettings set org.gnome.mutter.keybindings toggle-tiled-left "[]"
+gsettings set org.gnome.mutter.keybindings toggle-tiled-right "[]"
+gsettings set org.gnome.mutter edge-tiling false
+gsettings set org.gnome.mutter focus-change-on-pointer-rest false
+
 # Custom keybindings:
 #   custom0 = Ctrl+Alt+T → Alacritty (sin depender del terminal por defecto de GNOME)
 #   custom1 = Super+Shift+R → dots-fix-tiling (reinicia o-tiling cuando se corrompe el stack)

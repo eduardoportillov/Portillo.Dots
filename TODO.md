@@ -119,4 +119,4 @@ desmontan Tiling Shell e instalan/habilitan o-tiling. Atajos: Alt+Ctrl/Shift+HJK
 |---|---|---|---|
 | Alacritty | 0.16.1 (apt) | 0.17.0 | ❌ No (apt Ubuntu no tiene 0.17 todavía) — ver TODO #1 |
 | tmux | 3.6b (brew) | 3.6b | ✅ Sí |
-| o-tiling | v2.8.8 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar |
+| o-tiling | v2.9.12 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar |
