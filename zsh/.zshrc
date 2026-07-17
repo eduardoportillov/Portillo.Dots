@@ -70,6 +70,9 @@ case ":$PATH:" in
 esac
 alias npm="pnpm"
 
+# rustup (Rust toolchain manager)
+[[ -d "$HOME/.cargo/bin" ]] && export PATH="$HOME/.cargo/bin:$PATH"
+
 # SDKMAN (Java, Kotlin, Gradle) - manages JAVA_HOME automatically
 export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh"

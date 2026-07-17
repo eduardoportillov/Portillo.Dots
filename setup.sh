@@ -79,6 +79,8 @@ WHAT THIS SCRIPT DOES (in order):
                   + Node.js 22 LTS on first install
        SDKMAN     Java/Kotlin/Gradle — install only (run 'sdk selfupdate' to update)
        Go         brew outdated go / system package manager
+       rustup     Rust toolchain — self-updates via 'rustup update'
+                  + wasm32-wasip1/wasip2 targets (Zed extension dev)
        uv         Python package manager — 'uv self update'
        CopyQ      Clipboard manager
                   macOS: brew outdated --cask copyq
@@ -1171,6 +1173,30 @@ EOF
         else
           warn "No package manager available for Go installation"
         fi
+      fi
+    fi
+  fi
+
+  # rustup (Rust toolchain manager) — self-updates via 'rustup update'.
+  # Also ensures the wasm32-wasip1/wasip2 targets are present (needed to
+  # compile Rust-based Zed extensions, e.g. zed-netcoredbg).
+  if command -v rustup &>/dev/null || [[ -f "$HOME/.cargo/bin/rustup" ]]; then
+    local rustup_bin="rustup"
+    command -v rustup &>/dev/null || rustup_bin="$HOME/.cargo/bin/rustup"
+    info "Updating rustup..."
+    "$rustup_bin" update >>"$LOG" 2>&1 && ok "rustup up to date ($("$rustup_bin" show active-toolchain 2>/dev/null))" \
+      || warn "rustup update failed, continuing..."
+    "$rustup_bin" target add wasm32-wasip1 wasm32-wasip2 >>"$LOG" 2>&1 \
+      || warn "Failed to add wasm32-wasip1/wasip2 targets, continuing..."
+  else
+    if ask_yn "Install Rust (rustup)?" "y"; then
+      info "Installing rustup..."
+      if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs 2>>"$LOG" | sh -s -- -y >>"$LOG" 2>&1; then
+        ok "rustup installed ($("$HOME/.cargo/bin/rustc" --version 2>/dev/null))"
+        "$HOME/.cargo/bin/rustup" target add wasm32-wasip1 wasm32-wasip2 >>"$LOG" 2>&1 \
+          || warn "Failed to add wasm32-wasip1/wasip2 targets, continuing..."
+      else
+        warn "rustup installation failed, continuing..."
       fi
     fi
   fi
