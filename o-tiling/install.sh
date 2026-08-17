@@ -17,12 +17,15 @@ set -euo pipefail
 # Uso:   bash o-tiling/install.sh [--force]
 # Vars:
 #   OTILING_UUID      (default: o-tiling@oliwebd.github.com)
-#   OTILING_VERSION   tag del release a fijar (default: v2.9.12, build para shell 50)
+#   OTILING_VERSION   tag del release a fijar (default: v2.9.21, build para shell 50)
 #   TS_UUID           Tiling Shell a desmontar (default: tilingshell@ferrarodomenico.com)
+#   OTILING_AUTO_ENABLE  auto-habilitar tras instalar (default: false — ver TODO.md,
+#                        "o-tiling: corrompe stack_position en cada ventana nueva")
 
 OTILING_UUID="${OTILING_UUID:-o-tiling@oliwebd.github.com}"
-OTILING_VERSION="${OTILING_VERSION:-v2.9.12}"
+OTILING_VERSION="${OTILING_VERSION:-v2.9.21}"
 TS_UUID="${TS_UUID:-tilingshell@ferrarodomenico.com}"
+OTILING_AUTO_ENABLE="${OTILING_AUTO_ENABLE:-false}"
 
 FORCE=false
 [[ "${1:-}" == "--force" ]] && FORCE=true
@@ -47,11 +50,12 @@ done
 echo "Desmontando Tiling Shell si está presente..."
 gnome-extensions disable "$TS_UUID" 2>/dev/null || true
 rm -rf "$HOME/.local/share/gnome-shell/extensions/$TS_UUID" 2>/dev/null || true
-# Sacar Tiling Shell de enabled-extensions y asegurar o-tiling adentro
+# Sacar Tiling Shell de enabled-extensions (y meter o-tiling solo si
+# OTILING_AUTO_ENABLE=true — ver nota arriba, hoy queda apagada por default)
 if command -v gsettings >/dev/null 2>&1; then
-  python3 - "$TS_UUID" "$OTILING_UUID" <<'PY' || true
+  python3 - "$TS_UUID" "$OTILING_UUID" "$OTILING_AUTO_ENABLE" <<'PY' || true
 import subprocess, sys, ast
-ts, ot = sys.argv[1], sys.argv[2]
+ts, ot, auto_enable = sys.argv[1], sys.argv[2], sys.argv[3] == "true"
 out = subprocess.run(["gsettings","get","org.gnome.shell","enabled-extensions"],
                      capture_output=True, text=True).stdout.strip()
 try:
@@ -59,8 +63,11 @@ try:
 except Exception:
     lst = []
 lst = [e for e in lst if e != ts]
-if ot not in lst:
-    lst.append(ot)
+if auto_enable:
+    if ot not in lst:
+        lst.append(ot)
+else:
+    lst = [e for e in lst if e != ot]
 subprocess.run(["gsettings","set","org.gnome.shell","enabled-extensions", str(lst)])
 PY
 fi
@@ -75,7 +82,7 @@ if [[ "$FORCE" != true ]] && [[ -f "$MARKER" ]] \
   && [[ "$(cat "$MARKER" 2>/dev/null)" == "version=${OTILING_VERSION}" ]]; then
   echo "o-tiling ya instalado ($OTILING_VERSION). Saltando."
   echo "Para reinstalar: bash $0 --force"
-  gnome-extensions enable "$OTILING_UUID" 2>/dev/null || true
+  [[ "$OTILING_AUTO_ENABLE" == true ]] && gnome-extensions enable "$OTILING_UUID" 2>/dev/null
   exit 0
 fi
 
@@ -99,7 +106,7 @@ fi
 
 # Por si el shell minor (50.1) no matchea el metadata exacto
 gsettings set org.gnome.shell disable-extension-version-validation true 2>/dev/null || true
-gnome-extensions enable "$OTILING_UUID" 2>/dev/null || true
+[[ "$OTILING_AUTO_ENABLE" == true ]] && gnome-extensions enable "$OTILING_UUID" 2>/dev/null
 
 # === Aplicar patches locales (fixes sobre el código instalado) ===
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"

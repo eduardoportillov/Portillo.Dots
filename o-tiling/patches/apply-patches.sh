@@ -87,6 +87,79 @@ print("  ✓ tiling.js patched (move vertical J/K = mismo monitor)")
 PY
 }
 
+# =====================================================================
+# PATCH 2: diferir auto_tile() en notify::wm-class al próximo redraw
+# =====================================================================
+# Problema: wm_class_changed() (window/window.js) llama a auto_tile() de forma
+# SINCRÓNICA dentro del callback de la señal 'notify::wm-class', que es de las
+# primeras señales que Mutter emite para una ventana recién creada — a veces
+# antes de que Mutter termine de asentar el stack_position interno de esa
+# ventana. Tilear ahí mismo puede pisar meta_window_set_stack_position_no_sync
+# (assertion 'window->stack_position >= 0' failed), lo que corrompe el tile
+# silenciosamente (la ventana queda flotando, sin error visible en JS).
+# Fix: diferir auto_tile() al próximo Meta.LaterType.BEFORE_REDRAW (misma API
+# de "later" que el propio forest.js ya usa para reintentos de move_window),
+# para que corra después de que Mutter estabilizó el estado de la ventana.
+patch_defer_auto_tile() {
+  local file="$EXT_DIR/window/window.js"
+  if [[ ! -f "$file" ]]; then
+    echo "  ⚠ $file no existe — skip"
+    return 0
+  fi
+  if grep -q "PORTILLO.DOTS PATCH: defer auto_tile" "$file"; then
+    echo "  ✓ window.js ya patched (skip)"
+    return 0
+  fi
+
+  python3 - "$file" <<'PY'
+import sys
+from pathlib import Path
+
+p = Path(sys.argv[1])
+src = p.read_text()
+
+old = '''    wm_class_changed() {
+        if (this.is_tilable(this.ext)) {
+            this.ext.connect_window(this);
+            if (!this.meta.minimized) {
+                this.ext.auto_tiler?.auto_tile(this.ext, this);
+            }
+        }
+    }'''
+
+new = '''    wm_class_changed() {
+        if (this.is_tilable(this.ext)) {
+            this.ext.connect_window(this);
+            if (!this.meta.minimized) {
+                // PORTILLO.DOTS PATCH: defer auto_tile to the next compositor redraw
+                // tick. notify::wm-class can fire before Mutter has fully settled the
+                // new window's internal stacking state; tiling synchronously here can
+                // hit meta_window_set_stack_position_no_sync (assertion
+                // 'stack_position >= 0'), which silently corrupts the tile.
+                lib.later_add(Meta.LaterType.BEFORE_REDRAW, () => {
+                    if (this.actor_exists() && !this.meta.minimized) {
+                        this.ext.auto_tiler?.auto_tile(this.ext, this);
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        }
+    }'''
+
+if old not in src:
+    print("  ⚠ window.js: no se encontró el cuerpo exacto de wm_class_changed() — ¿cambió upstream?")
+    sys.exit(2)
+if src.count(old) != 1:
+    print("  ⚠ window.js: el patrón aparece más de una vez — abort")
+    sys.exit(2)
+src = src.replace(old, new, 1)
+
+p.write_text(src)
+print("  ✓ window.js patched (auto_tile diferido a BEFORE_REDRAW)")
+PY
+}
+
 echo "Aplicando patches a o-tiling..."
 patch_vertical_same_monitor
+patch_defer_auto_tile
 echo "Patches aplicados."

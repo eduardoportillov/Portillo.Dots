@@ -210,7 +210,7 @@ return {
     },
     opts = {
       notifier = {},
-      image = {},
+      image = { enabled = false },
       picker = {
         exclude = {
           ".git",

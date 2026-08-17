@@ -31,6 +31,10 @@ OT_DIR="$HOME/.local/share/gnome-shell/extensions/$OT_UUID"
 # Tiling Shell quedó deprecado (migramos a o-tiling). Si sigue habilitada,
 # la desmontamos para que no convivan dos tilers (corrompe el window-stack).
 TS_UUID="tilingshell@ferrarodomenico.com"
+# o-tiling corrompe stack_position en cada ventana nueva (ver TODO.md) — NO
+# se auto-habilita en login hasta que haya un fix upstream. Para reactivar
+# manualmente: gnome-extensions enable o-tiling@oliwebd.github.com
+OTILING_AUTO_ENABLE="${OTILING_AUTO_ENABLE:-false}"
 
 if [[ -d "$OT_DIR" ]]; then
   gsettings set org.gnome.shell disable-extension-version-validation true 2>>"$LOG_FILE" || true
@@ -40,11 +44,15 @@ if [[ -d "$OT_DIR" ]]; then
       log "Desmontando Tiling Shell (deprecado, evita conflicto de tilers)"
       gnome-extensions disable "$TS_UUID" 2>>"$LOG_FILE" || true
     fi
-    if ! gnome-extensions list --enabled 2>/dev/null | grep -qx "$OT_UUID"; then
-      log "Habilitando o-tiling"
-      gnome-extensions enable "$OT_UUID" 2>>"$LOG_FILE" || log "WARN: gnome-extensions enable falló"
+    if [[ "$OTILING_AUTO_ENABLE" == true ]]; then
+      if ! gnome-extensions list --enabled 2>/dev/null | grep -qx "$OT_UUID"; then
+        log "Habilitando o-tiling"
+        gnome-extensions enable "$OT_UUID" 2>>"$LOG_FILE" || log "WARN: gnome-extensions enable falló"
+      else
+        log "o-tiling ya habilitada"
+      fi
     else
-      log "o-tiling ya habilitada"
+      log "o-tiling: auto-enable desactivado (bug conocido, ver TODO.md) — no se toca"
     fi
   fi
 

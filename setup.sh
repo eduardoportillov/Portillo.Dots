@@ -87,9 +87,10 @@ WHAT THIS SCRIPT DOES (in order):
                   Linux: apt-get install --only-upgrade copyq
 
   11. Dotfile symlinks — always recreated (backup of originals kept in .backup/):
-        ~/.zshrc, ~/.p10k.zsh, ~/.tmux.conf, ~/.markdownlint.jsonc,
+        ~/.zshrc, ~/.p10k.zsh, ~/.dircolors, ~/.tmux.conf, ~/.markdownlint.jsonc,
         ~/.config/nvim, ~/.config/alacritty/alacritty.toml,
         ~/.config/opencode/config.json, ~/.config/xdg-terminals.list
+       Linux: installs a root-owned copy at /root/.dircolors for sudo -i.
 
   12. Set zsh as default shell
 
@@ -1325,6 +1326,70 @@ create_nvim_symlinks() {
   done
 }
 
+setup_root_dircolors() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+
+  local src="$REPO_DIR/zsh/.dircolors"
+  local dst="/root/.dircolors"
+  local marker="# Managed by Portillo.Dots."
+  local elevate=()
+
+  if [[ ! -f "$src" ]]; then
+    warn "dircolors config not found at $src, skipping root config"
+    return 1
+  fi
+
+  if [[ "$EUID" -ne 0 ]]; then
+    if ! command -v sudo &>/dev/null; then
+      warn "sudo not available, cannot install $dst"
+      return 1
+    fi
+    elevate=(sudo)
+  fi
+
+  if "${elevate[@]}" test -d "$dst" && ! "${elevate[@]}" test -L "$dst"; then
+    warn "$dst is a directory; refusing to replace it"
+    return 1
+  fi
+  if "${elevate[@]}" test -e "$dst" \
+    && ! "${elevate[@]}" test -f "$dst" \
+    && ! "${elevate[@]}" test -L "$dst"; then
+    warn "$dst has an unsupported file type; refusing to replace it"
+    return 1
+  fi
+
+  if ! "${elevate[@]}" test -L "$dst" \
+    && "${elevate[@]}" cmp -s "$src" "$dst" 2>/dev/null \
+    && [[ "$("${elevate[@]}" stat -c '%U:%G %a' "$dst" 2>/dev/null)" == "root:root 644" ]]; then
+    ok "Root dircolors already up to date"
+    return 0
+  fi
+
+  # Preserve an existing unmanaged root configuration before replacing it.
+  if { "${elevate[@]}" test -e "$dst" || "${elevate[@]}" test -L "$dst"; } \
+    && ! "${elevate[@]}" grep -qF "$marker" "$dst" 2>/dev/null; then
+    local backup="$dst.portillo-dots-backup-$(date +%Y%m%d-%H%M%S)-$$"
+    if "${elevate[@]}" cp -a "$dst" "$backup"; then
+      ok "Backed up existing root dircolors to $backup"
+    else
+      warn "Could not back up $dst, leaving it unchanged"
+      return 1
+    fi
+  fi
+
+  # Never install through a pre-existing symlink owned by root.
+  if "${elevate[@]}" test -L "$dst"; then
+    "${elevate[@]}" rm -f "$dst" || return 1
+  fi
+
+  if "${elevate[@]}" install -o root -g root -m 0644 "$src" "$dst"; then
+    ok "Installed root dircolors for sudo -i"
+  else
+    warn "Could not install $dst"
+    return 1
+  fi
+}
+
 # === PASO 8: CREATE SYMLINKS ===
 create_symlinks() {
   info "Creating symlinks..."
@@ -1335,6 +1400,7 @@ create_symlinks() {
     "alacritty/themes/kanagawa_dragon.toml:$HOME/.config/alacritty/themes/kanagawa_dragon.toml"
     "zsh/.zshrc:$HOME/.zshrc"
     "zsh/p10k.zsh:$HOME/.p10k.zsh"
+    "zsh/.dircolors:$HOME/.dircolors"
     ".markdownlint.jsonc:$HOME/.markdownlint.jsonc"
   )
   
@@ -1357,6 +1423,8 @@ create_symlinks() {
       ok "Created symlink: $dst_path"
     fi
   done
+
+  setup_root_dircolors
   
   create_nvim_symlinks
 }
@@ -1531,6 +1599,29 @@ verify() {
   
   local total=0
   local ok_count=0
+
+  # Semantic dircolors map: verify the source parses and the audited rules have
+  # not regressed to GNU's unreadable background combinations.
+  total=$((total + 1))
+  local dircolors_file="$REPO_DIR/zsh/.dircolors"
+  local generated_ls_colors=""
+  local dircolors_cmd=""
+  command -v dircolors &>/dev/null && dircolors_cmd="dircolors"
+  [[ -z "$dircolors_cmd" ]] && command -v gdircolors &>/dev/null && dircolors_cmd="gdircolors"
+  if [[ -n "$dircolors_cmd" ]] && [[ -f "$dircolors_file" ]]; then
+    generated_ls_colors="$("$dircolors_cmd" -b "$dircolors_file" 2>/dev/null \
+      | bash -c 'source /dev/stdin; printf "%s" "$LS_COLORS"' 2>/dev/null || true)"
+  fi
+  if [[ ":$generated_ls_colors:" == *':ow=01;38;2;228;104;118:'* ]] \
+    && [[ ":$generated_ls_colors:" == *':tw=01;38;2;228;104;118:'* ]] \
+    && [[ ":$generated_ls_colors:" == *':st=01;38;2;230;195;132:'* ]] \
+    && [[ ":$generated_ls_colors:" == *':su=38;2;13;12;12;48;2;228;104;118:'* ]] \
+    && [[ ":$generated_ls_colors:" == *':*.zip=38;2;182;146;123:'* ]]; then
+    ok "Kanagawa Dragon semantic dircolors"
+    ok_count=$((ok_count + 1))
+  else
+    error "Kanagawa Dragon semantic dircolors"
+  fi
   
   # Binarios
   local binaries=(
@@ -1748,6 +1839,7 @@ verify() {
     "$HOME/.config/alacritty/themes/kanagawa_dragon.toml:$REPO_DIR/alacritty/themes/kanagawa_dragon.toml"
     "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
     "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
+    "$HOME/.dircolors:$REPO_DIR/zsh/.dircolors"
     "$HOME/.markdownlint.jsonc:$REPO_DIR/.markdownlint.jsonc"
     "$HOME/.claude/settings.json:$REPO_DIR/claude/settings.json"
     "$HOME/.claude/CLAUDE.md:$REPO_DIR/claude/CLAUDE.md"
@@ -1782,6 +1874,18 @@ verify() {
       error "✗ $(basename "$target") symlink"
     fi
   done
+
+  if [[ "$PLATFORM" == "linux" ]]; then
+    total=$((total + 1))
+    if sudo test ! -L /root/.dircolors \
+      && sudo cmp -s "$REPO_DIR/zsh/.dircolors" /root/.dircolors 2>/dev/null \
+      && [[ "$(sudo stat -c '%U:%G %a' /root/.dircolors 2>/dev/null)" == "root:root 644" ]]; then
+      ok "✓ root dircolors (sudo -i)"
+      ok_count=$((ok_count + 1))
+    else
+      error "✗ root dircolors (sudo -i)"
+    fi
+  fi
   
   # Nvim: verify real directory + internal symlinks
   total=$((total + 1))

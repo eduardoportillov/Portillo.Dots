@@ -1,0 +1,201 @@
+# Managed by Portillo.Dots.
+# GNU ls colors for terminals using the Kanagawa Dragon palette.
+#
+# Most entries retain the standard GNU dircolors mappings, which Alacritty
+# renders through the official Kanagawa Dragon ANSI palette. Permission-marked
+# directories use semantic Kanagawa colors with audited contrast against the
+# Dragon background (#181616).
+
+COLORTERM ?*
+TERM Eterm
+TERM alacritty*
+TERM ansi
+TERM *color*
+TERM con[0-9]*x[0-9]*
+TERM cons25
+TERM console
+TERM cygwin
+TERM *direct*
+TERM dtterm
+TERM foot
+TERM gnome
+TERM hurd
+TERM jfbterm
+TERM konsole
+TERM kterm
+TERM linux
+TERM linux-c
+TERM mlterm
+TERM putty
+TERM rxvt*
+TERM screen*
+TERM st
+TERM terminator
+TERM tmux*
+TERM vt100
+TERM wezterm*
+TERM xterm*
+
+RESET 0
+DIR 01;34
+LINK 01;36
+MULTIHARDLINK 00
+FIFO 40;33
+SOCK 01;35
+DOOR 01;35
+BLK 40;33;01
+CHR 40;33;01
+ORPHAN 40;31;01
+MISSING 00
+# Kanagawa black (#0d0c0c) on bright red (#e46876), contrast 6.08:1.
+SETUID 38;2;13;12;12;48;2;228;104;118
+SETGID 30;43
+CAPABILITY 00
+
+# World-writable directories: bright red (#e46876), bold, no background.
+STICKY_OTHER_WRITABLE 01;38;2;228;104;118
+OTHER_WRITABLE 01;38;2;228;104;118
+
+# Sticky without world-write is a protected special state, not the same risk.
+# Kanagawa bright yellow (#e6c384), bold, no background; contrast 10.73:1.
+STICKY 01;38;2;230;195;132
+
+EXEC 01;32
+
+# Archives and packages: Kanagawa orange (#b6927b), contrast 6.34:1.
+.tar 38;2;182;146;123
+.tgz 38;2;182;146;123
+.arc 38;2;182;146;123
+.arj 38;2;182;146;123
+.taz 38;2;182;146;123
+.lha 38;2;182;146;123
+.lz4 38;2;182;146;123
+.lzh 38;2;182;146;123
+.lzma 38;2;182;146;123
+.tlz 38;2;182;146;123
+.txz 38;2;182;146;123
+.tzo 38;2;182;146;123
+.t7z 38;2;182;146;123
+.zip 38;2;182;146;123
+.z 38;2;182;146;123
+.dz 38;2;182;146;123
+.gz 38;2;182;146;123
+.lrz 38;2;182;146;123
+.lz 38;2;182;146;123
+.lzo 38;2;182;146;123
+.xz 38;2;182;146;123
+.zst 38;2;182;146;123
+.tzst 38;2;182;146;123
+.bz2 38;2;182;146;123
+.bz 38;2;182;146;123
+.tbz 38;2;182;146;123
+.tbz2 38;2;182;146;123
+.tz 38;2;182;146;123
+.deb 38;2;182;146;123
+.rpm 38;2;182;146;123
+.jar 38;2;182;146;123
+.war 38;2;182;146;123
+.ear 38;2;182;146;123
+.sar 38;2;182;146;123
+.rar 38;2;182;146;123
+.alz 38;2;182;146;123
+.ace 38;2;182;146;123
+.zoo 38;2;182;146;123
+.cpio 38;2;182;146;123
+.7z 38;2;182;146;123
+.rz 38;2;182;146;123
+.cab 38;2;182;146;123
+.wim 38;2;182;146;123
+.swm 38;2;182;146;123
+.dwm 38;2;182;146;123
+.esd 38;2;182;146;123
+
+# Images and video
+.avif 01;35
+.jpg 01;35
+.jpeg 01;35
+.mjpg 01;35
+.mjpeg 01;35
+.gif 01;35
+.bmp 01;35
+.pbm 01;35
+.pgm 01;35
+.ppm 01;35
+.tga 01;35
+.xbm 01;35
+.xpm 01;35
+.tif 01;35
+.tiff 01;35
+.png 01;35
+.svg 01;35
+.svgz 01;35
+.mng 01;35
+.pcx 01;35
+.mov 01;35
+.mpg 01;35
+.mpeg 01;35
+.m2v 01;35
+.mkv 01;35
+.webm 01;35
+.webp 01;35
+.ogm 01;35
+.mp4 01;35
+.m4v 01;35
+.mp4v 01;35
+.vob 01;35
+.qt 01;35
+.nuv 01;35
+.wmv 01;35
+.asf 01;35
+.rm 01;35
+.rmvb 01;35
+.flc 01;35
+.avi 01;35
+.fli 01;35
+.flv 01;35
+.gl 01;35
+.dl 01;35
+.xcf 01;35
+.xwd 01;35
+.yuv 01;35
+.cgm 01;35
+.emf 01;35
+.ogv 01;35
+.ogx 01;35
+
+# Audio
+.aac 00;36
+.au 00;36
+.flac 00;36
+.m4a 00;36
+.mid 00;36
+.midi 00;36
+.mka 00;36
+.mp3 00;36
+.mpc 00;36
+.ogg 00;36
+.ra 00;36
+.wav 00;36
+.oga 00;36
+.opus 00;36
+.spx 00;36
+.xspf 00;36
+
+# Backups and temporary files
+*~ 00;90
+*# 00;90
+.bak 00;90
+.old 00;90
+.orig 00;90
+.part 00;90
+.rej 00;90
+.swp 00;90
+.tmp 00;90
+.dpkg-dist 00;90
+.dpkg-old 00;90
+.ucf-dist 00;90
+.ucf-new 00;90
+.ucf-old 00;90
+.rpmnew 00;90
+.rpmorig 00;90
+.rpmsave 00;90

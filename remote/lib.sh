@@ -4,7 +4,7 @@ set -uo pipefail
 REMOTE_BASE="$HOME/.portillo-remote"
 REMOTE_BIN="$REMOTE_BASE/bin"
 REMOTE_CONFIG="$REMOTE_BASE"
-REMOTE_NVIM_SHARE="$HOME/.local/share/nvim-portillo-remote"
+REMOTE_NVIM_SHARE="$HOME/.local/share/portillo-remote/nvim"
 
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'

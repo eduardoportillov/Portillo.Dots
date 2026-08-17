@@ -26,14 +26,13 @@ symlink_if_exists() {
 
 install_neovim() {
   info "neovim..."
-  symlink_if_exists "nvim" && return 0
 
   if [[ -f "$DL_DIR/nvim.appimage" ]]; then
     chmod +x "$DL_DIR/nvim.appimage"
     mv "$DL_DIR/nvim.appimage" "$REMOTE_BIN/nvim"
     if ! "$REMOTE_BIN/nvim" --version &>/dev/null; then
       info "AppImage needs extraction..."
-      "$REMOTE_BIN/nvim" --appimage-extract &>/dev/null
+      (cd "$REMOTE_BIN" && "$REMOTE_BIN/nvim" --appimage-extract &>/dev/null)
       if [[ -d "$REMOTE_BIN/squashfs-root" ]]; then
         mv "$REMOTE_BIN/squashfs-root/usr/bin/nvim" "$REMOTE_BIN/nvim" 2>/dev/null
         rm -rf "$REMOTE_BIN/squashfs-root"
@@ -49,6 +48,8 @@ install_neovim() {
       mv "$nvim_bin" "$REMOTE_BIN/nvim"
     fi
     ok "neovim installed"
+  elif symlink_if_exists "nvim"; then
+    return 0
   elif [[ -x "$REMOTE_BIN/nvim" ]]; then
     ok "neovim (already installed)"
   else
@@ -63,20 +64,21 @@ install_tmux() {
   if [[ -f "$DL_DIR/tmux" ]]; then
     chmod +x "$DL_DIR/tmux"
     mv "$DL_DIR/tmux" "$REMOTE_BIN/tmux"
-    ok "tmux installed"
-  elif [[ -f "$DL_DIR/tmux.tar.gz" ]]; then
-    tar xzf "$DL_DIR/tmux.tar.gz" -C "$DL_DIR"
-    local binary
-    binary="$(find "$DL_DIR" -type f -name "tmux" ! -path "$DL_DIR/tmux.tar.gz" | head -1)"
-    if [[ -n "$binary" ]]; then
-      chmod +x "$binary"
-      mv "$binary" "$REMOTE_BIN/tmux"
+    if "$REMOTE_BIN/tmux" -V &>/dev/null; then
+      ok "tmux installed"
+    else
+      rm -f "$REMOTE_BIN/tmux"
+      warn "tmux download is invalid; Bash fallback will be used"
     fi
-    ok "tmux installed"
   elif [[ -x "$REMOTE_BIN/tmux" ]]; then
-    ok "tmux (already installed)"
+    if "$REMOTE_BIN/tmux" -V &>/dev/null; then
+      ok "tmux (already installed)"
+    else
+      rm -f "$REMOTE_BIN/tmux"
+      warn "invalid tmux removed; Bash fallback will be used"
+    fi
   else
-    warn "tmux: no binary provided"
+    warn "tmux not installed on host; remote.sh will use Bash without tmux"
   fi
 }
 
@@ -166,7 +168,101 @@ install_lazygit() {
   fi
 }
 
+install_node() {
+  info "node & npm..."
+  if [[ -f "$DL_DIR/node.tar.xz" ]]; then
+    local node_dir="$REMOTE_BASE/node"
+    rm -rf "$node_dir"
+    mkdir -p "$node_dir"
+    tar -xf "$DL_DIR/node.tar.xz" -C "$node_dir" --strip-components=1
+    if [[ -x "$node_dir/bin/node" ]]; then
+      ln -sf "$node_dir/bin/node" "$REMOTE_BIN/node"
+      ln -sf "$node_dir/bin/npm" "$REMOTE_BIN/npm"
+      ln -sf "$node_dir/bin/npx" "$REMOTE_BIN/npx"
+      ok "node & npm installed"
+      return 0
+    fi
+  fi
+  symlink_if_exists "node" && symlink_if_exists "npm" && return 0
+  if [[ -x "$REMOTE_BIN/node" ]]; then
+    ok "node & npm (already installed)"
+  else
+    warn "node: not installed"
+  fi
+}
+
+install_zig_cc() {
+  info "C compiler (zig cc)..."
+  if [[ -f "$DL_DIR/zig.tar.xz" ]]; then
+    local zig_dir="$REMOTE_BASE/zig"
+    rm -rf "$zig_dir"
+    mkdir -p "$zig_dir"
+    tar -xf "$DL_DIR/zig.tar.xz" -C "$zig_dir" --strip-components=1
+    local zig_bin="$zig_dir/zig"
+    if [[ -x "$zig_bin" ]]; then
+      ln -sf "$zig_bin" "$REMOTE_BIN/zig"
+      cat > "$REMOTE_BIN/cc" <<'CC_EOF'
+#!/usr/bin/env bash
+args=()
+for arg in "$@"; do
+  case "$arg" in
+    *unknown-linux*)
+      arg="${arg//unknown-linux/linux}"
+      ;;
+  esac
+  args+=("$arg")
+done
+exec "$HOME/.portillo-remote/zig/zig" cc "${args[@]}"
+CC_EOF
+      chmod +x "$REMOTE_BIN/cc"
+      ln -sf "$REMOTE_BIN/cc" "$REMOTE_BIN/gcc"
+      ok "C compiler (zig cc) installed"
+      return 0
+    fi
+  fi
+  symlink_if_exists "gcc" && symlink_if_exists "cc" && return 0
+  if [[ -x "$REMOTE_BIN/cc" ]]; then
+    ok "C compiler (already installed)"
+  else
+    warn "C compiler: not installed"
+  fi
+}
+
+install_stylua() {
+  info "stylua..."
+  symlink_if_exists "stylua" && return 0
+
+  if [[ -f "$DL_DIR/stylua.zip" ]]; then
+    if command -v unzip &>/dev/null; then
+      unzip -qo "$DL_DIR/stylua.zip" -d "$REMOTE_BIN"
+      chmod +x "$REMOTE_BIN/stylua" 2>/dev/null || true
+    elif command -v python3 &>/dev/null; then
+      python3 -c "import zipfile; zipfile.ZipFile('$DL_DIR/stylua.zip').extractall('$REMOTE_BIN')"
+      chmod +x "$REMOTE_BIN/stylua" 2>/dev/null || true
+    fi
+    if [[ -x "$REMOTE_BIN/stylua" ]]; then
+      ok "stylua installed"
+      return 0
+    fi
+  elif [[ -f "$DL_DIR/stylua" ]]; then
+    chmod +x "$DL_DIR/stylua"
+    mv "$DL_DIR/stylua" "$REMOTE_BIN/stylua"
+    ok "stylua installed"
+    return 0
+  fi
+
+  if [[ -x "$REMOTE_BIN/stylua" ]]; then
+    ok "stylua (already installed)"
+  else
+    warn "stylua: no binary provided"
+  fi
+}
+
 setup_lazy_nvim() {
+  if ! command -v git &>/dev/null; then
+    warn "git not found on remote host; install git ('sudo apt install -y git') so LazyVim can clone plugins"
+    return 1
+  fi
   info "Pre-installing lazy.nvim..."
   local lazy_dir="$REMOTE_NVIM_SHARE/lazy/lazy.nvim"
   if [[ -d "$lazy_dir" ]]; then
@@ -175,13 +271,17 @@ setup_lazy_nvim() {
     return 0
   fi
   mkdir -p "$(dirname "$lazy_dir")"
-  git clone --filter=blob:none https://github.com/folke/lazy.nvim.git "$lazy_dir" 2>/dev/null
-  ok "lazy.nvim cloned"
+  if git clone --filter=blob:none https://github.com/folke/lazy.nvim.git "$lazy_dir" 2>/dev/null; then
+    ok "lazy.nvim cloned"
+  else
+    warn "Failed to clone lazy.nvim"
+    return 1
+  fi
 }
 
 setup_nvim_config_symlink() {
   local nvim_app_dir="$HOME/.config/portillo-remote/nvim"
-  if [[ -L "$nvim_app_dir" ]] || [[ -d "$nvim_app_dir" ]]; then
+  if [[ -L "$nvim_app_dir" ]] && [[ "$(readlink "$nvim_app_dir")" == "$REMOTE_BASE/nvim" ]]; then
     return 0
   fi
   mkdir -p "$(dirname "$nvim_app_dir")"
@@ -190,32 +290,29 @@ setup_nvim_config_symlink() {
 }
 
 setup_tpm() {
-  info "Installing TPM..."
-  local tpm_dir="$REMOTE_BASE/tmux/plugins/tpm"
-  if [[ -d "$tpm_dir" ]]; then
-    ok "TPM already present"
+  if ! command -v git &>/dev/null; then
+    warn "git not found on remote host; TPM clone skipped"
     return 0
   fi
-  mkdir -p "$(dirname "$tpm_dir")"
-  git clone --depth 1 https://github.com/tmux-plugins/tpm.git "$tpm_dir" 2>/dev/null
-  ok "TPM installed"
-}
-
-generate_tmux_remote_conf() {
-  info "Generating tmux-remote.conf..."
-  local src="$REMOTE_BASE/tmux/tmux.conf"
-  local dst="$REMOTE_BASE/tmux-remote.conf"
-
-  if [[ ! -f "$src" ]]; then
-    warn "No tmux.conf found, skipping"
-    return 0
+  info "Installing TPM and plugins..."
+  local tpm_dir="$HOME/.tmux/plugins/tpm"
+  mkdir -p "$HOME/.tmux/plugins"
+  if [[ ! -d "$tpm_dir" ]]; then
+    git clone --depth 1 https://github.com/tmux-plugins/tpm.git "$tpm_dir" 2>/dev/null || true
   fi
 
-  sed \
-    -e "s|run '~/.tmux/plugins/tpm/tpm'|run '$REMOTE_BASE/tmux/plugins/tpm/tpm'|" \
-    "$src" > "$dst"
+  local user_tmux_conf="$HOME/.tmux.conf"
+  if [[ ! -e "$user_tmux_conf" ]] || [[ -L "$user_tmux_conf" ]]; then
+    ln -sf "$REMOTE_BASE/tmux/tmux.conf" "$user_tmux_conf"
+  fi
 
-  ok "tmux-remote.conf generated"
+  if [[ -x "$tpm_dir/bin/install_plugins" ]] && command -v tmux &>/dev/null; then
+    tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/" 2>/dev/null || true
+    "$tpm_dir/bin/install_plugins" &>/dev/null || true
+    ok "TPM and plugins installed"
+  else
+    ok "TPM installed"
+  fi
 }
 
 main() {
@@ -232,13 +329,15 @@ main() {
   install_fd
   install_fzf
   install_lazygit
+  install_node
+  install_zig_cc
+  install_stylua
 
   echo ""
   info "Post-install setup..."
   setup_lazy_nvim
   setup_nvim_config_symlink
   setup_tpm
-  generate_tmux_remote_conf
 
   echo ""
   ok "All binaries installed"

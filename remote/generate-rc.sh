@@ -1,17 +1,7 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-ZSHRC="$REPO_DIR/zsh/.zshrc"
-
-if [[ ! -f "$ZSHRC" ]]; then
-  echo "ERROR: $ZSHRC not found" >&2
-  exit 1
-fi
-
-generate_rc() {
-  cat <<'HEADER'
+cat <<'EOF'
 # Portillo Remote bashrc - auto-generated
 # Do not edit manually
 
@@ -20,39 +10,57 @@ export EDITOR="nvim"
 export NVIM_APPNAME="portillo-remote/nvim"
 export VISUAL="nvim"
 
+# Generated from Portillo.Dots/zsh/.dircolors during deploy. Keeping the
+# resolved shell fragment outside ~/.portillo-remote makes colors survive the
+# normal cleanup and avoids requiring dircolors on the remote host.
+if [[ -r "$HOME/.portillo-dots-remote-state/ls-colors.sh" ]]; then
+  source "$HOME/.portillo-dots-remote-state/ls-colors.sh"
+elif [[ -r "$HOME/.dircolors" ]]; then
+  if command -v dircolors &>/dev/null; then
+    eval "$(dircolors -b "$HOME/.dircolors")"
+  elif command -v gdircolors &>/dev/null; then
+    eval "$(gdircolors -b "$HOME/.dircolors")"
+  fi
+fi
+
+if command ls --color=auto -d . &>/dev/null; then
+  alias ls='ls --color=auto'
+elif command -v gls &>/dev/null; then
+  alias ls='gls --color=auto'
+fi
+
 PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 
-HEADER
-
-  local in_function=0 func_buffer=""
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    if [[ "$line" =~ ^[[:space:]]*function[[:space:]] ]]; then
-      in_function=1
-      func_buffer="$line"$'\n'
-      continue
-    fi
-
-    if [[ $in_function -eq 1 ]]; then
-      func_buffer+="$line"$'\n'
-      if [[ "$line" =~ ^[[:space:]]*\}[[:space:]]*$ ]]; then
-        echo "$func_buffer"
-        in_function=0
-        func_buffer=""
-      fi
-      continue
-    fi
-
-    if [[ "$line" =~ ^[[:space:]]*alias[[:space:]] ]]; then
-      echo "$line"
-    fi
-  done < "$ZSHRC"
-
-  cat <<'FOOTER'
-
-# Remote helpers
+alias ll='ls -lah'
+alias la='ls -lah'
+alias l='ls -lh'
+alias mkdir='mkdir -p'
+alias grep='grep --color=auto'
+alias ..='cd ..'
+alias ...='cd ../..'
 alias vim='nvim'
 alias vi='nvim'
 alias tm='tmux new-session -A -s portillo'
+
+# Top processes by resident memory. Usage: memtop [count], defaults to 10.
+memtop() {
+  local limit="${1:-10}"
+
+  if ! [[ "$limit" =~ ^[0-9]+$ ]] || [[ "$limit" -lt 1 ]]; then
+    printf 'usage: memtop [count]\n' >&2
+    return 2
+  fi
+
+  ps -eo pid,rss,comm --sort=-rss | awk -v limit="$limit" '
+    NR == 1 {
+      printf "%-8s %8s %s\n", "PID", "MB", "CMD"
+      next
+    }
+    NR <= limit + 1 {
+      printf "%-8s %8.1f %s\n", $1, $2 / 1024, $3
+    }
+  '
+}
 
 export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 
@@ -62,7 +70,4 @@ fi
 if [[ -f "$HOME/.portillo-remote/fzf/shell/key-bindings.bash" ]]; then
   source "$HOME/.portillo-remote/fzf/shell/key-bindings.bash"
 fi
-FOOTER
-}
-
-generate_rc
+EOF

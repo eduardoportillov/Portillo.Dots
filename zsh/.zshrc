@@ -18,6 +18,15 @@ elif [[ "$_PORTILLO_OS" == "linux" ]]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 fi
 
+# Load the Kanagawa Dragon rules before Oh My Zsh reads LS_COLORS.
+if [[ -r "$HOME/.dircolors" ]]; then
+  if (( $+commands[dircolors] )); then
+    eval "$(dircolors -b "$HOME/.dircolors")"
+  elif (( $+commands[gdircolors] )); then
+    eval "$(gdircolors -b "$HOME/.dircolors")"
+  fi
+fi
+
 # Oh My Zsh configuration
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="powerlevel10k/powerlevel10k"
@@ -118,13 +127,6 @@ function tm() {
 # Shell options
 setopt ignoreeof
 
-# Fix unreadable colors for world-writable dirs (ow/tw/st): default LS_COLORS
-# paints them with a green background that clashes with dark terminal themes
-# (e.g. Kanagawa Dragon). Keep the security warning but as bold bright-red
-# text (Kanagawa Dragon's bright red, #e46876) with no background, so it
-# stays legible while still standing out from normal directories.
-export LS_COLORS="${LS_COLORS}:ow=01;38;2;228;104;118:tw=01;38;2;228;104;118:st=01;38;2;228;104;118"
-
 # Useful aliases
 alias ll='ls -lah'
 alias la='ls -lah'
@@ -133,6 +135,7 @@ alias mkdir='mkdir -p'
 alias grep='grep --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
+alias gentle='/home/eduardoportillo/Documentos/code-repo/utils/Gentleman.Dots/installer/gentleman-installer-linux-amd64'
 
 # Top processes by resident memory. Usage: memtop [count], defaults to 10.
 function memtop() {

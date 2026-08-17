@@ -102,14 +102,78 @@ pineado, `configure.sh` con gsettings). `setup.sh` y `restore-gnome-keybindings.
 desmontan Tiling Shell e instalan/habilitan o-tiling. Atajos: Alt+Ctrl/Shift+HJKL.
 
 **Riesgo conocido / a observar**:
-- o-tiling es fork de Pop Shell → el bug `stack_position` es de Pop Shell (pop-os/shell#647),
-  ligado a **stacking + multi-monitor**. Mitigación: dejamos el modo stacking SIN bindear.
-  Si reaparece corrupción: `dots-diag` con el bug activo, reportar a
-  [oliwebd/o-tiling](https://github.com/oliwebd/o-tiling), y si no hay fix, volver a
-  Tiling Shell (zonas, estable).
 - **Solo UN tiler activo a la vez** — dos corrompen el stack (lección aprendida: el
   servicio de login re-habilitaba Tiling Shell y convivía con o-tiling → 224 assertions).
 - o-tiling auto-floata diálogos; tiene "floating exceptions" para apps puntuales.
+
+---
+
+## 3. o-tiling DESHABILITADA (2026-07-17): corrompe stack_position en cada ventana nueva
+
+**Estado actual**: `o-tiling@oliwebd.github.com` está **instalada pero deshabilitada**
+(`enabled-extensions` vacío, `OTILING_AUTO_ENABLE=false` en `install.sh` y
+`restore-gnome-keybindings.sh` — no se auto-prende en login). Sin tiler activo por ahora.
+
+**Síntoma**: ya no es la corrupción intermitente que describía la sección de arriba —
+ahora `meta_window_set_stack_position_no_sync: assertion 'window->stack_position >= 0'
+failed` se dispara al 100% con **cualquier ventana nueva**, y el tiling/atajos
+(`Ctrl+Alt+HJKL`) directamente no funcionan.
+
+**Confirmado por aislamiento** (reproducible a demanda):
+- Extensión deshabilitada → 0 errores, con cualquier app.
+- Extensión habilitada → error en cada ventana nueva, sin excepción.
+- Esto descarta que sea config nuestra o un bug genérico de Mutter sin relación —
+  es el propio código de tiling de o-tiling el que dispara la corrupción.
+
+**Se probaron y fallaron 4 mitigaciones**:
+1. Actualizar el pin `v2.8.8 → v2.9.12` (varios releases con fixes de restack/teardown).
+2. Patch local: diferir `auto_tile()` en `notify::wm-class` a `Meta.LaterType.BEFORE_REDRAW`.
+3. Patch local: delay real de 150ms tras la señal `first-frame` (el punto que Mutter
+   mismo recomienda como "seguro" para tocar una ventana nueva) — **falló igual**, lo
+   que descarta timing/race como causa arreglable con solo un delay.
+4. **Update a v2.9.21** (2026-07-29), después de que el maintainer respondiera en el
+   issue #50 con un fix (`8483c91`: espera la señal `'restacked'` de Mutter antes de
+   `raise()`/`activate()` en `grab_focus()`, en vez de un delay a ciegas) — **también
+   falló**, confirmado en vivo (`journalctl --user -f` mientras se reproducía): el
+   assertion se sigue disparando (esta vez con Chrome), y aparte, **incluso cuando NO
+   se dispara ningún error**, el tiling y los atajos (`Ctrl+Alt+H/J/K/L`) tampoco
+   funcionan — sin ningún error visible en `journalctl` ni en Looking Glass.
+
+El patch 2 (`window.js`, `wm_class_changed`) sigue aplicado (no hace daño, no resolvió
+el bug). El patch 3 se sacó de `apply-patches.sh`: dejó de aplicar limpio contra
+v2.9.21 porque el fix del maintainer reescribió esa misma zona.
+
+**Pista concreta para el fix, reportada en el comentario de seguimiento**: el fix
+`8483c91` solo protege el `raise()` dentro de `grab_focus()` (camino de ventana nueva).
+Hay un segundo `raise()` sin proteger en `window/window.js`, función standalone
+`activate()` (línea ~773), usada por **22 sitios** en `extension.js` — incluidos los
+4 atajos `focus-left/down/up/right` (`Ctrl+Alt+HJKL`). Como no tiene el mismo guard de
+`'restacked'`, cualquier cambio de foco entre ventanas existentes puede pisar la misma
+carrera, lo que explicaría por qué los atajos no responden aunque no haya ventana nueva
+de por medio.
+
+**Conclusión**: bug real de Mutter 50.1-0ubuntu2.2 (o de cómo o-tiling lo dispara),
+todavía sin resolver pese al primer intento de fix upstream. Bug relacionado (misma
+assertion, sin fix) en una extensión no relacionada:
+[ubuntu/Tiling-Assistant#329](https://github.com/ubuntu/Tiling-Assistant/issues/329).
+
+**Reportado upstream**: [oliwebd/o-tiling#50](https://github.com/oliwebd/o-tiling/issues/50)
+(2 rondas: reporte inicial + seguimiento del 2026-07-29 con el hallazgo del segundo
+`raise()`).
+
+**Alternativa evaluada, no adoptada**: `tiling-assistant@ubuntu.com` (viene con Ubuntu,
+ya está en el sistema, deshabilitada) no dispara el bug en uso normal — pero es un
+paradigma distinto (snap manual arrastrando/atajos, sin auto-tile ni foco direccional
+`Ctrl+Alt+HJKL`), no un reemplazo transparente.
+
+**Próximos pasos**: revisar el issue #50 de tanto en tanto. Si upstream manda un fix
+nuevo, `bash o-tiling/install.sh --force` con la versión nueva y `OTILING_AUTO_ENABLE=true
+gnome-extensions enable o-tiling@oliwebd.github.com` para reactivar y volver a probar
+(idealmente con `journalctl --user -f` corriendo en vivo mientras se reproduce, no
+revisando el log después — así se distingue si el assertion se dispara de si el tiling
+simplemente no hace nada). Si no hay movimiento, evaluar migrar a Tiling Assistant en
+serio (requiere reconfigurar atajos desde cero, ver conversación de auditoría del
+2026-07-17/29 para el detalle de por qué no es 1:1).
 
 ---
 
@@ -119,4 +183,4 @@ desmontan Tiling Shell e instalan/habilitan o-tiling. Atajos: Alt+Ctrl/Shift+HJK
 |---|---|---|---|
 | Alacritty | 0.16.1 (apt) | 0.17.0 | ❌ No (apt Ubuntu no tiene 0.17 todavía) — ver TODO #1 |
 | tmux | 3.6b (brew) | 3.6b | ✅ Sí |
-| o-tiling | v2.9.12 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar |
+| o-tiling | v2.9.21 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar. **Deshabilitada por bug, ver TODO #3** |

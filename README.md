@@ -25,7 +25,7 @@ The setup script is **idempotent**: run it multiple times without issues. Symlin
 ### Terminal & Multiplexer
 
 - **alacritty** — GPU-accelerated terminal emulator
-  - Hack Nerd Font, Tokyo Night Storm theme
+  - Hack Nerd Font, Kanagawa Dragon theme
   - Blur, padding, custom keybindings
   - URL hints with Alt+Space (works on both macOS and Linux)
   - Note: On macOS, some users may prefer Command instead of Alt for hints. Edit `alacritty/alacritty.toml` line 73 to change `mods = "Alt"` to `mods = "Command"`
@@ -90,6 +90,7 @@ Portillo.Dots/
 ├── alacritty/
 │   └── alacritty.toml
 ├── zsh/
+│   ├── .dircolors          # Readable permission colors for Kanagawa Dragon
 │   ├── .zshrc
 │   └── p10k.zsh           # Powerlevel10k config (1837 lines)
 ```
@@ -103,7 +104,206 @@ After running `setup.sh`:
 - `~/.config/alacritty/alacritty.toml` → `$REPO/alacritty/alacritty.toml`
 - `~/.zshrc` → `$REPO/zsh/.zshrc`
 - `~/.p10k.zsh` → `$REPO/zsh/p10k.zsh`
+- `~/.dircolors` → `$REPO/zsh/.dircolors`; Linux also installs a protected copy for `sudo -i`
 - `~/.markdownlint.jsonc` → `$REPO/.markdownlint.jsonc`
+
+## Mapa de colores de `ls` (Kanagawa Dragon)
+
+GNU `ls` decide el color mediante `LS_COLORS`, generado desde
+[`zsh/.dircolors`](zsh/.dircolors). Alacritty renderiza los colores ANSI con la
+paleta oficial de [`kanagawa_dragon.toml`](alacritty/themes/kanagawa_dragon.toml).
+
+### Azul, blanco y rojo
+
+| Color | Significado principal | Ejemplo de permisos |
+|---|---|---|
+| Azul Kanagawa | Directorio sin una condición especial de `LS_COLORS` | `drwxrwxr-x` (`0775`) o `drwxrwx---` (`0770`) |
+| Blanco Kanagawa | Archivo regular sin otra regla especial | `-rw-------` (`0600`), `-rw-r--r--` (`0644`) o `-rw-rw-rw-` (`0666`) |
+| Rojo Kanagawa `#e46876` | Directorio con escritura global (`o+w`), tenga sticky bit o no | `drwxrwxrwx` (`0777`) o `drwxrwxrwt` (`1777`) |
+| Amarillo Kanagawa `#e6c384` | Sticky bit sin escritura global | `drwxr-xr-t` (`1755`) |
+
+#### El color y los permisos son datos distintos
+
+Una línea de `ll` muestra, entre otras cosas, dos piezas de información separadas:
+
+```text
+-rw-rw-rw- 1 eduardoportillo eduardoportillo 317 Mar 24 19:51 .env
+^^^^^^^^^^                                                   ^^^^
+ permisos                                              nombre con color
+```
+
+La primera columna (`-rw-rw-rw-`) siempre describe el tipo y los permisos del
+objeto. El color se aplica principalmente al **nombre** (`.env`) y sirve para
+clasificar rápidamente su tipo o alguna condición especial. El color no sustituye
+la lectura de los permisos y no es una auditoría completa de seguridad.
+
+Por eso no existe una relación como "blanco significa `0666`". Un archivo regular
+puede ser `0600`, `0644`, `0664` o `0666` y continuar blanco: si no es ejecutable,
+no coincide con una extensión coloreada y no tiene otra condición especial, cae
+en la categoría genérica de archivo regular. En esta configuración esa categoría
+usa el foreground normal de Kanagawa Dragon (`#c5c9c5`), que se percibe blanco.
+
+#### Cómo leer `-rw-rw-rw-`
+
+La cadena tiene diez posiciones, divididas como `- | rw- | rw- | rw-`:
+
+| Posición | Fragmento | Significado |
+|---|---|---|
+| 1 | `-` | Es un archivo regular. `d` indicaría directorio y `l`, enlace simbólico. |
+| 2-4 | `rw-` | El propietario puede leer (`r`) y escribir (`w`), pero no ejecutar (`-`). |
+| 5-7 | `rw-` | Los miembros del grupo pueden leer y escribir, pero no ejecutar. |
+| 8-10 | `rw-` | Los demás usuarios (`others`) pueden leer y escribir, pero no ejecutar. |
+
+En notación octal, `r=4`, `w=2` y `x=1`. Cada bloque `rw-` suma `4+2=6`,
+por lo que `rw-rw-rw-` equivale a `0666`:
+
+```text
+usuario   grupo     others
+rw-       rw-       rw-
+ 6         6         6       -> 0666
+```
+
+Esto permite que cualquier cuenta local, o proceso ejecutado bajo otra cuenta,
+lea y modifique el archivo. No significa por sí solo que el archivo sea accesible
+desde Internet: eso depende del servicio y de los directorios que lo contienen.
+Sin embargo, para un `.env` con secretos suele ser demasiado permisivo; normalmente
+debería ser `0600` (`rw-------`). Un archivo de configuración sin secretos suele
+usar `0644` (`rw-r--r--`), salvo que la aplicación requiera otra cosa.
+
+#### Qué significa "directorio normal" en azul
+
+"Normal" es una categoría visual de `LS_COLORS`, no una garantía absoluta de que
+los permisos sean correctos. La regla `DIR 01;34` pinta azul cualquier directorio
+que no active una regla más específica:
+
+- `OTHER_WRITABLE`: escritura permitida a `others` (`o+w`).
+- `STICKY_OTHER_WRITABLE`: ambas condiciones a la vez.
+- `STICKY`: sticky bit activo (`+t`) sin `o+w`.
+
+Por eso varios permisos diferentes pueden aparecer azules:
+
+| Permisos | Octal | Interpretación |
+|---|---:|---|
+| `drwx------` | `0700` | Solo el propietario puede usar el directorio. |
+| `drwxr-x---` | `0750` | Propietario completo; el grupo puede entrar y listar; `others` no accede. |
+| `drwxrwx---` | `0770` | Propietario y grupo tienen control completo; `others` no accede. |
+| `drwxr-xr-x` | `0755` | Solo el propietario escribe; todos pueden entrar y listar. |
+| `drwxrwxr-x` | `0775` | Propietario y grupo escriben; `others` puede entrar y listar, pero no escribir. |
+
+En un directorio, `r` permite listar nombres, `w` permite crear, borrar o renombrar
+entradas, y `x` permite atravesarlo y acceder a su contenido. Las operaciones
+reales suelen requerir una combinación de `w` y `x`.
+
+En la captura, `apps` y `config` son `0775`, mientras que `nextcloud_data` es
+`0770`; todos aparecen azules porque ninguno concede escritura a `others` ni usa
+sticky bit. Aun así, los permisos de grupo deben ser apropiados para quién integra
+ese grupo: el azul no evalúa si el grupo es demasiado amplio.
+
+`themes`, en cambio, es `drwxrwxrwx` (`0777`). Tiene `o+w`, así que cualquier
+usuario local puede crear, reemplazar o borrar entradas allí; la regla roja tiene
+prioridad sobre el azul de directorio.
+
+#### Sticky bit: diferencia entre `1755`, `0777` y `1777`
+
+El sticky bit es el bit especial octal `01000`, también llamado *restricted
+deletion flag*. En un directorio compartido evita que un usuario sin privilegios
+borre o renombre entradas de otro usuario: solo puede hacerlo el propietario de
+la entrada, el propietario del directorio o `root`.
+
+| Permisos | Octal | Color | Efecto |
+|---|---:|---|---|
+| `drwxr-xr-x` | `0755` | Azul | Directorio común, sin escritura global ni sticky. |
+| `drwxr-xr-t` | `1755` | Amarillo | Sticky activo, pero `others` no puede escribir; es un estado especial protegido. |
+| `drwxrwxrwx` | `0777` | Rojo | Todos pueden escribir y cualquiera podría borrar entradas ajenas. |
+| `drwxrwxrwt` | `1777` | Rojo | Todos pueden escribir, pero sticky restringe el borrado; `/tmp` usa normalmente este modo. |
+
+La `t` minúscula ocupa la posición de ejecución de `others` y significa sticky
+con `x`; una `T` mayúscula significa sticky sin `x`. Sticky no concede escritura
+por sí mismo. Por eso `1755` es amarillo, mientras `0777` y `1777` son rojos por
+su `o+w`.
+
+### Leyenda completa
+
+| Apariencia | Tipo o estado |
+|---|---|
+| Blanco (foreground `#c5c9c5`) | Archivo regular sin regla especial |
+| Azul | Directorio normal |
+| Rojo brillante sin fondo (`#e46876`) | Directorio `OTHER_WRITABLE` o `STICKY_OTHER_WRITABLE` |
+| Amarillo brillante sin fondo (`#e6c384`) | Directorio `STICKY` sin escritura global |
+| Verde | Archivo ejecutable |
+| Cian | Enlace simbólico y archivos de audio |
+| Magenta | Imágenes, video, sockets y doors |
+| Naranja Kanagawa (`#b6927b`) | Comprimidos y paquetes (`.tar`, `.zip`, `.deb`, etc.) |
+| Gris | Backups y temporales (`.bak`, `.old`, `.swp`, `.tmp`, etc.) |
+| Amarillo sobre fondo oscuro | Pipes y dispositivos de bloque o carácter |
+| Negro Kanagawa sobre rojo Kanagawa | Ejecutable con `setuid` |
+| Negro sobre amarillo | Ejecutable con `setgid` |
+| Rojo sobre fondo oscuro | Enlace simbólico huérfano o inaccesible |
+
+### Auditoría de contraste
+
+Los valores se calcularon contra el fondo opaco Kanagawa Dragon `#181616`. Se usa
+como umbral conservador `4.5:1`, habitual para texto normal:
+
+| Uso | Colores | Ratio |
+|---|---|---:|
+| Archivo regular | `#c5c9c5` sobre `#181616` | `10.76:1` |
+| Directorio | `#8ba4b0` sobre `#181616` | `6.90:1` |
+| Escritura global | `#e46876` sobre `#181616` | `5.61:1` |
+| Sticky sin `o+w` | `#e6c384` sobre `#181616` | `10.73:1` |
+| Comprimido/paquete | `#b6927b` sobre `#181616` | `6.34:1` |
+| `setuid` | `#0d0c0c` sobre `#e46876` | `6.08:1` |
+| `setgid` | `#0d0c0c` sobre `#c4b28a` | `9.38:1` |
+
+El mapa reemplaza específicamente el azul sobre verde predeterminado de GNU para
+directorios escribibles y el blanco sobre rojo de `setuid`, que con esta paleta
+solo alcanzaba `1.88:1`. Alacritty permanece idéntico al tema oficial; los ajustes
+viven exclusivamente en `zsh/.dircolors`.
+
+La misma configuración se aplica al usuario local y, como copia protegida
+`root:root 0644`, a `sudo -i`.
+
+### SSH directo y `remote.sh`
+
+`remote.sh deploy` y `remote.sh connect` usan `zsh/.dircolors` como única fuente
+de verdad y organizan los archivos remotos de la siguiente forma:
+
+| Ruta en el host | Contenido | Ciclo de vida |
+|---|---|---|
+| `~/.dircolors` | Copia del mapa de colores Kanagawa Dragon | **Persistente** (para herramientas estándar) |
+| `~/.portillo-dots-remote-state/` | `ls-colors.sh` (resuelto), checksums y respaldo original | **Persistente** (no requiere GNU `dircolors` remoto) |
+| Bloque en `~/.bashrc` o `~/.zshrc` | Carga de `ls-colors.sh` y alias de color | **Persistente** (delimita inicio/fin administrado) |
+| `~/.portillo-remote/` | Dotfiles completos (`nvim`, etc.) y binarios portables | **Persistente** con `deploy`; **transitorio** con `connect --cleanup` |
+
+El cleanup normal de `remote.sh connect` elimina `~/.portillo-remote`, pero
+conserva ese estado pequeño para que SSH directo siga funcionando. Si ya existía
+un `~/.dircolors`, se respalda una sola vez. `remote.sh teardown HOST` retira solo
+el bloque administrado y restaura el archivo original.
+
+Para tmux remoto, `remote.sh` usa un servidor dedicado (`tmux -L portillo-dots`),
+por lo que nunca modifica ni reutiliza sesiones tmux normales del servidor. Las
+nuevas ventanas ejecutan el Bash administrado. Cuando cambia la versión del mapa,
+conserva todos los panes existentes y selecciona una ventana nueva con el entorno
+actualizado; una shell que ya estaba ejecutándose no puede cambiar
+retroactivamente sus variables. También crea otra ventana si se solicita una ruta
+`--cd` diferente.
+
+Con `--cleanup`, el runtime transitorio se elimina cuando no hay una sesión tmux
+dedicada; si la sesión sigue activa, se conserva para no romper panes o clientes.
+`remote.sh teardown` termina únicamente el servidor `portillo-dots`, nunca el tmux
+predeterminado del host.
+
+Comandos habituales:
+
+```bash
+./remote.sh deploy HOST       # instala dotfiles/binarios y activa SSH directo
+./remote.sh connect HOST      # despliega y entra por tmux dedicado
+./remote.sh status HOST       # audita versión, Bash, SSH directo y tmux
+./remote.sh teardown HOST -f  # desinstala todo y restaura la configuración previa
+```
+
+El sufijo `*` que muestra `ls -F` no es una alerta del mapa: significa que el
+archivo tiene algún bit de ejecución. El sufijo `/` identifica directorios.
 
 ## Moving the Repo
 
@@ -118,6 +318,7 @@ This recreates all symlinks to point to the new location without reinstalling pa
 ## Customization
 
 - **Shell**: Edit `zsh/.zshrc` for environment variables, aliases, and tool setup
+- **Colores de `ls`**: Edit `zsh/.dircolors`; rerun `setup.sh --config-only` to sync the root copy
 - **Prompt**: Configure `zsh/p10k.zsh` with `p10k configure` or edit directly
 - **Editor**: Add/modify plugins in `nvim/lua/plugins/` (LazyVim spec format)
 - **Terminal**: Adjust colors, fonts, opacity in `alacritty/alacritty.toml`
