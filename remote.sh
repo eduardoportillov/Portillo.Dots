@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+REPO_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 REMOTE_DIR="$REPO_DIR/remote"
 HOSTS_CONF="$REMOTE_DIR/hosts.conf"
 HOSTS_LOCAL_CONF="$REMOTE_DIR/hosts.local.conf"
@@ -50,6 +56,7 @@ Commands:
   connect             Deploy + connect via SSH (direct Bash by default)
   teardown            Remove all deployed files from remote host
   status              Check deployment status on remote host
+  ls                  List commands and options (no host required)
   path <host> <path>  Save path for host
   path <host>         Show paths for host
   path ls             List all saved paths (with connect prompt)
@@ -81,6 +88,35 @@ Examples:
 EOF
 }
 
+cmd_ls() {
+  cat <<EOF
+Comandos disponibles:
+  deploy    Despliega dotfiles y binarios al host remoto
+  connect   Despliega + conecta por SSH (Bash directo por defecto)
+  teardown  Elimina todos los archivos desplegados del host remoto
+  status    Comprueba el estado del despliegue en el host remoto
+  ls        Muestra esta lista de comandos y opciones
+  path      Gestiona rutas guardadas (remote.sh path ls / d / <host>)
+  help      Muestra la ayuda completa
+
+Opciones:
+  --cleanup     Auto-limpieza al desconectar (por defecto)
+  --no-cleanup  Conserva configs en el remoto tras desconectar
+  --tmux        Conecta en una sesión tmux dedicada
+  --no-tmux     Conecta directo a Bash (por defecto)
+  --skip-bins   Omite la instalación de binarios
+  --cd PATH     Usa esa ruta esta sesión y la guarda
+  --no-cd       Ignora las rutas guardadas esta sesión
+  --port PORT   Puerto SSH (anula la config de SSH)
+  --identity FILE  Archivo de identidad SSH
+  -f, --force   Omite los avisos de confirmación
+  -v, --verbose Salida detallada
+  -h, --help    Muestra la ayuda completa
+
+Para detalles y ejemplos: remote.sh help
+EOF
+}
+
 parse_args() {
   if [[ $# -lt 1 ]]; then
     usage
@@ -100,7 +136,11 @@ parse_args() {
     return
   fi
 
-  if [[ $# -lt 1 ]] && [[ "$COMMAND" != "help" ]]; then
+  if [[ "$COMMAND" == "help" ]] || [[ "$COMMAND" == "ls" ]]; then
+    return
+  fi
+
+  if [[ $# -lt 1 ]]; then
     error "Missing host argument"
     usage
     exit 1
@@ -1247,6 +1287,7 @@ case "$COMMAND" in
   teardown) cmd_teardown ;;
   status)   cmd_status ;;
   path)     cmd_path ;;
+  ls)       cmd_ls ;;
   help)     usage ;;
   *)        error "Unknown command: $COMMAND"; usage; exit 1 ;;
 esac

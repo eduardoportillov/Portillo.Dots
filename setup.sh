@@ -1390,10 +1390,17 @@ setup_root_dircolors() {
   fi
 }
 
+# === PASO 7I: REMOTE.SH AS GLOBAL COMMAND ===
+setup_remote() {
+  mkdir -p "$HOME/.local/bin"
+  chmod +x "$REPO_DIR/remote.sh"
+  ln -sfn "$REPO_DIR/remote.sh" "$HOME/.local/bin/dots-remote"
+  ok "Comando disponible globalmente: dots-remote (ver ayuda con: dots-remote ls)"
+}
+
 # === PASO 8: CREATE SYMLINKS ===
 create_symlinks() {
   info "Creating symlinks..."
-  
   local symlinks=(
     "tmux/tmux.conf:$HOME/.tmux.conf"
     "alacritty/alacritty.toml:$HOME/.config/alacritty/alacritty.toml"
@@ -1964,6 +1971,9 @@ sync_configs_only() {
   setup_gnome_user_service
   echo ""
 
+  setup_remote
+  echo ""
+
   create_symlinks
   echo ""
 
@@ -2065,6 +2075,9 @@ main() {
   echo ""
 
   setup_gnome_user_service
+  echo ""
+
+  setup_remote
   echo ""
 
   create_symlinks
