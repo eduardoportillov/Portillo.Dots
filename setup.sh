@@ -628,7 +628,7 @@ setup_tpm() {
 # === PASO 7A: SETUP OPENCODE ===
 setup_opencode_config() {
   local opencode_config_dir="$HOME/.config/opencode"
-  local opencode_config_file="$opencode_config_dir/config.jsonc"
+  local opencode_config_file="$opencode_config_dir/opencode.jsonc"
   local template_file="$REPO_DIR/opencode/opencode.template.jsonc"
   local env_file="$REPO_DIR/opencode/.env"
   local generated_config="$REPO_DIR/opencode/opencode.jsonc"
@@ -651,38 +651,16 @@ setup_opencode_config() {
     info "Copied .env.example → .env (fill in your API keys)"
   fi
 
-  # Generate opencode.jsonc from template using .env as source of truth
-  if [[ -f "$env_file" ]]; then
-    info "Generating opencode.jsonc from template with .env variables..."
-    
-    # Read template
-    local config_content="$(<"$template_file")"
-    
-    # Replace ALL variables from .env dynamically
-    local var_count=0
-    while IFS='=' read -r key value; do
-      # Skip empty lines and comments
-      [[ -z "$key" ]] && continue
-      [[ "$key" =~ ^#.* ]] && continue
-      
-      # Trim whitespace
-      key="$(echo "$key" | xargs)"
-      value="$(echo "$value" | xargs)"
-      
-      # Replace {{VARIABLE}} with the value
-      config_content="${config_content//\{\{$key\}\}/$value}"
-      var_count=$((var_count + 1))
-    done < "$env_file"
-    
-    # Write generated config to repo
-    echo "$config_content" > "$generated_config"
-    ok "Generated opencode.jsonc with $var_count variables"
-  else
-    warn "OpenCode .env not found, using template as-is"
-    cp "$template_file" "$generated_config"
+  # Preserve an independent configuration (including an existing V2 setup).
+  if [[ -e "$opencode_config_file" || -L "$opencode_config_file" ]]; then
+    if [[ ! -L "$opencode_config_file" ]] || [[ "$(readlink "$opencode_config_file")" != "$generated_config" ]]; then
+      warn "Preserving existing OpenCode config: $opencode_config_file (merge manually)"
+      return 0
+    fi
   fi
+  bash "$regenerate_script" || return 1
   
-  # Create symlink from ~/.config/opencode/config.jsonc to generated opencode.jsonc
+  # Use the documented global filename; do not overwrite unrelated configs.
   mkdir -p "$opencode_config_dir"
   
   if [[ -L "$opencode_config_file" ]] && [[ "$(readlink "$opencode_config_file")" == "$generated_config" ]]; then
