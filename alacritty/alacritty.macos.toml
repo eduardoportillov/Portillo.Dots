@@ -1,0 +1,29 @@
+[general]
+import = ["~/.config/alacritty/themes/kanagawa_dragon.toml"]
+
+[window]
+padding = { x = 12, y = 12 }
+opacity = 1.0
+blur = true
+
+[font]
+size = 12.0
+
+[font.normal]
+family = "Hack Nerd Font"
+
+[selection]
+save_to_clipboard = true
+
+[env]
+TERM = "xterm-256color"
+
+[terminal]
+shell = { program = "/bin/zsh", args = ["--login"] }
+osc52 = "onlycopy"
+
+[[hints.enabled]]
+command = "open"
+hyperlinks = true
+post_processing = true
+binding = { key = "Space", mods = "Alt" }

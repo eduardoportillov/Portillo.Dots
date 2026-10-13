@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -61,6 +60,28 @@ class ConfigTests(unittest.TestCase):
             output.symlink_to(target)
             self.assertNotEqual(self.run_renderer(template, env, output).returncode, 0)
             self.assertEqual(target.read_text(), 'keep')
+
+    def test_jsonc_comments_and_trailing_commas(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            template, env, output = (base / name for name in ('template', '.env', 'output'))
+            template.write_text('{"url":"https://host/x,}", // comment\n "list":[1,], /* comment */ }')
+            result = self.run_renderer(template, env, output)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(output.read_text())['url'], 'https://host/x,}')
+
+    def test_server_overlay_comes_last(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'config'
+            result = subprocess.run(['python3', str(ROOT / 'opencode/render-config.py'),
+                                     '--template', str(ROOT / 'opencode/base.jsonc'),
+                                     '--env', str(Path(directory) / 'absent.env'),
+                                     '--overlay', str(ROOT / 'opencode/server.jsonc'),
+                                     '--output', str(output)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rules = json.loads(output.read_text())['permissions']
+            matches = [r for r in rules if r['action'] == 'shell' and r['resource'] == '*']
+            self.assertEqual(matches[-1]['effect'], 'ask')
 
 
 if __name__ == '__main__':

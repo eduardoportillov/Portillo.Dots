@@ -12,11 +12,13 @@ else
 fi
 
 # Homebrew shellenv
-if [[ "$_PORTILLO_OS" == "macos" ]]; then
-  eval "$(/opt/homebrew/bin/brew shellenv)"
-elif [[ "$_PORTILLO_OS" == "linux" ]]; then
-  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-fi
+for _brew in /opt/homebrew/bin/brew /usr/local/Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+  if [[ -x "$_brew" ]]; then
+    eval "$("$_brew" shellenv)"
+    break
+  fi
+done
+unset _brew
 
 # Load the Kanagawa Dragon rules before Oh My Zsh reads LS_COLORS.
 if [[ -r "$HOME/.dircolors" ]]; then
@@ -54,7 +56,7 @@ if [[ "$_PORTILLO_OS" == "macos" ]]; then
   plugins+=(macos)
 fi
 
-source $ZSH/oh-my-zsh.sh
+[[ ! -r "$ZSH/oh-my-zsh.sh" ]] || source "$ZSH/oh-my-zsh.sh"
 
 # Powerlevel10k
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
@@ -71,13 +73,12 @@ if command -v fnm >/dev/null 2>&1; then
   eval "$(fnm env --use-on-cd --shell zsh)"
 fi
 
-# pnpm — default JS package manager; npm is shimmed to pnpm via ~/.local/bin/npm
+# pnpm — use explicitly; leave npm semantics unchanged for external tools.
 export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME/bin:"*) ;;
   *) export PATH="$PNPM_HOME/bin:$PNPM_HOME:$PATH" ;;
 esac
-alias npm="pnpm"
 
 # rustup (Rust toolchain manager)
 [[ -d "$HOME/.cargo/bin" ]] && export PATH="$HOME/.cargo/bin:$PATH"
@@ -135,7 +136,7 @@ alias mkdir='mkdir -p'
 alias grep='grep --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
-alias gentle='/home/eduardoportillo/Documentos/code-repo/utils/Gentleman.Dots/installer/gentleman-installer-linux-amd64'
+[[ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/portillo-dots/local.zsh" ]] || source "${XDG_CONFIG_HOME:-$HOME/.config}/portillo-dots/local.zsh"
 
 # Top processes by resident memory. Usage: memtop [count], defaults to 10.
 function memtop() {
@@ -157,6 +158,5 @@ function memtop() {
   '
 }
 
-# ~/.local/bin — must come last so its shims (e.g. npm → pnpm) take priority
-# over anything node version managers (nvm/fnm) prepend to PATH above.
+# User-installed tools. No npm shim is installed by Portillo.Dots.
 export PATH="$HOME/.local/bin:$PATH"

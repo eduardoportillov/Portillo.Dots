@@ -10,8 +10,10 @@ import tempfile
 
 def load_jsonc(text):
     # Remove comments and trailing commas only outside quoted strings.
-    tokens = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/|,(?=\s*[}\]])')
-    return json.loads(tokens.sub(lambda m: m[0] if m[0].startswith('"') else '', text))
+    tokens = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/')
+    text = tokens.sub(lambda m: m[0] if m[0].startswith('"') else ' ', text)
+    commas = re.compile(r'"(?:\\.|[^"\\])*"|,(?=\s*[}\]])')
+    return json.loads(commas.sub(lambda m: m[0] if m[0].startswith('"') else '', text))
 
 
 def read_env(path):
@@ -54,12 +56,20 @@ def main():
     parser.add_argument('--template', type=Path, default=base / 'opencode.template.jsonc')
     parser.add_argument('--env', type=Path, default=base / '.env')
     parser.add_argument('--output', type=Path, default=base / 'opencode.jsonc')
+    parser.add_argument('--overlay', type=Path, action='append', default=[])
     args = parser.parse_args()
     try:
         if args.env.is_symlink() or args.output.is_symlink():
             raise ValueError('Refusing symlinked credential input or generated output')
-        config = render(load_jsonc(args.template.read_text()), read_env(args.env))
-        args.env.chmod(0o600)
+        config = render(load_jsonc(args.template.read_text()), read_env(args.env) if args.env.exists() else {})
+        for overlay in args.overlay:
+            extra = load_jsonc(overlay.read_text())
+            # Native ordered rules follow the base rules: last matching rule wins.
+            rules = config.get('permissions', []) + extra.get('permissions', [])
+            config.update(extra)
+            config['permissions'] = rules
+        if args.env.exists():
+            args.env.chmod(0o600)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary = tempfile.mkstemp(prefix='.opencode-', dir=args.output.parent)
         try:
