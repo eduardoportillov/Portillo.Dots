@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,34 +26,38 @@ symlink_if_exists() {
 
 install_neovim() {
   info "neovim..."
-
-  if [[ -f "$DL_DIR/nvim.appimage" ]]; then
-    chmod +x "$DL_DIR/nvim.appimage"
-    mv "$DL_DIR/nvim.appimage" "$REMOTE_BIN/nvim"
-    if ! "$REMOTE_BIN/nvim" --version &>/dev/null; then
-      info "AppImage needs extraction..."
-      (cd "$REMOTE_BIN" && "$REMOTE_BIN/nvim" --appimage-extract &>/dev/null)
-      if [[ -d "$REMOTE_BIN/squashfs-root" ]]; then
-        mv "$REMOTE_BIN/squashfs-root/usr/bin/nvim" "$REMOTE_BIN/nvim" 2>/dev/null
-        rm -rf "$REMOTE_BIN/squashfs-root"
-      fi
+  if [[ -f "$DL_DIR/nvim.tar.gz" ]]; then
+    local runtime="$REMOTE_BASE/nvim-runtime"
+    [[ ! -L "$runtime" ]] || { error 'Unsafe Neovim runtime path'; return 1; }
+    local digest
+    digest="$(file_digest "$DL_DIR/nvim.tar.gz")"
+    if [[ -f "$runtime/.archive-sha256" && "$(cat "$runtime/.archive-sha256")" == "$digest" && -x "$runtime/bin/nvim" ]]; then
+      ln -sfn "$runtime/bin/nvim" "$REMOTE_BIN/nvim"
+      ok 'neovim runtime unchanged; extraction skipped'
+      return 0
     fi
-    ok "neovim installed"
-  elif [[ -f "$DL_DIR/nvim.tar.gz" ]]; then
-    tar xzf "$DL_DIR/nvim.tar.gz" -C "$DL_DIR"
-    local nvim_bin
-    nvim_bin="$(find "$DL_DIR" -type f -name "nvim" ! -path "$DL_DIR/nvim.tar.gz" | head -1)"
-    if [[ -n "$nvim_bin" ]]; then
-      chmod +x "$nvim_bin"
-      mv "$nvim_bin" "$REMOTE_BIN/nvim"
+    local extracted
+    extracted="$(mktemp -d "$REMOTE_BASE/.nvim.XXXXXXXX")"
+    tar xzf "$DL_DIR/nvim.tar.gz" -C "$extracted" --strip-components=1
+    if [[ ! -x "$extracted/bin/nvim" || ! -d "$extracted/share/nvim/runtime" ]]; then
+      rm -rf "$extracted"
+      error 'Incomplete Neovim distribution'
+      return 1
     fi
-    ok "neovim installed"
+    "$extracted/bin/nvim" --version >/dev/null || { rm -rf "$extracted"; return 1; }
+    printf '%s\n' "$digest" > "$extracted/.archive-sha256"
+    rm -rf "$runtime"
+    mv "$extracted" "$runtime"
+    # Keep bin/, lib/ and share/ together; Neovim resolves runtime relatively.
+    ln -sfn "$runtime/bin/nvim" "$REMOTE_BIN/nvim"
+    ok 'neovim installed with its complete runtime'
   elif symlink_if_exists "nvim"; then
     return 0
   elif [[ -x "$REMOTE_BIN/nvim" ]]; then
     ok "neovim (already installed)"
   else
-    warn "neovim: no binary provided"
+    error "neovim: no binary provided"
+    return 1
   fi
 }
 
@@ -172,6 +176,13 @@ install_node() {
   info "node & npm..."
   if [[ -f "$DL_DIR/node.tar.xz" ]]; then
     local node_dir="$REMOTE_BASE/node"
+    [[ ! -L "$node_dir" ]] || { error 'Unsafe Node runtime path'; return 1; }
+    local digest
+    digest="$(file_digest "$DL_DIR/node.tar.xz")"
+    if [[ -f "$node_dir/.archive-sha256" && "$(cat "$node_dir/.archive-sha256")" == "$digest" && -x "$node_dir/bin/node" ]]; then
+      ok 'node runtime unchanged; extraction skipped'
+      return 0
+    fi
     rm -rf "$node_dir"
     mkdir -p "$node_dir"
     tar -xf "$DL_DIR/node.tar.xz" -C "$node_dir" --strip-components=1
@@ -179,6 +190,7 @@ install_node() {
       ln -sf "$node_dir/bin/node" "$REMOTE_BIN/node"
       ln -sf "$node_dir/bin/npm" "$REMOTE_BIN/npm"
       ln -sf "$node_dir/bin/npx" "$REMOTE_BIN/npx"
+      printf '%s\n' "$digest" > "$node_dir/.archive-sha256"
       ok "node & npm installed"
       return 0
     fi
@@ -195,6 +207,13 @@ install_zig_cc() {
   info "C compiler (zig cc)..."
   if [[ -f "$DL_DIR/zig.tar.xz" ]]; then
     local zig_dir="$REMOTE_BASE/zig"
+    [[ ! -L "$zig_dir" ]] || { error 'Unsafe Zig runtime path'; return 1; }
+    local digest
+    digest="$(file_digest "$DL_DIR/zig.tar.xz")"
+    if [[ -f "$zig_dir/.archive-sha256" && "$(cat "$zig_dir/.archive-sha256")" == "$digest" && -x "$REMOTE_BIN/cc" ]]; then
+      ok 'C compiler runtime unchanged; extraction skipped'
+      return 0
+    fi
     rm -rf "$zig_dir"
     mkdir -p "$zig_dir"
     tar -xf "$DL_DIR/zig.tar.xz" -C "$zig_dir" --strip-components=1
@@ -216,6 +235,7 @@ exec "$HOME/.portillo-remote/zig/zig" cc "${args[@]}"
 CC_EOF
       chmod +x "$REMOTE_BIN/cc"
       ln -sf "$REMOTE_BIN/cc" "$REMOTE_BIN/gcc"
+      printf '%s\n' "$digest" > "$zig_dir/.archive-sha256"
       ok "C compiler (zig cc) installed"
       return 0
     fi
@@ -266,8 +286,7 @@ setup_lazy_nvim() {
   info "Pre-installing lazy.nvim..."
   local lazy_dir="$REMOTE_NVIM_SHARE/lazy/lazy.nvim"
   if [[ -d "$lazy_dir" ]]; then
-    git -C "$lazy_dir" pull --ff-only 2>/dev/null
-    ok "lazy.nvim up to date"
+    ok "lazy.nvim already installed (versions managed by lazy-lock.json)"
     return 0
   fi
   mkdir -p "$(dirname "$lazy_dir")"
@@ -285,7 +304,12 @@ setup_nvim_config_symlink() {
     return 0
   fi
   mkdir -p "$(dirname "$nvim_app_dir")"
-  ln -sf "$REMOTE_BASE/nvim" "$nvim_app_dir"
+  if [[ -e "$nvim_app_dir" || -L "$nvim_app_dir" ]]; then
+    local saved
+    saved="$(mktemp -d "$(dirname "$nvim_app_dir")/.nvim-backup.XXXXXXXX")"
+    mv "$nvim_app_dir" "$saved/nvim"
+  fi
+  ln -s "$REMOTE_BASE/nvim" "$nvim_app_dir"
   ok "nvim config symlink created"
 }
 
@@ -312,6 +336,12 @@ main() {
   install_zig_cc
   install_stylua
 
+  local binary
+  for binary in nvim rg fd fzf lazygit node npm stylua; do
+    [[ -x "$REMOTE_BIN/$binary" ]] || { error "Required remote binary missing: $binary"; return 1; }
+    "$REMOTE_BIN/$binary" --version >/dev/null || { error "Remote binary cannot run: $binary"; return 1; }
+  done
+
   echo ""
   info "Post-install setup..."
   setup_lazy_nvim
@@ -324,4 +354,6 @@ main() {
   ls -la "$REMOTE_BIN"
 }
 
-main "$@"
+if [[ "${PORTILLO_INSTALLER_LIBRARY:-0}" != 1 ]]; then
+  main "$@"
+fi

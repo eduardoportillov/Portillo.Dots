@@ -30,6 +30,7 @@ RSYNC_SSH_WRAPPER=""
 REMOTE_DEPLOY_ID=""
 VERBOSE=0
 FORCE=0
+REFRESH_BINS=0
 SKIP_BINS=0
 CLEANUP=1
 NO_CD=0
@@ -69,6 +70,7 @@ Options:
   --tmux              Connect inside dedicated tmux session
   --no-tmux           Connect directly into Bash (default)
   --skip-bins         Skip binary installation
+  --refresh-bins      Refresh verified binary downloads for the remote platform
   --cd PATH           Override path this session + auto-save
   --no-cd             Ignore saved paths this session
   --port PORT         SSH port (overrides SSH config)
@@ -105,6 +107,7 @@ Opciones:
   --tmux        Conecta en una sesión tmux dedicada
   --no-tmux     Conecta directo a Bash (por defecto)
   --skip-bins   Omite la instalación de binarios
+  --refresh-bins  Actualiza las descargas verificadas para la plataforma remota
   --cd PATH     Usa esa ruta esta sesión y la guarda
   --no-cd       Ignora las rutas guardadas esta sesión
   --port PORT   Puerto SSH (anula la config de SSH)
@@ -156,10 +159,12 @@ parse_args() {
       --no-tmux)    NO_TMUX=1; shift ;;
       --tmux)       NO_TMUX=0; shift ;;
       --skip-bins)  SKIP_BINS=1; shift ;;
+      --refresh-bins) REFRESH_BINS=1; shift ;;
       --no-cd)      NO_CD=1; shift ;;
-      --cd)         CD_PATH="$2"; shift 2 ;;
-      --port)       SSH_PORT="$2"; shift 2 ;;
-      --identity)   SSH_IDENTITY="$2"; shift 2 ;;
+      --cd|--port|--identity)
+        [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { error "Missing value for $1"; exit 2; }
+        case "$1" in --cd) CD_PATH="$2" ;; --port) SSH_PORT="$2" ;; --identity) SSH_IDENTITY="$2" ;; esac
+        shift 2 ;;
       -f|--force)   FORCE=1; shift ;;
       -v|--verbose) VERBOSE=1; shift ;;
       -h|--help)    usage; exit 0 ;;
@@ -518,6 +523,7 @@ preserve_dir "$base/downloads" "$stage/downloads"
 preserve_dir "$base/fzf" "$stage/fzf"
 preserve_dir "$base/node" "$stage/node"
 preserve_dir "$base/zig" "$stage/zig"
+preserve_dir "$base/nvim-runtime" "$stage/nvim-runtime"
 preserve_dir "$base/tmux/plugins" "$stage/tmux/plugins"
 
 [[ ! -e "$old" && ! -L "$old" ]] || exit 1
@@ -576,7 +582,7 @@ deploy_shell_environment() {
 get_remote_version() {
   local repo="$1"
   local location
-  location="$(curl -sI -o /dev/null -w '%{redirect_url}' \
+  location="$(curl --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 60 -fsI -o /dev/null -w '%{redirect_url}' \
     "https://github.com/$repo/releases/latest" 2>/dev/null)"
   local tag="${location##*/}"
   tag="${tag#v}"
@@ -587,29 +593,19 @@ download_binaries_locally() {
   local dl_dir="$1"
   mkdir -p "$dl_dir"
 
-  local arch
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64|amd64)  arch="x86_64" ;;
-    aarch64|arm64) arch="aarch64" ;;
-    armv7l|armhf)  arch="armv7l" ;;
-  esac
+  local arch="$REMOTE_ARCH"
 
   # neovim
   info "neovim..."
-  if [[ ! -f "$dl_dir/nvim.appimage" ]]; then
+  if [[ ! -f "$dl_dir/nvim.tar.gz" ]]; then
     local nvim_url
     case "$arch" in
-      x86_64)  nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.appimage" ;;
-      aarch64) nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-arm64.appimage" ;;
-      armv7l)  nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-armv7l.tar.gz" ;;
+      x86_64)  nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz" ;;
+      aarch64) nvim_url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-arm64.tar.gz" ;;
     esac
     info "Downloading neovim..."
     if curl -fSL --connect-timeout 15 --max-time 300 -o "$dl_dir/nvim-download" "$nvim_url" 2>/dev/null; then
-      case "$arch" in
-        armv7l) mv "$dl_dir/nvim-download" "$dl_dir/nvim.tar.gz" ;;
-        *)      mv "$dl_dir/nvim-download" "$dl_dir/nvim.appimage" ;;
-      esac
+      mv "$dl_dir/nvim-download" "$dl_dir/nvim.tar.gz"
       ok "neovim downloaded"
     else
       warn "Failed to download neovim"
@@ -718,8 +714,9 @@ download_binaries_locally() {
       armv7l)  node_arch="armv7l" ;;
     esac
     local node_ver
-    node_ver="$(curl -sL https://nodejs.org/dist/index.json | grep -E '"lts":"[A-Za-z]+"' | head -1 | grep -oE '"version":"v[0-9.]+"' | sed 's/"version":"v//;s/"//' || true)"
-    [[ -n "$node_ver" ]] || node_ver="24.19.0"
+    node_ver="$(curl --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 60 -fsSL https://nodejs.org/dist/index.json \
+      | python3 -c 'import json,sys; print(next(v["version"][1:] for v in json.load(sys.stdin) if v["lts"]))')" || return 1
+    [[ "$node_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
     info "Downloading node & npm (v$node_ver)..."
     if curl -fSL --connect-timeout 15 --max-time 300 -o "$dl_dir/node.tar.xz" \
       "https://nodejs.org/dist/v${node_ver}/node-v${node_ver}-linux-${node_arch}.tar.xz" 2>/dev/null; then
@@ -788,14 +785,33 @@ deploy_binaries() {
     return 0
   fi
 
-  local LOCAL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/portillo-remote-downloads"
+  local remote_os remote_arch
+  remote_os="$(ssh_cmd uname -s)" || return 1
+  remote_arch="$(ssh_cmd uname -m)" || return 1
+  [[ "$remote_os" == Linux ]] || { error 'Portable downloads support Linux only; use --skip-bins on other systems'; return 1; }
+  case "$remote_arch" in
+    x86_64|amd64) REMOTE_ARCH=x86_64 ;;
+    aarch64|arm64) REMOTE_ARCH=aarch64 ;;
+    *) error "Unsupported remote architecture: $remote_arch (use --skip-bins)"; return 1 ;;
+  esac
+  local LOCAL_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/portillo-remote-downloads/linux-$REMOTE_ARCH"
+  [[ ! -L "$LOCAL_CACHE" ]] || { error 'Refusing a symlinked binary cache'; return 1; }
   mkdir -p "$LOCAL_CACHE"
+  chmod 0700 "$LOCAL_CACHE"
+  if [[ "$REFRESH_BINS" -eq 1 ]]; then
+    # Remove only the known cached artifacts, never arbitrary cache contents.
+    rm -f "$LOCAL_CACHE"/{nvim.tar.gz,rg.tar.gz,fd.tar.gz,fzf.tar.gz,lazygit.tar.gz,node.tar.xz,zig.tar.xz,stylua.zip,.integrity.json}
+  fi
 
   info "Preparing binaries..."
-  download_binaries_locally "$LOCAL_CACHE"
+  download_binaries_locally "$LOCAL_CACHE" || return 1
+  python3 "$REMOTE_DIR/verify-downloads.py" "$LOCAL_CACHE" "$REMOTE_ARCH" || return 1
 
   info "Transferring binaries to $HOST..."
-  if ! rsync_cmd "$LOCAL_CACHE/" "$HOST:~/.portillo-remote/downloads/"; then
+  if ! rsync_cmd --include='/nvim.tar.gz' --include='/rg.tar.gz' --include='/fd.tar.gz' \
+    --include='/fzf.tar.gz' --include='/lazygit.tar.gz' --include='/node.tar.xz' \
+    --include='/zig.tar.xz' --include='/stylua.zip' --exclude='*' \
+    "$LOCAL_CACHE/" "$HOST:~/.portillo-remote/downloads/"; then
     error "Binary transfer failed"
     return 1
   fi
@@ -820,8 +836,10 @@ load_host_config() {
     if [[ -f "$conf_file" ]]; then
       current_file="$conf_file"
       while IFS='=' read -r h p || [[ -n "$h" ]]; do
-        h="$(echo "$h" | xargs)"
-        p="$(echo "$p" | xargs)"
+        h="${h#"${h%%[![:space:]]*}"}"
+        h="${h%"${h##*[![:space:]]}"}"
+        p="${p#"${p%%[![:space:]]*}"}"
+        p="${p%"${p##*[![:space:]]}"}"
         [[ -z "$h" || -z "$p" ]] && continue
         [[ "$h" =~ ^# ]] && continue
         if [[ -z "$host_filter" ]] || [[ "$h" == "$host_filter" ]]; then
@@ -838,8 +856,11 @@ save_host_path() {
   local host="$1"
   local path="$2"
 
+  [[ "$host" != *$'\n'* && "$host" != *'='* && "$host" != *'|'* && "$path" != *$'\n'* && "$path" != *'|'* ]] \
+    || { error 'Host/path contains an unsupported delimiter'; return 1; }
+
   touch "$HOSTS_LOCAL_CONF"
-  echo "$host=$path" >> "$HOSTS_LOCAL_CONF"
+  grep -Fxq -- "$host=$path" "$HOSTS_LOCAL_CONF" || printf '%s=%s\n' "$host" "$path" >> "$HOSTS_LOCAL_CONF"
   ok "Saved $host → $path"
 }
 
@@ -857,7 +878,7 @@ delete_host_path() {
 
   if [[ -n "$specific_path" ]]; then
     local count
-    count="$(grep -c "^${host}=${specific_path}" "$HOSTS_LOCAL_CONF" 2>/dev/null || echo "0")"
+    count="$(awk -v entry="$host=$specific_path" '$0 == entry { count++ } END { print count+0 }' "$HOSTS_LOCAL_CONF")"
     if [[ "$count" -eq 0 ]]; then
       warn "$specific_path not found for $host"
       rm -f "$tmpfile"
@@ -866,10 +887,10 @@ delete_host_path() {
 
     confirm_action "Delete $specific_path from $host?" || { info "Cancelled"; rm -f "$tmpfile"; return 0; }
 
-    grep -v "^${host}=${specific_path}" "$HOSTS_LOCAL_CONF" > "$tmpfile"
+    awk -v entry="$host=$specific_path" '$0 != entry' "$HOSTS_LOCAL_CONF" > "$tmpfile"
   else
     local count
-    count="$(grep -c "^${host}=" "$HOSTS_LOCAL_CONF" 2>/dev/null || echo "0")"
+    count="$(awk -v prefix="$host=" 'index($0,prefix) == 1 { count++ } END { print count+0 }' "$HOSTS_LOCAL_CONF")"
     if [[ "$count" -eq 0 ]]; then
       warn "No paths found for $host"
       rm -f "$tmpfile"
@@ -878,7 +899,7 @@ delete_host_path() {
 
     confirm_action "Delete all $count paths for $host?" || { info "Cancelled"; rm -f "$tmpfile"; return 0; }
 
-    grep -v "^${host}=" "$HOSTS_LOCAL_CONF" > "$tmpfile"
+    awk -v prefix="$host=" 'index($0,prefix) != 1' "$HOSTS_LOCAL_CONF" > "$tmpfile"
   fi
 
   mv "$tmpfile" "$HOSTS_LOCAL_CONF"
@@ -902,17 +923,17 @@ get_host_path() {
     return 0
   fi
 
-  echo ""
-  echo -e "  ${YELLOW}Multiple paths for $host:${NC}"
-  echo ""
+  echo "" >&2
+  echo -e "  ${YELLOW}Multiple paths for $host:${NC}" >&2
+  echo "" >&2
 
   local i=1
   while IFS='|' read -r h p s; do
-    echo -e "    ${BLUE}$i)${NC} $p"
+    echo -e "    ${BLUE}$i)${NC} $p" >&2
     i=$((i + 1))
   done <<< "$entries"
 
-  echo ""
+  echo "" >&2
   read -p "  Which path? [1-$count / q]: " -r choice
 
   if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "$count" ]]; then
@@ -920,7 +941,7 @@ get_host_path() {
     return 0
   fi
 
-  info "Cancelled"
+  info "Cancelled" >&2
   return 1
 }
 
@@ -967,11 +988,10 @@ cmd_path() {
 
       if command -v fzf &>/dev/null; then
         local selection
-        selection="$(echo "$entries" | awk -F'|' '{printf "%s  %s  (%s)\n", $1, $2, $3}' | fzf --prompt="Connect > " --height=~20 --reverse --no-multi 2>/dev/null)"
+        selection="$(printf '%s\n' "$entries" | fzf --delimiter='|' --with-nth=1,2 --prompt="Connect > " --height=~20 --reverse --no-multi 2>/dev/null)"
         if [[ -n "$selection" ]]; then
           local sel_host sel_path
-          sel_host="$(echo "$selection" | awk '{print $1}')"
-          sel_path="$(echo "$selection" | awk '{print $3}')"
+          IFS='|' read -r sel_host sel_path _ <<< "$selection"
           HOST="$sel_host"
           CD_PATH="$sel_path"
           cmd_connect
@@ -1266,9 +1286,10 @@ STATUS_EOF
   return "$rc"
 }
 
-parse_args "$@"
-
-case "$COMMAND" in
+main() {
+  trap cleanup_ssh EXIT
+  parse_args "$@"
+  case "$COMMAND" in
   deploy)   cmd_deploy ;;
   connect)  cmd_connect ;;
   teardown) cmd_teardown ;;
@@ -1277,4 +1298,9 @@ case "$COMMAND" in
   ls)       cmd_ls ;;
   help)     usage ;;
   *)        error "Unknown command: $COMMAND"; usage; exit 1 ;;
-esac
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

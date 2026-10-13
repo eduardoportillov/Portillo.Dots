@@ -39,7 +39,19 @@ detect_os() {
 }
 
 ensure_dir() {
+  [[ ! -L "$1" ]] || { error "Refusing symlinked runtime directory: $1"; return 1; }
   mkdir -p "$1"
+}
+
+file_digest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    error 'SHA-256 utility is required on the remote host'
+    return 1
+  fi
 }
 
 symlink_if_exists() {
