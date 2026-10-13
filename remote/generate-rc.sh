@@ -40,7 +40,7 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias vim='nvim'
 alias vi='nvim'
-alias tm='tmux new-session -A -s portillo'
+alias tm='tmux -L portillo-dots new-session -A -s portillo'
 
 # Top processes by resident memory. Usage: memtop [count], defaults to 10.
 memtop() {

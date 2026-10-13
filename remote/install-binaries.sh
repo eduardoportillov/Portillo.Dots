@@ -290,29 +290,8 @@ setup_nvim_config_symlink() {
 }
 
 setup_tpm() {
-  if ! command -v git &>/dev/null; then
-    warn "git not found on remote host; TPM clone skipped"
-    return 0
-  fi
-  info "Installing TPM and plugins..."
-  local tpm_dir="$HOME/.tmux/plugins/tpm"
-  mkdir -p "$HOME/.tmux/plugins"
-  if [[ ! -d "$tpm_dir" ]]; then
-    git clone --depth 1 https://github.com/tmux-plugins/tpm.git "$tpm_dir" 2>/dev/null || true
-  fi
-
-  local user_tmux_conf="$HOME/.tmux.conf"
-  if [[ ! -e "$user_tmux_conf" ]] || [[ -L "$user_tmux_conf" ]]; then
-    ln -sf "$REMOTE_BASE/tmux/tmux.conf" "$user_tmux_conf"
-  fi
-
-  if [[ -x "$tpm_dir/bin/install_plugins" ]] && command -v tmux &>/dev/null; then
-    tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/" 2>/dev/null || true
-    "$tpm_dir/bin/install_plugins" &>/dev/null || true
-    ok "TPM and plugins installed"
-  else
-    ok "TPM installed"
-  fi
+  # Remote tmux uses server/tmux.conf without global plugins or autoboot.
+  return 0
 }
 
 main() {

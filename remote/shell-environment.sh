@@ -491,7 +491,7 @@ prepare_rc_remove() {
 }
 
 generate_tmux_conf() {
-  local src="$REMOTE_BASE/tmux/tmux.conf"
+  local src="$REMOTE_BASE/server/tmux.conf"
   local dst="$1"
   [[ -f "$src" ]] || {
     : > "$dst"

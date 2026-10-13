@@ -265,6 +265,8 @@ check_prerequisites() {
   command -v rsync &>/dev/null || missing+=("rsync")
   command -v ssh &>/dev/null   || missing+=("ssh")
   command -v curl &>/dev/null  || missing+=("curl")
+  command -v git &>/dev/null   || missing+=("git")
+  command -v python3 &>/dev/null || missing+=("python3")
 
   if [[ ${#missing[@]} -gt 0 ]]; then
     error "Missing local commands: ${missing[*]}"
@@ -463,18 +465,14 @@ REMOTE_CLEANUP_EOF
 
 deploy_configs() {
   info "Syncing dotfiles to $HOST..."
+  local manifest
+  manifest="$(mktemp)"
+  if ! python3 "$REMOTE_DIR/deploy-manifest.py" "$REPO_DIR" > "$manifest"; then
+    rm -f "$manifest"
+    return 1
+  fi
   if rsync_cmd \
-    --delete \
-    --exclude='.git' \
-    --exclude='.backup' \
-    --exclude='setup.sh' \
-    --exclude='alacritty/' \
-    --exclude='remote/' \
-    --exclude='remote.sh' \
-    --exclude='README.md' \
-    --exclude='nvim/db_ui/connections.lua' \
-    --exclude='.managed-by-portillo-dots-runtime' \
-    --exclude='.portillo-dots-deploy-id' \
+    --from0 --files-from="$manifest" \
     "$REPO_DIR/" \
     "$HOST:~/.portillo-remote-stage-$REMOTE_DEPLOY_ID/" \
     && ssh_cmd "REMOTE_DEPLOY_ID='$REMOTE_DEPLOY_ID' bash -s" <<'REMOTE_SWAP_EOF'
@@ -532,21 +530,12 @@ else
 fi
 REMOTE_SWAP_EOF
   then
+    rm -f "$manifest"
     ok "Dotfiles synced atomically"
   else
+    rm -f "$manifest"
     error "Dotfile sync failed"
     return 1
-  fi
-}
-
-deploy_linux_optimizations() {
-  info "Applying Linux optimizations on $HOST..."
-  local result
-  result="$(ssh_cmd "bash ~/.portillo-remote/linux/optimize.sh --apply 2>&1" 2>/dev/null)" || true
-  if echo "$result" | grep -q "Optimization complete"; then
-    ok "Linux optimizations applied on $HOST"
-  else
-    info "Linux optimizations: auto-skipped (root may be needed for some settings)"
   fi
 }
 
@@ -1044,7 +1033,6 @@ cmd_deploy() {
   check_ssh_connection
   prepare_remote_base || { cleanup_ssh; return 1; }
   deploy_configs || { abort_remote_deploy; return 1; }
-  deploy_linux_optimizations
   deploy_binaries || { abort_remote_deploy; return 1; }
   deploy_shell_environment || { abort_remote_deploy; return 1; }
   finalize_remote_deploy || { abort_remote_deploy; return 1; }
@@ -1076,7 +1064,6 @@ cmd_connect() {
   check_ssh_connection
   prepare_remote_base || { cleanup_ssh; return 1; }
   deploy_configs || { abort_remote_deploy; return 1; }
-  deploy_linux_optimizations
   deploy_binaries || { abort_remote_deploy; return 1; }
   deploy_shell_environment || { abort_remote_deploy; return 1; }
   finalize_remote_deploy || { abort_remote_deploy; return 1; }
