@@ -23,7 +23,7 @@ shell = { program = "/bin/zsh", args = ["--login"] }
 osc52 = "onlycopy"
 
 [[hints.enabled]]
-command = "open"
+command = { program = "open", args = ["{hint}"] }
 hyperlinks = true
 post_processing = true
 binding = { key = "Space", mods = "Alt" }

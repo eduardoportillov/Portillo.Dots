@@ -49,7 +49,7 @@ save_to_clipboard = true
 alphabet = "jkhlndfsaugcvmoweyri"
 
 [[hints.enabled]]
-command = "xdg-open"
+command = { program = "xdg-open", args = ["{hint}"] }
 hyperlinks = true
 post_processing = true
 persist = false
@@ -65,7 +65,8 @@ history = 10000
 multiplier = 3
 
 [terminal]
-shell = { program = "/usr/bin/zsh", args = ["--login"] }
+# Resolve Zsh from the session PATH. Linuxbrew installs it outside /usr/bin.
+shell = { program = "/usr/bin/env", args = ["zsh", "--login"] }
 # Permite a TUIs (Claude Code, etc.) copiar al clipboard del sistema vía OSC 52
 # cuando seleccionas texto dentro de ellas. "OnlyCopy" es write-only (no lectura)
 # por seguridad: una app malintencionada no puede leer tu clipboard.
