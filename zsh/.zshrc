@@ -3,6 +3,16 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
+# A restored tmux pane may predate GNOME's graphical login. Recover the current
+# connection metadata before clipboard clients start; leave SSH forwarding alone.
+if [[ -n "${TMUX:-}" && -z "${SSH_CONNECTION:-}${SSH_TTY:-}" ]]; then
+  _portillo_graphical_helper="${${(%):-%N}:A:h:h}/linux/graphical-environment.sh"
+  if [[ -f "$_portillo_graphical_helper" ]]; then
+    eval "$(bash "$_portillo_graphical_helper")"
+  fi
+  unset _portillo_graphical_helper
+fi
+
 # OS detection
 _PORTILLO_OS="$(uname -s)"
 if [[ "$_PORTILLO_OS" == "Darwin" ]]; then
