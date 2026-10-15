@@ -45,7 +45,7 @@ local M = {
       end
 
       -- Provide a convenience mapping to toggle DBUI
-      vim.api.nvim_set_keymap("n", "<leader>db", ":DBUI<CR>", { noremap = true, silent = true })
+      vim.keymap.set("n", "<leader>Db", "<cmd>DBUI<cr>", { silent = true, desc = "Database UI" })
     end,
   },
 }

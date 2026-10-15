@@ -114,7 +114,12 @@ return {
         local env_file = io.open(env_file_path, "r")
         if env_file then
           for line in env_file:lines() do
-            for key, value in string.gmatch(line, "([%w_]+)=([%w_]+)") do
+            local key, value = line:match("^%s*([%a_][%w_]*)%s*=%s*(.-)%s*$")
+            if key then
+              local quote = value:sub(1, 1)
+              if (quote == '"' or quote == "'") and value:sub(-1) == quote and #value >= 2 then
+                value = value:sub(2, -2)
+              end
               variables[key] = value
             end
           end
@@ -377,7 +382,7 @@ end, desc = "Console" },
               break
             end
           end
-          vim.cmd("edit " .. vim.api.nvim_buf_get_name(bufnr))
+          vim.cmd("edit " .. vim.fn.fnameescape(vim.api.nvim_buf_get_name(bufnr)))
           if line then
             vim.api.nvim_win_set_cursor(0, { line, column })
           end
