@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Remote Server environment; sourced by Bash or Zsh without changing login shell.
 for portillo_bin in "$HOME/.local/bin" "$HOME/.opencode/bin"; do
   case ":$PATH:" in *":$portillo_bin:"*) ;; *) PATH="$portillo_bin:$PATH" ;; esac

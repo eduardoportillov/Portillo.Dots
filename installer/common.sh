@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Globals are shared with the other sourced installer modules.
+# shellcheck disable=SC2034
 # Shared helpers; sourcing this file has no side effects.
 info() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*" >&2; }

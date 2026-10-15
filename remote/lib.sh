@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Globals are consumed by the remote installer when this library is sourced.
+# shellcheck disable=SC2034
 set -uo pipefail
 
 REMOTE_BASE="$HOME/.portillo-remote"

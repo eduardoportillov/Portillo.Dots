@@ -712,9 +712,9 @@ status_environment() {
 
   if [[ -f "$DIRCOLORS_DEST" ]] && [[ ! -L "$DIRCOLORS_DEST" ]] \
     && cmp -s "$DIRCOLORS_DEST" "$STATE_DIR/dircolors.deployed"; then
-    ok "~/.dircolors matches the deployed map"
+    ok "$HOME/.dircolors matches the deployed map"
   else
-    fail "~/.dircolors is missing, modified, or unsafe"
+    fail "$HOME/.dircolors is missing, modified, or unsafe"
     rc=1
   fi
 
