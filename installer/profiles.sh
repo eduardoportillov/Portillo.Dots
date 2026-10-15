@@ -65,9 +65,18 @@ install_profile() {
   done
   export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
   if [[ "$PROFILE" == workstation ]]; then
+    check_workstation_neovim || die 'Upgrade Neovim before configuring LazyVim (native package too old; consider Homebrew)'
     install_workstation
   fi
   install_opencode
+}
+
+check_workstation_neovim() {
+  local version major minor
+  version="$(nvim --version | sed -n '1s/.*v\([0-9]*\.[0-9]*\).*/\1/p')"
+  major="${version%%.*}" minor="${version#*.}"
+  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || return 1
+  [[ "$major" -gt 0 || "$minor" -ge 11 ]]
 }
 
 configure_profile() {
@@ -114,6 +123,11 @@ verify_configs() {
   done
   [[ -f "$CONFIG_HOME/opencode/opencode.jsonc" || -f "$CONFIG_HOME/opencode/opencode.json" ]] \
     || { warn 'OpenCode global config missing'; failed=1; }
+  if [[ -f "$CONFIG_HOME/opencode/opencode.jsonc" ]]; then
+    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.jsonc" "$PROFILE" || failed=1
+  elif [[ -f "$CONFIG_HOME/opencode/opencode.json" ]]; then
+    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.json" "$PROFILE" || failed=1
+  fi
   return "$failed"
 }
 
@@ -130,10 +144,7 @@ verify_profile() {
     opencode --version | grep -Eq '(^|v)2\.' || { warn 'OpenCode V2 is required'; failed=1; }
   fi
   if [[ "$PROFILE" == workstation ]] && command -v nvim >/dev/null 2>&1; then
-    local version major minor
-    version="$(nvim --version | sed -n '1s/.*v\([0-9]*\.[0-9]*\).*/\1/p')"
-    major="${version%%.*}" minor="${version#*.}"
-    if [[ ! "$major" =~ ^[0-9]+$ || ! "$minor" =~ ^[0-9]+$ ]] || [[ "$major" -eq 0 && "$minor" -lt 11 ]]; then
+    if ! check_workstation_neovim; then
       warn 'LazyVim requires Neovim >= 0.11; use a newer distro package or Homebrew'; failed=1
     fi
   fi

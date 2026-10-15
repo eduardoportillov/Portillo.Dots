@@ -31,6 +31,8 @@ fi
 root_copy() {
   local source="$1" destination="$2" mode="$3" temporary
   [[ -f "$source" && ! -L "$source" ]] || { printf 'Unsafe input: %s\n' "$source" >&2; return 1; }
+  [[ ! -e "$destination" || -f "$destination" || -L "$destination" ]] \
+    || { printf 'Refusing to replace non-file system config: %s\n' "$destination" >&2; return 1; }
   mkdir -p "$(dirname "$destination")"
   if [[ -e "$destination" || -L "$destination" ]]; then
     if [[ ! -L "$destination" ]] && cmp -s "$source" "$destination"; then
@@ -40,7 +42,7 @@ root_copy() {
     fi
     local saved
     saved="$(mktemp -d "$(dirname "$destination")/.portillo-backup.XXXXXXXX")"
-    mv "$destination" "$saved/$(basename "$destination")"
+    cp -pP "$destination" "$saved/$(basename "$destination")"
     printf 'System backup: %s\n' "$saved"
   fi
   temporary="$(mktemp "$(dirname "$destination")/.portillo.XXXXXXXX")"
@@ -64,7 +66,7 @@ install_packages() {
     optional=(lazygit lazydocker zoxide atuin tree-sitter-cli)
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    local apt_options=(-y)
+    local apt_options=(-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
     [[ "$upgrade" == true ]] || apt_options+=(--no-upgrade)
     apt-get install "${apt_options[@]}" "${required[@]}" ${build[@]+"${build[@]}"}
   elif command -v dnf >/dev/null 2>&1; then

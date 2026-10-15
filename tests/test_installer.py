@@ -67,11 +67,22 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / '.config/opencode/opencode.jsonc'
             config.parent.mkdir(parents=True)
-            config.write_text('{"model":"custom/model"}\n')
+            original = '{"model":"custom/model","permissions":[{"action":"shell","resource":"*","effect":"ask"},{"action":"edit","resource":"*","effect":"ask"}]}\n'
+            config.write_text(original)
             result = self.configure_server(directory)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(config.is_symlink())
-            self.assertEqual(config.read_text(), '{"model":"custom/model"}\n')
+            self.assertEqual(config.read_text(), original)
+
+    def test_preserved_permissive_server_config_fails_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / '.config/opencode/opencode.jsonc'
+            config.parent.mkdir(parents=True)
+            config.write_text('{"permissions":[{"action":"shell","resource":"*","effect":"allow"}]}')
+            result = self.configure_server(directory)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Independent config preserved', result.stderr)
+            self.assertFalse(config.is_symlink())
 
     def test_nvim_directory_symlink_is_not_written_through(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -104,6 +115,28 @@ class InstallerTests(unittest.TestCase):
         result = subprocess.run(['bash', str(ROOT / 'installer/privileged.sh')],
                                 env={**os.environ, 'SUDO_USER': ''}, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_privileged_failure_stops_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'log'
+            script = '''source "$1/setup.sh"; PROFILE=server; LOG="$2";
+                sudo() { printf 'mock system failure\\n'; return 57; }
+                privileged_phase
+                printf 'MUST NOT RUN\\n' '''
+            result = subprocess.run(['bash', '-euc', script, '_', str(ROOT), str(log)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 57)
+            self.assertNotIn('MUST NOT RUN', result.stdout)
+
+    def test_server_preserves_symlinked_shell_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            original = home / 'shell-original'
+            original.write_text('do not overwrite\n')
+            (home / '.bashrc').symlink_to(original)
+            result = self.configure_server(directory)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(original.read_text(), 'do not overwrite\n')
+            self.assertTrue((home / '.bashrc').is_symlink())
 
     def test_single_sudo_invocation_and_no_sudoers_writer(self):
         shell = '\n'.join(p.read_text() for p in (ROOT / 'installer').glob('*.sh'))

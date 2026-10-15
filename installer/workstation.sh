@@ -31,7 +31,7 @@ install_workstation() {
   if ! command -v rustup >/dev/null 2>&1 && [[ ! -x "$HOME/.cargo/bin/rustup" ]]; then
     run_installer rustup https://sh.rustup.rs -y --no-modify-path
   elif [[ "$UPGRADE" == true ]]; then
-    "$HOME/.cargo/bin/rustup" update >>"$LOG" 2>&1
+    "$(command -v rustup || printf '%s' "$HOME/.cargo/bin/rustup")" update >>"$LOG" 2>&1
   fi
   export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
   rustup target add wasm32-wasip1 wasm32-wasip2 >>"$LOG" 2>&1
@@ -132,6 +132,10 @@ configure_workstation() {
   done
   mkdir -p "$HOME/.local/bin"
   symlink_file "$REPO_DIR/remote.sh" "$HOME/.local/bin/dots-remote"
+  if [[ "$PLATFORM" == linux ]]; then
+    symlink_file "$REPO_DIR/linux/dots-fix-tiling.sh" "$HOME/.local/bin/dots-fix-tiling"
+    symlink_file "$REPO_DIR/linux/dots-diag.sh" "$HOME/.local/bin/dots-diag"
+  fi
   if [[ "$PLATFORM" == linux && -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] && command -v gsettings >/dev/null 2>&1; then
     bash "$REPO_DIR/gnome/configure.sh" >>"$LOG" 2>&1
     # Known-broken o-tiling stays opt-in, never deleted/enabled by setup.
