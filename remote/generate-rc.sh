@@ -51,12 +51,11 @@ memtop() {
     return 2
   fi
 
-  ps -eo pid,rss,comm --sort=-rss | awk -v limit="$limit" '
-    NR == 1 {
+  ps -axo pid=,rss=,comm= | LC_ALL=C sort -k2,2nr | awk -v limit="$limit" '
+    BEGIN {
       printf "%-8s %8s %s\n", "PID", "MB", "CMD"
-      next
     }
-    NR <= limit + 1 {
+    NR <= limit {
       printf "%-8s %8.1f %s\n", $1, $2 / 1024, $3
     }
   '
