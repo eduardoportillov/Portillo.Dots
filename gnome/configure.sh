@@ -45,24 +45,34 @@ gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Shift><Alt>f
 gsettings set org.gnome.desktop.wm.keybindings begin-move "[]"
 gsettings set org.gnome.desktop.wm.keybindings begin-resize "[]"
 
-# Tiling nativo de Mutter: DESHABILITADO. o-tiling (BSP) es el único tiler;
-# dejar Super+Left/Right activo hace que Mutter y o-tiling gestionen la misma
-# ventana en paralelo, lo que puede contribuir a la corrupción de stack_position
-# (ver o-tiling/README.md, "Caveat conocido"). edge-tiling (drag-to-edge) y
-# focus-change-on-pointer-rest (crashes conocidos en Wayland) también fuera.
-gsettings set org.gnome.mutter.keybindings toggle-tiled-left "[]"
-gsettings set org.gnome.mutter.keybindings toggle-tiled-right "[]"
-gsettings set org.gnome.mutter edge-tiling false
-gsettings set org.gnome.mutter focus-change-on-pointer-rest false
+# No quitar el tiling nativo cuando o-tiling está deshabilitado por su bug.
+if command -v gnome-extensions >/dev/null 2>&1 \
+  && gnome-extensions list --enabled | grep -qx 'o-tiling@oliwebd.github.com'; then
+  gsettings set org.gnome.mutter.keybindings toggle-tiled-left "[]"
+  gsettings set org.gnome.mutter.keybindings toggle-tiled-right "[]"
+  gsettings set org.gnome.mutter edge-tiling false
+fi
 
 # Custom keybindings:
-#   custom0 = Ctrl+Alt+T → Alacritty (sin depender del terminal por defecto de GNOME)
-#   custom1 = Super+Shift+R → dots-fix-tiling (reinicia o-tiling cuando se corrompe el stack)
+#   Entradas con nombre propio; conservar todos los atajos ajenos.
 gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "[]"
 CK_PATH=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-CK0=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/
-CK1=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CK0', '$CK1']"
+CK0=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/portillo-terminal/
+CK1=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/portillo-tiling-reset/
+CUSTOM_BINDINGS="$(python3 - "$CK0" "$CK1" <<'PY'
+import ast, subprocess, sys
+result = subprocess.run(['gsettings', 'get', 'org.gnome.settings-daemon.plugins.media-keys', 'custom-keybindings'],
+                        check=True, capture_output=True, text=True).stdout.strip()
+bindings = [] if result == '@as []' else ast.literal_eval(result)
+if not isinstance(bindings, list) or not all(isinstance(item, str) for item in bindings):
+    raise ValueError('Invalid custom keybindings; refusing to overwrite')
+for entry in sys.argv[1:]:
+    if entry not in bindings:
+        bindings.append(entry)
+print(repr(bindings))
+PY
+)"
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$CUSTOM_BINDINGS"
 gsettings set "$CK_PATH:$CK0" name 'Alacritty'
 gsettings set "$CK_PATH:$CK0" command 'alacritty'
 gsettings set "$CK_PATH:$CK0" binding '<Control><Alt>t'
