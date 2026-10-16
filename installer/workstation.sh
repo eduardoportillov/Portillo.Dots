@@ -65,11 +65,14 @@ install_workstation() {
   fi
   if [[ "$PLATFORM" == mac ]]; then
     local app
+    # These casks are user applications, not system packages. Do not require a
+    # second authentication just to copy them into a root-owned /Applications.
+    mkdir -p "$HOME/Applications"
     for app in alacritty zed aerospace copyq; do
       if ! brew list --cask "$app" >/dev/null 2>&1; then
-        brew install --cask "$app" >>"$LOG" 2>&1
+        brew install --cask --appdir="$HOME/Applications" "$app" >>"$LOG" 2>&1
       elif [[ "$UPGRADE" == true ]]; then
-        brew upgrade --cask "$app" >>"$LOG" 2>&1
+        brew upgrade --cask --appdir="$HOME/Applications" "$app" >>"$LOG" 2>&1
       fi
     done
   elif ! command -v zed >/dev/null 2>&1 || [[ "$UPGRADE" == true ]]; then
