@@ -2,6 +2,15 @@
 
 show_actions() {
   info "Profile: $PROFILE | Platform: $PLATFORM/$ARCH | Packages: $PACKAGE_MANAGER"
+  if [[ "${CHECK_SUDO:-false}" == true ]]; then
+    info 'Read-only privileged identity check: one sudo invocation, no packages/config/service changes'
+    return 0
+  fi
+  if [[ "${HARDEN_EXISTING_SERVICE:-false}" == true ]]; then
+    info 'Harden only the matching existing Linux service script: root-owned copy + backup'
+    info 'No packages, sudoers changes, service restart or hardware tuning'
+    return 0
+  fi
   if [[ "$CONFIG_ONLY" == true ]]; then
     info 'User configs only: no sudo, downloads, packages or system services'
   else
@@ -21,10 +30,15 @@ show_actions() {
 
 privileged_phase() {
   info 'System phase: sudo may request your password once; no sudoers rule is created'
-  # A single sudo process keeps root authority only for this helper's lifetime.
-  # Use stdin so the helper is loaded once, not kept as a user-writable daemon.
-  sudo /bin/bash -s -- "$PROFILE" "$PACKAGE_MANAGER" "$HARDWARE" "$HARDWARE_ONLY" \
-    "$CHANGE_SHELL" "$UPGRADE" "$REPO_DIR" < "$REPO_DIR/installer/privileged.sh" \
+  local core="$REPO_DIR/installer/privileged-core.sh" entry="$REPO_DIR/installer/privileged.sh"
+  [[ -f "$core" && -r "$core" && ! -L "$core" && -f "$entry" && -r "$entry" && ! -L "$entry" ]] \
+    || die 'Missing or unsafe privileged payload; sudo was not invoked'
+  /bin/bash -p -n "$core" && /bin/bash -p -n "$entry" || die 'Invalid privileged payload; sudo was not invoked'
+  # -p ignores imported shell functions and BASH_ENV before any root code runs.
+  # Functions are parsed before the final entrypoint call; its children get EOF.
+  cat "$core" "$entry" | \
+    sudo /bin/bash -p -s -- "$PROFILE" "$PACKAGE_MANAGER" "$HARDWARE" "$HARDWARE_ONLY" \
+    "$CHANGE_SHELL" "$UPGRADE" "$REPO_DIR" "${1:-install}" \
     2>&1 | tee -a "$LOG"
 }
 

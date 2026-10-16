@@ -1,141 +1,84 @@
 #!/usr/bin/env bash
-# One bounded root process. No arbitrary command input and no downloaded scripts.
+# Entrypoint appended to privileged-core.sh and loaded via one sudo process.
 set -euo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+IFS=$' \t\n'
 unset BASH_ENV ENV CDPATH
+umask 022
 
-[[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]] || {
-  printf 'Run this helper through setup.sh as a normal user.\n' >&2; exit 1;
-}
-[[ $# -eq 7 ]] || exit 2
-profile="$1" manager="$2" hardware="$3" hardware_only="$4" change_shell="$5" upgrade="$6" repo="$7"
-case "$profile:$manager" in workstation:native|workstation:brew|server:native|server:brew) ;; *) exit 2 ;; esac
-for flag in "$hardware" "$hardware_only" "$change_shell" "$upgrade"; do
-  case "$flag" in true|false) ;; *) exit 2 ;; esac
-done
-[[ "$profile" != server || ( "$hardware" == false && "$change_shell" == false ) ]] || exit 2
-[[ "$repo" == /* && -d "$repo" && "$(id -u "$SUDO_USER")" == "${SUDO_UID:-}" ]] || exit 2
-warnings=()
-
-# Retire only the exact legacy rule created for this invoking user. Never delete
-# an unrelated sudoers file and never create a replacement authentication rule.
-legacy=/etc/sudoers.d/portillo-dots-setup
-if [[ -f "$legacy" && ! -L "$legacy" ]] \
-  && [[ "$(cat "$legacy")" == "$SUDO_USER ALL=(ALL) NOPASSWD: ALL" ]]; then
-  rm -f "$legacy"
-  printf 'Removed the matching legacy Portillo.Dots sudoers rule.\n'
-elif [[ -e "$legacy" || -L "$legacy" ]]; then
-  printf 'Existing legacy sudoers path is unrelated; review it manually.\n' >&2
-fi
-
-root_copy() {
-  local source="$1" destination="$2" mode="$3" temporary
-  [[ -f "$source" && ! -L "$source" ]] || { printf 'Unsafe input: %s\n' "$source" >&2; return 1; }
-  [[ ! -e "$destination" || -f "$destination" || -L "$destination" ]] \
-    || { printf 'Refusing to replace non-file system config: %s\n' "$destination" >&2; return 1; }
-  mkdir -p "$(dirname "$destination")"
-  if [[ -e "$destination" || -L "$destination" ]]; then
-    if [[ ! -L "$destination" ]] && cmp -s "$source" "$destination"; then
-      chown "root:$(id -gn root)" "$destination"
-      chmod "$mode" "$destination"
-      return 0
-    fi
-    local saved
-    saved="$(mktemp -d "$(dirname "$destination")/.portillo-backup.XXXXXXXX")"
-    cp -pP "$destination" "$saved/$(basename "$destination")"
-    printf 'System backup: %s\n' "$saved"
+privileged_main() {
+  [[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]] || {
+    printf 'Run this helper through setup.sh as a normal user.\n' >&2; return 1;
+  }
+  [[ $# -eq 8 ]] || return 2
+  local profile="$1" manager="$2" hardware="$3" hardware_only="$4" change_shell="$5" upgrade="$6" repo="$7" operation="$8"
+  case "$profile:$manager" in workstation:native|workstation:brew|server:native|server:brew) ;; *) return 2 ;; esac
+  case "$operation" in install|check|harden) ;; *) return 2 ;; esac
+  local flag
+  for flag in "$hardware" "$hardware_only" "$change_shell" "$upgrade"; do
+    case "$flag" in true|false) ;; *) return 2 ;; esac
+  done
+  [[ "$profile" != server || ( "$hardware" == false && "$hardware_only" == false && "$change_shell" == false ) ]] || return 2
+  [[ "$hardware_only" == false || ( "$hardware" == true && "$upgrade" == false && "$change_shell" == false ) ]] || return 2
+  [[ "$repo" == /* && -d "$repo" && "$(id -u "$SUDO_USER")" == "${SUDO_UID:-}" ]] || return 2
+  declare -F root_copy retire_legacy_rule install_packages harden_existing_service >/dev/null || {
+    printf 'Incomplete privileged payload; use setup.sh.\n' >&2; return 1;
+  }
+  local platform
+  platform="$(uname -s)"
+  case "$platform:$manager" in Linux:native|Linux:brew|Darwin:brew) ;; *) return 2 ;; esac
+  [[ "$hardware" == false || "$platform" == Linux ]] || return 2
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  if [[ "$operation" == check ]]; then
+    [[ "$hardware" == false && "$change_shell" == false && "$upgrade" == false ]] || return 2
+    printf 'Privileged identity verified: uid=%s invoking_uid=%s. No system changes performed.\n' "$EUID" "$SUDO_UID"
+    return 0
   fi
-  temporary="$(mktemp "$(dirname "$destination")/.portillo.XXXXXXXX")"
-  install -o root -g "$(id -gn root)" -m "$mode" "$source" "$temporary"
-  # Rename replaces a destination symlink itself, never writes through it.
-  mv -f "$temporary" "$destination"
-}
+  if [[ "$operation" == harden ]]; then
+    [[ "$platform:$profile" == Linux:workstation && "$hardware" == false && "$change_shell" == false && "$upgrade" == false ]] || return 2
+    harden_existing_service /usr/local/bin/apply-linux-hardware-settings.sh \
+      /etc/systemd/system/apply-linux-hardware-settings.service \
+      "$repo/linux/optimize.sh" "$repo/linux/apply-linux-hardware-settings.service"
+    return
+  fi
 
-install_packages() {
-  local required=(git curl unzip zip rsync tmux neovim ripgrep fzf python3 jq htop)
-  local optional=() build=()
-  if [[ "$manager" == brew ]]; then
-    required=(git curl unzip zip rsync python3)
+  retire_legacy_rule /etc/sudoers.d/portillo-dots-setup "$SUDO_USER"
+  if [[ "$hardware_only" == false ]]; then
+    case "$platform" in
+      Linux) install_packages "$profile" "$manager" "$upgrade" ;;
+      Darwin)
+        local prefix
+        if [[ "$(uname -m)" == arm64 ]]; then prefix=/opt/homebrew; else prefix=/usr/local/Homebrew; fi
+        if [[ ! -e "$prefix" && ! -L "$prefix" ]]; then
+          mkdir -p "$(dirname "$prefix")"
+          mkdir "$prefix"
+          chown -h "$SUDO_UID:$(id -g "$SUDO_USER")" "$prefix"
+        fi
+        ;;
+      *) return 2 ;;
+    esac
   fi
-  if command -v apt-get >/dev/null 2>&1; then
-    pm=apt
-    required+=(ca-certificates openssh-client)
-    [[ "$manager" != native ]] || required+=(fd-find bat)
-    [[ "$profile" != workstation ]] || build+=(build-essential zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig)
-    [[ "$profile:$manager" != workstation:native ]] || build+=(golang-go)
-    optional=(lazygit lazydocker zoxide atuin tree-sitter-cli)
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    local apt_options=(-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
-    [[ "$upgrade" == true ]] || apt_options+=(--no-upgrade)
-    apt-get install "${apt_options[@]}" "${required[@]}" ${build[@]+"${build[@]}"}
-  elif command -v dnf >/dev/null 2>&1; then
-    pm=dnf
-    required+=(ca-certificates openssh-clients)
-    [[ "$manager" != native ]] || required+=(fd-find bat)
-    [[ "$profile" != workstation ]] || build+=(gcc gcc-c++ make zsh ffmpeg-free alacritty xclip wl-clipboard copyq fontconfig)
-    [[ "$profile:$manager" != workstation:native ]] || build+=(golang)
-    optional=(lazygit lazydocker zoxide atuin tree-sitter-cli)
-    dnf install -y "${required[@]}" ${build[@]+"${build[@]}"}
-    [[ "$upgrade" == false ]] || dnf upgrade -y "${required[@]}" ${build[@]+"${build[@]}"}
-  elif command -v pacman >/dev/null 2>&1; then
-    pm=pacman
-    required+=(ca-certificates openssh)
-    [[ "$manager" != native ]] || required+=(fd bat)
-    [[ "$profile" != workstation ]] || build+=(base-devel zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig)
-    [[ "$profile:$manager" != workstation:native ]] || build+=(go)
-    optional=(lazygit lazydocker zoxide atuin tree-sitter)
-    # Arch must avoid partial upgrades when refreshing repository metadata.
-    pacman -Syu --needed --noconfirm "${required[@]}" ${build[@]+"${build[@]}"}
-  else
-    printf 'Unsupported package manager\n' >&2; return 1
+  if [[ "$hardware" == true ]]; then
+    root_copy "$repo/linux/optimize.sh" /usr/local/bin/apply-linux-hardware-settings.sh 0755
+    root_copy "$repo/linux/apply-linux-hardware-settings.service" /etc/systemd/system/apply-linux-hardware-settings.service 0644
+    root_copy "$repo/linux/99-battery-charge-threshold.rules" /etc/udev/rules.d/99-battery-charge-threshold.rules 0644
+    /bin/bash /usr/local/bin/apply-linux-hardware-settings.sh --apply
+    systemctl daemon-reload
+    systemctl enable --now apply-linux-hardware-settings.service
+    udevadm control --reload-rules
+    udevadm trigger -s power_supply
   fi
-  if [[ "$profile" == workstation && "$manager" == native ]]; then
-    for package in "${optional[@]}"; do
-      case "$pm" in
-        apt) apt-get install "${apt_options[@]}" "$package" || warnings+=("$package") ;;
-        dnf) dnf install -y "$package" || warnings+=("$package") ;;
-        pacman) pacman -S --needed --noconfirm "$package" || warnings+=("$package") ;;
-      esac
-    done
+  if [[ "$change_shell" == true ]]; then
+    local shell
+    shell="$(command -v zsh)"
+    grep -qxF "$shell" /etc/shells || printf '%s\n' "$shell" >> /etc/shells
+    chsh -s "$shell" "$SUDO_USER"
+  fi
+  if [[ "$platform" == Linux && "$profile" == workstation && "$hardware_only" == false ]]; then
+    root_copy "$repo/zsh/.dircolors" /root/.dircolors 0644
   fi
 }
 
-if [[ "$hardware_only" == false ]]; then
-  case "$(uname -s)" in
-    Linux) install_packages ;;
-    Darwin)
-      # Homebrew bootstrap: directories only as root; git/network run as user.
-      if [[ "$(uname -m)" == arm64 ]]; then prefix=/opt/homebrew; else prefix=/usr/local/Homebrew; fi
-      if [[ ! -e "$prefix" && ! -L "$prefix" ]]; then
-        mkdir -p "$prefix"
-        chown "$SUDO_UID:$(id -g "$SUDO_USER")" "$prefix"
-      fi
-      ;;
-    *) exit 2 ;;
-  esac
-fi
-
-if [[ "$hardware" == true ]]; then
-  [[ "$(uname -s)" == Linux ]] || exit 2
-  root_copy "$repo/linux/optimize.sh" /usr/local/bin/apply-linux-hardware-settings.sh 0755
-  root_copy "$repo/linux/apply-linux-hardware-settings.service" /etc/systemd/system/apply-linux-hardware-settings.service 0644
-  root_copy "$repo/linux/99-battery-charge-threshold.rules" /etc/udev/rules.d/99-battery-charge-threshold.rules 0644
-  /bin/bash /usr/local/bin/apply-linux-hardware-settings.sh --apply
-  systemctl daemon-reload
-  systemctl enable --now apply-linux-hardware-settings.service
-  udevadm control --reload-rules
-  udevadm trigger -s power_supply
-fi
-
-if [[ "$change_shell" == true ]]; then
-  shell="$(command -v zsh)"
-  grep -qxF "$shell" /etc/shells || printf '%s\n' "$shell" >> /etc/shells
-  chsh -s "$shell" "$SUDO_USER"
-fi
-if [[ "$(uname -s)" == Linux && "$profile" == workstation && "$hardware_only" == false ]]; then
-  root_copy "$repo/zsh/.dircolors" /root/.dircolors 0644
-fi
-if [[ ${#warnings[@]} -gt 0 ]]; then
-  printf 'Optional packages unavailable: %s\n' "${warnings[*]}" >&2
-fi
+# No child command can consume the remaining script stream or prompt on stdin.
+privileged_main "$@" </dev/null

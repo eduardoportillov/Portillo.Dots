@@ -16,6 +16,8 @@ source "$REPO_DIR/installer/opencode.sh"
 PROFILE=""
 CONFIG_ONLY=false
 CHECK_ONLY=false
+CHECK_SUDO=false
+HARDEN_EXISTING_SERVICE=false
 DRY_RUN=false
 UPGRADE=false
 HARDWARE=false
@@ -36,6 +38,8 @@ Profiles (not OpenCode versions):
 Options:
   --config-only         Apply user configurations only (no packages or sudo)
   --check               Read-only verification of the selected profile
+  --check-sudo          Authenticate once and verify root identity; no system changes
+  --harden-existing-service  Replace the matching legacy Linux service script link only
   --dry-run             Show actions without writing files or using the network
   --upgrade             Update installed tools explicitly
   --package-manager     auto|native|brew (brew must already exist on Linux)
@@ -48,7 +52,7 @@ Options:
   --help, -h            Show this help
 
 No profile: offer a menu in a terminal; require --profile in automation.
-One privileged phase, at most one sudo authentication; never edits sudoers.
+One privileged phase; no new sudoers privileges. A matching legacy rule may be retired.
 EOF
 }
 
@@ -63,6 +67,8 @@ parse_args() {
       --package-manager) require_value "$@"; PACKAGE_MANAGER="$2"; shift 2 ;;
       --config-only) CONFIG_ONLY=true; shift ;;
       --check) CHECK_ONLY=true; shift ;;
+      --check-sudo) CHECK_SUDO=true; shift ;;
+      --harden-existing-service) HARDEN_EXISTING_SERVICE=true; shift ;;
       --dry-run) DRY_RUN=true; shift ;;
       --upgrade) UPGRADE=true; shift ;;
       --hardware) HARDWARE=true; shift ;;
@@ -95,8 +101,13 @@ main() {
     || die '--check cannot be combined with modifying options'
   [[ "$HARDWARE_ONLY" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$CHANGE_SHELL" == false ) ]] \
     || die '--apply-linux cannot be combined with other operation modes'
+  [[ "$CHECK_SUDO" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && "$OPENCODE_TEMPLATE" == false && "$HARDEN_EXISTING_SERVICE" == false ) ]] \
+    || die '--check-sudo cannot be combined with modifying or other checking options'
+  [[ "$HARDEN_EXISTING_SERVICE" == false || ( "$PROFILE" == workstation && "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && "$OPENCODE_TEMPLATE" == false ) ]] \
+    || die '--harden-existing-service requires workstation and cannot be combined with other operations'
   detect_platform
   [[ "$HARDWARE" == false || "$PLATFORM" == linux ]] || die 'Hardware settings require Linux'
+  [[ "$HARDEN_EXISTING_SERVICE" == false || "$PLATFORM" == linux ]] || die 'Existing service hardening requires Linux'
   if [[ "$CHECK_ONLY" == true ]]; then
     verify_profile
     return
@@ -107,6 +118,12 @@ main() {
   if [[ "$INTERACTIVE" == true ]]; then
     read -r -p 'Proceed? [y/N]: ' answer
     [[ "$answer" =~ ^[Yy]$ ]] || return 0
+  fi
+  if [[ "$CHECK_SUDO" == true || "$HARDEN_EXISTING_SERVICE" == true ]]; then
+    command -v sudo >/dev/null 2>&1 || die 'sudo is required for this identity check'
+    LOG=/dev/null
+    if [[ "$CHECK_SUDO" == true ]]; then privileged_phase check; else privileged_phase harden; fi
+    return
   fi
   initialize_state
   trap cleanup_setup EXIT

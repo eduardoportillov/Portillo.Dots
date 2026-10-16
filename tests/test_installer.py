@@ -26,6 +26,12 @@ class InstallerTests(unittest.TestCase):
         cases = [[], ['--wat'], ['--profile'], ['--profile', 'unknown'],
                  ['--profile', 'server', '--hardware'], ['--profile', 'server', '--change-shell'],
                  ['--profile', 'server', '--config-only', '--upgrade'],
+                 ['--profile', 'server', '--check-sudo', '--config-only'],
+                 ['--profile', 'server', '--check-sudo', '--check'],
+                 ['--profile', 'server', '--check-sudo', '--upgrade'],
+                 ['--profile', 'server', '--harden-existing-service'],
+                 ['--profile', 'workstation', '--harden-existing-service', '--hardware'],
+                 ['--profile', 'workstation', '--harden-existing-service', '--check-sudo'],
                  ['--profile', 'workstation', '--apply-linux', '--config-only']]
         for args in cases:
             with self.subTest(args=args), tempfile.TemporaryDirectory() as directory:
