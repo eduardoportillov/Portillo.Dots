@@ -8,28 +8,35 @@ vim.g.autoformat = true
 
 vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/site")
 
--- Dynamic clipboard: use OSC 52 over SSH so yank copies to host system clipboard,
--- wl-clipboard on Wayland (Linux local), or xclip on X11.
-if vim.env.SSH_TTY or vim.env.SSH_CONNECTION or vim.env.NVIM_APPNAME == "portillo-remote/nvim" then
+-- Dynamic clipboard, chosen by what is actually available:
+--   SSH              -> OSC 52, copy-only (never request reads from the client)
+--   Wayland          -> wl-clipboard
+--   X11              -> xclip
+--   macOS / fallback -> Neovim's built-in provider, or the unnamed register
+-- A tool is only selected when its display server is present: wl-copy without
+-- WAYLAND_DISPLAY, or xclip without DISPLAY, would silently fail to yank.
+local has_osc52, osc52 = pcall(require, "vim.ui.clipboard.osc52")
+if (vim.env.SSH_TTY or vim.env.SSH_CONNECTION or vim.env.NVIM_APPNAME == "portillo-remote/nvim") and has_osc52 then
   vim.g.clipboard = {
-    name = "OSC 52",
+    name = "SSH OSC 52 (copy only)",
     copy = {
-      ["+"] = require("vim.ui.clipboard.osc52").copy("+"),
-      ["*"] = require("vim.ui.clipboard.osc52").copy("*"),
+      ["+"] = osc52.copy("+"),
+      ["*"] = osc52.copy("*"),
     },
+    -- Copy only: OSC 52 paste would ask the terminal for the client clipboard.
     paste = {
-      ["+"] = require("vim.ui.clipboard.osc52").paste("+"),
-      ["*"] = require("vim.ui.clipboard.osc52").paste("*"),
+      ["+"] = function() return { vim.fn.getreg('"', 1, true), vim.fn.getregtype('"') } end,
+      ["*"] = function() return { vim.fn.getreg('"', 1, true), vim.fn.getregtype('"') } end,
     },
   }
-elseif vim.fn.executable("wl-copy") == 1 then
+elseif vim.env.WAYLAND_DISPLAY and vim.fn.executable("wl-copy") == 1 then
   vim.g.clipboard = {
     name = "wl-clipboard",
     copy = { ["+"] = "wl-copy", ["*"] = "wl-copy --primary" },
     paste = { ["+"] = "wl-paste --no-newline", ["*"] = "wl-paste --no-newline --primary" },
     cache_enabled = 0,
   }
-elseif vim.fn.executable("xclip") == 1 then
+elseif vim.env.DISPLAY and vim.fn.executable("xclip") == 1 then
   vim.g.clipboard = {
     name = "xclip",
     copy = { ["+"] = "xclip -selection clipboard", ["*"] = "xclip -selection primary" },
