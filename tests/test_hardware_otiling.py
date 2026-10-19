@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,7 +60,7 @@ class OtiringInstallTests(unittest.TestCase):
         return path.read_text()
 
     def test_default_run_touches_no_other_extension_or_global_setting(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result, calls = self.run_install(directory, ['--force'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             log = self.calls(calls)
@@ -69,7 +71,7 @@ class OtiringInstallTests(unittest.TestCase):
             self.assertIn('usa --remove-tiling-shell', result.stdout)
 
     def test_destructive_actions_are_gated_behind_flags(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result, calls = self.run_install(
                 directory, ['--force', '--remove-tiling-shell', '--disable-ding',
                             '--allow-version-mismatch'])
@@ -80,7 +82,7 @@ class OtiringInstallTests(unittest.TestCase):
             self.assertIn('Desmontando Tiling Shell', result.stdout)
 
     def test_patch_failure_fails_the_install_and_writes_no_marker(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result, calls = self.run_install(directory, ['--force'],
                                              patch_body='#!/usr/bin/env bash\necho "patch failed" >&2\nexit 1\n')
             self.assertNotEqual(result.returncode, 0)
@@ -90,7 +92,7 @@ class OtiringInstallTests(unittest.TestCase):
             self.assertEqual(markers, [], 'a failed install must not record a success marker')
 
     def test_marker_records_the_patch_digest(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result, calls = self.run_install(directory, ['--force'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             home = Path(directory) / 'home'
@@ -102,7 +104,7 @@ class OtiringInstallTests(unittest.TestCase):
             self.assertEqual(digest, hashlib.sha256(source.read_bytes()).hexdigest())
 
     def test_changed_patches_retrigger_without_redownloading(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             self.run_install(directory, ['--force'])
             install = self.make_install(directory, 'exit 0')  # new digest
             stubs = Path(directory) / 'stubs2'
@@ -119,7 +121,7 @@ class OtiringInstallTests(unittest.TestCase):
             self.assertNotIn('Descargando', result.stdout)
 
     def test_unknown_option_is_rejected(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result, _ = self.run_install(directory, ['--delete-everything'])
             self.assertEqual(result.returncode, 2)
             self.assertIn('Opción desconocida', result.stderr)
@@ -138,7 +140,7 @@ class ApplyPatchesTests(unittest.TestCase):
                               capture_output=True, text=True, timeout=30)
 
     def test_missing_target_file_is_a_failure_not_a_skip(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             # The extension directory exists but neither target file does.
             result = self.run_patches(directory, '', files={})
             self.assertNotEqual(result.returncode, 0)
@@ -147,7 +149,7 @@ class ApplyPatchesTests(unittest.TestCase):
 
     def test_success_is_only_announced_when_every_patch_applies(self):
         # Give patch 1 a real target so it can run, but leave patch 2 missing.
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             files = {'engine/tiling.js': 'function move_window_or_monitor() {}\n'}
             result = self.run_patches(directory, '', files=files)
             self.assertNotEqual(result.returncode, 0)

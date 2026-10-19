@@ -9,6 +9,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +98,7 @@ class DeployLifecycleTests(unittest.TestCase):
         return remote.run(script, check=check)
 
     def test_full_deploy_builds_runtime_and_never_touches_host_tmux(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = self.fake(directory)
             self.deploy(remote)
             runtime = remote.runtime()
@@ -116,7 +118,7 @@ class DeployLifecycleTests(unittest.TestCase):
                 self.assertNotIn('.env', name)
 
     def test_transfer_failure_rolls_back_and_keeps_previous_runtime(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = self.fake(directory)
             self.deploy(remote)
             marker = remote.runtime() / 'zsh/.dircolors'
@@ -138,7 +140,7 @@ class DeployLifecycleTests(unittest.TestCase):
                              'partial staging must be rolled back')
 
     def test_binary_install_failure_rolls_back_to_previous_runtime(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = self.fake(directory)
             self.deploy(remote)
             first = (remote.runtime() / 'zsh/.dircolors').read_text()
@@ -160,7 +162,7 @@ class DeployLifecycleTests(unittest.TestCase):
                              'rollback must not leave the old directory behind')
 
     def test_teardown_removes_only_the_managed_runtime(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = self.fake(directory)
             self.deploy(remote)
             unrelated = remote.home / 'unrelated-file'
@@ -177,7 +179,7 @@ class DeployLifecycleTests(unittest.TestCase):
             self.assertEqual(unrelated.read_text(), 'keep me')
 
     def test_cleanup_preserves_runtime_while_dedicated_tmux_is_active(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = self.fake(directory)
             self.deploy(remote)
             # Simulate an active dedicated tmux session through the runtime binary.
@@ -193,7 +195,7 @@ class DeployLifecycleTests(unittest.TestCase):
             self.assertIn('preserved', result.stdout + result.stderr)
 
     def test_cleanup_removes_runtime_without_active_session(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = self.fake(directory)
             self.deploy(remote)
             result = remote.run('cleanup_remote_runtime')
@@ -203,7 +205,7 @@ class DeployLifecycleTests(unittest.TestCase):
 
 class ManifestTransportTests(unittest.TestCase):
     def test_rsync_payload_is_allowlisted_and_free_of_secrets(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             secret = ROOT / 'opencode' / '.env'
             existed = secret.exists()
@@ -236,7 +238,7 @@ class ManifestTransportTests(unittest.TestCase):
                     self.assertNotIn('do-not-ship', path.read_text(errors='ignore'))
 
     def test_paths_with_spaces_round_trip_through_the_host_table(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             table = Path(directory) / 'hosts.local.conf'
             result = remote.run(f'''
@@ -248,7 +250,7 @@ class ManifestTransportTests(unittest.TestCase):
             self.assertEqual(result.stdout.splitlines()[-1].strip(), '/srv/my app (v2)/dir')
 
     def test_equals_sign_in_a_path_round_trips(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             table = Path(directory) / 'hosts.local.conf'
             result = remote.run(f'''
@@ -259,7 +261,7 @@ class ManifestTransportTests(unittest.TestCase):
             self.assertEqual(result.stdout.splitlines()[-1].strip(), '/srv/build=release/dir')
 
     def test_paths_with_delimiters_are_rejected(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             table = Path(directory) / 'hosts.local.conf'
             for index, path in enumerate(['/srv/a|b', '/srv/a\nb']):
@@ -273,7 +275,7 @@ class ManifestTransportTests(unittest.TestCase):
 
 class PlatformGateTests(unittest.TestCase):
     def test_unsupported_remote_platform_refuses_binaries_without_skip(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory, platform='Darwin')
             result = remote.run('''
                 HOST="fakehost"
@@ -287,7 +289,7 @@ class PlatformGateTests(unittest.TestCase):
                              'no download may start before the platform gate')
 
     def test_unsupported_remote_architecture_is_reported(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory, arch='mips64')
             result = remote.run('''
                 HOST="fakehost"
@@ -299,7 +301,7 @@ class PlatformGateTests(unittest.TestCase):
             self.assertIn('Unsupported remote architecture', result.stdout + result.stderr)
 
     def test_skip_bins_leaves_configs_without_downloading(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             result = remote.run('''
                 HOST="fakehost"
@@ -328,7 +330,7 @@ class CacheLifecycleTests(unittest.TestCase):
         return cache
 
     def test_refresh_bins_clears_only_known_artifacts(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             cache = self.cache_dir(directory)
             for name in self.CACHE_FILES + ['.integrity.json', 'user-notes.txt', 'keep-me.tar.gz']:
@@ -355,7 +357,7 @@ class CacheLifecycleTests(unittest.TestCase):
             self.assertNotIn('.integrity.json', remaining)
 
     def test_without_refresh_existing_cache_is_kept(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             cache = self.cache_dir(directory)
             for name in self.CACHE_FILES + ['.integrity.json']:
@@ -379,7 +381,7 @@ class CacheLifecycleTests(unittest.TestCase):
                 self.assertIn(name, remaining)
 
     def test_corrupt_cached_download_is_rejected_before_transfer(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             cache = self.cache_dir(directory)
             import hashlib
@@ -407,7 +409,7 @@ class CacheLifecycleTests(unittest.TestCase):
 
 class RedeployTests(unittest.TestCase):
     def test_redeploy_updates_the_runtime_in_place(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             script = '''
                 HOST="fakehost"
@@ -474,7 +476,7 @@ class TmuxIsolationTests(unittest.TestCase):
 
 class ConnectFlowTests(unittest.TestCase):
     def test_connect_deploys_then_cleans_up_by_default(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             result = remote.run('''
                 HOST="fakehost"
@@ -495,7 +497,7 @@ class ConnectFlowTests(unittest.TestCase):
                             'persistent shell state survives the transient cleanup')
 
     def test_connect_no_cleanup_preserves_the_runtime(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             result = remote.run('''
                 HOST="fakehost"
@@ -513,7 +515,7 @@ class ConnectFlowTests(unittest.TestCase):
                             '--no-cleanup must keep the runtime for later use')
 
     def test_connect_failure_still_cleans_the_transient_runtime(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             result = remote.run('''
                 HOST="fakehost"
@@ -533,7 +535,7 @@ class ConnectFlowTests(unittest.TestCase):
                              'a failed session must not leave a transient runtime behind')
 
     def test_connect_stages_only_the_allowlisted_files(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             remote = FakeRemote(directory)
             secret = ROOT / 'opencode' / '.env'
             existed = secret.exists()

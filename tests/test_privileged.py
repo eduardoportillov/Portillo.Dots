@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,7 +221,7 @@ class PrivilegedCoreTests(unittest.TestCase):
 
 class PrivilegedPackageTests(unittest.TestCase):
     def run_packages(self, backend, profile='server', manager='native', upgrade=False, fail_arg=''):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             mock = base / backend
             mock.write_text(f'#!{sys.executable}\n' + '''import json, os, sys
@@ -278,7 +280,7 @@ if os.environ.get('FAIL_ARG') in sys.argv[1:]:
 
 class SudoTransportTests(unittest.TestCase):
     def test_invalid_payload_is_rejected_before_authentication(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             (base / 'installer').mkdir()
             (base / 'installer/privileged-core.sh').write_text('broken() {\n')
@@ -293,7 +295,7 @@ class SudoTransportTests(unittest.TestCase):
 
     @unittest.skipIf(os.geteuid() == 0, 'The installer must be invoked by a normal user')
     def test_read_only_cli_probe_does_not_create_user_state(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             home, bin_dir = base / 'home', base / 'bin'
             home.mkdir()
@@ -314,7 +316,7 @@ class SudoTransportTests(unittest.TestCase):
             self.assertTrue(calls[0].endswith(' check'))
 
     def test_read_only_probe_dry_run_does_not_invoke_sudo(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             home = base / 'home'
             home.mkdir()
@@ -325,7 +327,7 @@ class SudoTransportTests(unittest.TestCase):
             self.assertEqual(list(home.iterdir()), [])
 
     def test_one_privileged_bash_invocation_with_payload_on_stdin(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             script = '''source "$1/setup.sh"; PROFILE=server; PACKAGE_MANAGER=native; LOG="$2/log";
                 fixture="$2"
@@ -343,7 +345,7 @@ class SudoTransportTests(unittest.TestCase):
 
     def test_authentication_failure_and_interrupt_do_not_retry_or_continue(self):
         for status in [1, 130, 143]:
-            with self.subTest(status=status), tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+            with self.subTest(status=status), tempdir() as directory:
                 base = Path(directory)
                 script = '''source "$1/setup.sh"; PROFILE=server; PACKAGE_MANAGER=native; LOG="$2/log";
                     fixture="$2"; status="$3"
@@ -357,7 +359,7 @@ class SudoTransportTests(unittest.TestCase):
                 self.assertNotIn('MUST NOT CONTINUE', result.stdout)
 
     def test_privileged_bash_does_not_execute_bash_env_before_identity_guard(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             untrusted = base / 'untrusted.sh'
             untrusted.write_text('touch "$MOCK_MARKER"\n')

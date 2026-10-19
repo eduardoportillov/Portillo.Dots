@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +45,7 @@ class OperationModeTests(unittest.TestCase):
             for args in [['--profile', profile, '--dry-run'],
                          ['--profile', profile, '--check-sudo', '--dry-run'],
                          ['--profile', 'workstation', '--harden-existing-service', '--dry-run']]:
-                with self.subTest(args=args), tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+                with self.subTest(args=args), tempdir() as directory:
                     home = Path(directory)
                     result = self.run_setup(directory, args)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -52,7 +54,7 @@ class OperationModeTests(unittest.TestCase):
 
     def test_check_is_read_only(self):
         for profile in ('server', 'workstation'):
-            with self.subTest(profile=profile), tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+            with self.subTest(profile=profile), tempdir() as directory:
                 home = Path(directory)
                 result = self.run_setup(directory, ['--profile', profile, '--check'])
                 # A missing profile is expected to fail verification, not to write.
@@ -61,7 +63,7 @@ class OperationModeTests(unittest.TestCase):
                                  '--check must never write config or state')
 
     def test_check_exit_code_is_nonzero_when_a_required_tool_is_missing(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             stubs = home / 'bin'
             stubs.mkdir()
@@ -96,7 +98,7 @@ class OperationModeTests(unittest.TestCase):
             self.assertNotIn('Verification passed', result.stdout)
 
     def test_summary_names_created_preserved_and_failed_events(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             result = self.run_setup(directory, ['--profile', 'server', '--config-only'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -106,7 +108,7 @@ class OperationModeTests(unittest.TestCase):
             self.assertIn('[+] link', result.stdout)
 
     def test_summary_reports_a_preserved_independent_config(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             config = home / '.config/opencode/opencode.jsonc'
             config.parent.mkdir(parents=True)
@@ -120,7 +122,7 @@ class OperationModeTests(unittest.TestCase):
             self.assertFalse(config.is_symlink())
 
     def test_summary_reports_failures_and_the_run_exits_nonzero(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             config = home / '.config/opencode/opencode.jsonc'
             config.parent.mkdir(parents=True)
@@ -133,7 +135,7 @@ class OperationModeTests(unittest.TestCase):
             self.assertIn('Completed WITH FAILURES', result.stderr)
 
     def test_config_only_never_invokes_sudo(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             mocks = home / 'bin'
             mocks.mkdir()
@@ -163,7 +165,7 @@ class ArgumentValidationTests(unittest.TestCase):
                  ['--package-manager', '--dry-run'], ['--profile', ''],
                  ['--package-manager', '']]
         for args in cases:
-            with self.subTest(args=args), tempfile.TemporaryDirectory(dir='/tmp/opencode') as d:
+            with self.subTest(args=args), tempdir() as d:
                 result = self.run_setup(args, env=self.temp_env(d))
                 self.assertNotEqual(result.returncode, 0, args)
                 self.assertIn('Missing value', result.stderr)
@@ -172,7 +174,7 @@ class ArgumentValidationTests(unittest.TestCase):
         cases = [['--profile', 'desktop'], ['--profile', 'SERVER'],
                  ['--package-manager', 'apt'], ['--package-manager', 'native!']]
         for args in cases:
-            with self.subTest(args=args), tempfile.TemporaryDirectory(dir='/tmp/opencode') as d:
+            with self.subTest(args=args), tempdir() as d:
                 result = self.run_setup(args, env=self.temp_env(d))
                 self.assertNotEqual(result.returncode, 0, args)
 
@@ -180,7 +182,7 @@ class ArgumentValidationTests(unittest.TestCase):
         cases = [['--nope'], ['extra'], ['--profile', 'server', 'extra'],
                  ['--profile', 'server', '--check', 'trailing']]
         for args in cases:
-            with self.subTest(args=args), tempfile.TemporaryDirectory(dir='/tmp/opencode') as d:
+            with self.subTest(args=args), tempdir() as d:
                 result = self.run_setup(args, env=self.temp_env(d))
                 self.assertNotEqual(result.returncode, 0, args)
 
@@ -194,12 +196,12 @@ class ArgumentValidationTests(unittest.TestCase):
             ['--profile', 'workstation', '--config-only', '--hardware'],
         ]
         for args in cases:
-            with self.subTest(args=args), tempfile.TemporaryDirectory(dir='/tmp/opencode') as d:
+            with self.subTest(args=args), tempdir() as d:
                 result = self.run_setup(args, env=self.temp_env(d))
                 self.assertNotEqual(result.returncode, 0, args)
 
     def test_help_exits_zero_and_documents_every_mode(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result = self.run_setup(['--help'], env=self.temp_env(directory))
             self.assertEqual(result.returncode, 0, result.stderr)
             for flag in ['--dry-run', '--check', '--config-only', '--upgrade',
@@ -207,7 +209,7 @@ class ArgumentValidationTests(unittest.TestCase):
                 self.assertIn(flag, result.stdout)
 
     def test_help_exits_zero_without_creating_state(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             result = self.run_setup(['-h'], env=self.temp_env(directory))
             self.assertEqual(result.returncode, 0)
             self.assertEqual([p for p in Path(directory).iterdir()
@@ -217,7 +219,7 @@ class ArgumentValidationTests(unittest.TestCase):
 
 class DiagnosticOutputTests(unittest.TestCase):
     def test_dry_run_prints_the_plan_including_gated_actions(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             env = os.environ.copy()
             env.update(HOME=directory, XDG_CONFIG_HOME=directory + '/.config',
                        XDG_STATE_HOME=directory + '/.state', SHELL='/bin/bash')
@@ -232,7 +234,7 @@ class DiagnosticOutputTests(unittest.TestCase):
             self.assertIn('Declared minimum versions', result.stdout)
 
     def test_no_false_completion_after_a_failed_requirement(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             config = home / '.config/opencode/opencode.jsonc'
             config.parent.mkdir(parents=True)

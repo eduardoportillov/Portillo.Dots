@@ -8,6 +8,8 @@ import shutil
 import stat
 import subprocess
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,7 +120,7 @@ class PermissionTests(unittest.TestCase):
                               env=env, capture_output=True, text=True, timeout=30)
 
     def test_secure_file_tightens_only_when_needed(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             loose = home / 'loose.env'
             loose.write_text('A=value\n')
@@ -134,7 +136,7 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(tight.stat().st_mode), 0o400)
 
     def test_secure_file_ignores_symlinks_and_foreign_files(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             target = home / 'target.env'
             target.write_text('A=value\n')
@@ -148,7 +150,7 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(result.stdout, '')
 
     def test_verify_reports_group_accessible_credentials(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             env_file = home / 'repo' / 'opencode/.env'
             env_file.parent.mkdir(parents=True)
@@ -163,7 +165,7 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_known_secrets_are_restricted_after_configuration(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             env_file = home / 'repo' / 'opencode/.env'
             env_file.parent.mkdir(parents=True)
@@ -179,7 +181,7 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(logs.stat().st_mode), 0o700)
 
     def test_symlinked_credential_path_is_reported_not_followed(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             real = home / 'elsewhere.env'
             real.write_text('A=value\n')
@@ -202,7 +204,7 @@ class BackupSafetyTests(unittest.TestCase):
                                '_', str(ROOT)], env=env, capture_output=True, text=True, timeout=30)
 
     def test_backup_preserves_full_path_and_content(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             original = home / 'deep/nested/settings.json'
             original.parent.mkdir(parents=True)
@@ -217,7 +219,7 @@ class BackupSafetyTests(unittest.TestCase):
             self.assertIn('deep/nested', str(saved[0]))
 
     def test_equal_basenames_in_different_directories_never_collide(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             for folder in ['first', 'second']:
                 path = home / folder / 'settings.json'
@@ -230,7 +232,7 @@ class BackupSafetyTests(unittest.TestCase):
             self.assertEqual(contents, ['first', 'second'])
 
     def test_repeated_backups_stop_at_the_collision_instead_of_overwriting(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             path = home / 'settings.json'
             path.write_text('version-1')
@@ -257,7 +259,7 @@ class BackupSafetyTests(unittest.TestCase):
                              'the source must survive a refused backup')
 
     def test_backup_directory_is_private_to_the_owner(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             (home / 'file').write_text('x')
             result = self.run_backup('backup "$HOME/file"; printf "%s\\n" "$BACKUP_DIR"', home)
@@ -270,7 +272,7 @@ class BackupSafetyTests(unittest.TestCase):
 
 class LogSafetyTests(unittest.TestCase):
     def test_log_is_owner_only_and_receives_no_credential_values(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             env_file = home / 'repo' / 'opencode/.env'
             env_file.parent.mkdir(parents=True)
@@ -296,7 +298,7 @@ class LogSafetyTests(unittest.TestCase):
             self.assertNotIn(secret, result.stdout + result.stderr)
 
     def test_run_installer_writes_script_to_the_temporary_work_dir(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory)
             script = '''
                 REPO_DIR="$HOME/repo"; mkdir -p "$REPO_DIR"
@@ -321,7 +323,7 @@ class LogSafetyTests(unittest.TestCase):
 
 class FailurePreservationTests(unittest.TestCase):
     def test_failed_generation_leaves_the_previous_config_untouched(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             base = Path(directory)
             template, env_file, output = (base / n for n in ('template', '.env', 'output.jsonc'))
             previous = '{"model":"keep-me"}\n'

@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +41,7 @@ class ToolVersionCacheTests(unittest.TestCase):
                               env=env, capture_output=True, text=True, timeout=20)
 
     def test_repeat_queries_hit_the_cache_instead_of_spawning_the_tool(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             counter = Path(directory) / 'invocations'
             counter.write_text('')
             self.make_tool(directory, 'slowtool', '2.0.32', counter)
@@ -55,7 +57,7 @@ class ToolVersionCacheTests(unittest.TestCase):
                              'a cached version must not spawn the tool again')
 
     def test_changing_the_executable_invalidates_the_entry(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             counter = Path(directory) / 'invocations'
             counter.write_text('')
             tool = self.make_tool(directory, 'slowtool', '1.0.0', counter)
@@ -69,7 +71,7 @@ class ToolVersionCacheTests(unittest.TestCase):
             self.assertEqual(counter.read_text().count('ran'), 2)
 
     def test_cache_is_not_created_when_the_tool_reports_no_version(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             counter = Path(directory) / 'invocations'
             counter.write_text('')
             tool = Path(directory) / 'bin' / 'quiet'
@@ -81,7 +83,7 @@ class ToolVersionCacheTests(unittest.TestCase):
             self.assertFalse((Path(directory) / 'cache/portillo-dots/tool-versions.tsv').exists())
 
     def test_cache_holds_no_credential_material(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             counter = Path(directory) / 'invocations'
             counter.write_text('')
             self.make_tool(directory, 'slowtool', '2.0.32', counter)
@@ -117,7 +119,7 @@ raise SystemExit(0)
         return home, stubs, calls
 
     def test_brew_queries_the_package_set_once_not_once_per_package(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home, stubs, calls = self.brew_env(directory)
             script = '''
                 source "$1/setup.sh"
@@ -140,7 +142,7 @@ raise SystemExit(0)
             self.assertLess(len(install_calls), 20)
 
     def test_rustup_target_list_is_queried_once_per_run(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory) / 'home'
             stubs = Path(directory) / 'bin'
             stubs.mkdir(parents=True)
@@ -184,7 +186,7 @@ raise SystemExit(0)
 
 class SinglePassVerificationTests(unittest.TestCase):
     def test_opencode_checks_use_one_python_invocation(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             home = Path(directory) / 'home'
             home.mkdir()
             config = home / '.config/opencode'
@@ -237,7 +239,7 @@ class ShellStartupTests(unittest.TestCase):
         end = zshrc.index('unset _portillo_graphical_helper', start)
         end = zshrc.index('fi', end) + 2
         block = zshrc[start:end]
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             stubs = Path(directory) / 'bin'
             stubs.mkdir()
             marker = Path(directory) / 'called'
@@ -280,7 +282,7 @@ class ShellStartupTests(unittest.TestCase):
                           'inside tmux the session lookup is expected to run once')
 
     def test_secrets_loader_runs_no_subprocess_when_absent(self):
-        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+        with tempdir() as directory:
             stubs = Path(directory) / 'bin'
             stubs.mkdir()
             marker = Path(directory) / 'called'

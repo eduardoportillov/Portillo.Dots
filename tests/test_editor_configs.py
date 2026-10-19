@@ -9,6 +9,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+
+from _support import tempdir
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,7 +163,7 @@ print("OPT_CLIPBOARD\t" .. tostring(captured.opts.clipboard))
 def run_lua(path, env_spec='', exes_spec='', osc='with-osc'):
     if not LUA:
         raise unittest.SkipTest('Lua interpreter not available')
-    with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
+    with tempdir() as directory:
         harness = Path(directory) / 'stub.lua'
         harness.write_text(VIM_STUB)
         # dkjson stub so the harness can require it without a dependency.
