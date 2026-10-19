@@ -8,8 +8,8 @@ while [[ -L "$SOURCE" ]]; do
   [[ "$SOURCE" == /* ]] || SOURCE="$DIRECTORY/$SOURCE"
 done
 REPO_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-source "$REPO_DIR/installer/common.sh"
 source "$REPO_DIR/installer/components.sh"
+source "$REPO_DIR/installer/common.sh"
 source "$REPO_DIR/installer/profiles.sh"
 source "$REPO_DIR/installer/workstation.sh"
 source "$REPO_DIR/installer/opencode.sh"
@@ -130,7 +130,11 @@ main() {
   trap cleanup_setup EXIT
   preflight
   if [[ "$CONFIG_ONLY" == false ]]; then
-    privileged_phase
+    if needs_privileged_phase; then
+      privileged_phase
+    else
+      info 'No privileged phase required for this platform/options; sudo is not invoked'
+    fi
     [[ "$HARDWARE_ONLY" == false ]] || return 0
     install_profile
   fi

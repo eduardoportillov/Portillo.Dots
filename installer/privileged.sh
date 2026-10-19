@@ -48,13 +48,10 @@ privileged_main() {
     case "$platform" in
       Linux) install_packages "$profile" "$manager" "$upgrade" ;;
       Darwin)
-        local prefix
-        if [[ "$(uname -m)" == arm64 ]]; then prefix=/opt/homebrew; else prefix=/usr/local/Homebrew; fi
-        if [[ ! -e "$prefix" && ! -L "$prefix" ]]; then
-          mkdir -p "$(dirname "$prefix")"
-          mkdir "$prefix"
-          chown -h "$SUDO_UID:$(id -g "$SUDO_USER")" "$prefix"
-        fi
+        # Homebrew is pre-installed by its official installer and manages
+        # packages as the invoking user. Nothing here needs root; macOS system
+        # package writes are intentionally not performed.
+        printf 'macOS: user-level Homebrew manages all packages; no root package action.\n'
         ;;
       *) return 2 ;;
     esac

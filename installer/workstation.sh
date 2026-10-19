@@ -18,10 +18,18 @@ install_workstation() {
     "$fnm_bin" install 24 >>"$LOG" 2>&1
     "$fnm_bin" default 24 >>"$LOG" 2>&1
     "$fnm_bin" use 24 >>"$LOG" 2>&1
+    command -v node >/dev/null 2>&1 || die 'Node.js installation did not expose node'
   fi
   if ! command -v pnpm >/dev/null 2>&1; then
-    # A user prefix avoids sudo and leaves Node's npm untouched.
-    npm install --global --prefix "$HOME/.local" pnpm >>"$LOG" 2>&1
+    # A user prefix avoids sudo and leaves Node's own npm semantics untouched.
+    # Resolve npm explicitly: a Node install may not expose it on PATH.
+    local npm_bin
+    npm_bin="$(command -v npm || true)"
+    [[ -n "$npm_bin" ]] || npm_bin="$(dirname "$(command -v node)")/npm"
+    [[ -x "$npm_bin" ]] || die 'npm is required to install pnpm; check the Node.js installation'
+    "$npm_bin" install --global --prefix "$HOME/.local" pnpm >>"$LOG" 2>&1
+    export PATH="$HOME/.local/bin:$PATH"
+    command -v pnpm >/dev/null 2>&1 || die 'pnpm installation did not expose pnpm'
   elif [[ "$UPGRADE" == true ]]; then
     pnpm self-update >>"$LOG" 2>&1
   fi
@@ -34,7 +42,13 @@ install_workstation() {
     "$(command -v rustup || printf '%s' "$HOME/.cargo/bin/rustup")" update >>"$LOG" 2>&1
   fi
   export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-  rustup target add wasm32-wasip1 wasm32-wasip2 >>"$LOG" 2>&1
+  command -v rustup >/dev/null 2>&1 || die 'rustup installation did not expose rustup'
+  # Zed extension development needs these targets, but only fetch them when
+  # missing: re-running setup must not make a network round-trip every time.
+  if ! rustup target list --installed 2>/dev/null | grep -qx wasm32-wasip1 \
+    || ! rustup target list --installed 2>/dev/null | grep -qx wasm32-wasip2; then
+    rustup target add wasm32-wasip1 wasm32-wasip2 >>"$LOG" 2>&1
+  fi
   if ! command -v uv >/dev/null 2>&1; then
     run_installer uv https://astral.sh/uv/install.sh
   elif [[ "$UPGRADE" == true ]]; then
