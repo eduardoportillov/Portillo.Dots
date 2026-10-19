@@ -70,13 +70,10 @@ privileged_phase() {
 install_brew_tools() {
   local prefix
   prefix="$(homebrew_prefix "$PLATFORM" "$ARCH")" || die "No documented Homebrew prefix for $PLATFORM/$ARCH"
-  if [[ "$PLATFORM" == mac ]] && ! command -v brew >/dev/null 2>&1; then
-    # Homebrew must be pre-installed with its official installer. Bootstrapping
-    # by cloning would land in a prefix we cannot verify on an untested platform,
-    # and macOS Intel requires /usr/local, which is never empty enough to clone.
-    die "Homebrew is required on macOS. Install it first, then re-run setup:
-         /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-  fi
+  # Self-contained: on Linux the prefix root was prepared by the privileged
+  # phase and brew is cloned as the invoking user. macOS keeps its documented
+  # pre-installed Homebrew requirement (see ensure_homebrew).
+  ensure_homebrew "$prefix"
   if [[ "$PLATFORM" == mac ]] && [[ "$(brew --prefix 2>/dev/null)" != "$prefix" ]]; then
     warn "Homebrew reports prefix '$(brew --prefix 2>/dev/null)' but the documented prefix is '$prefix'"
   fi

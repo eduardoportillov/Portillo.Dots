@@ -136,6 +136,23 @@ harden_existing_service() {
   printf 'Existing service script hardened: uid=%s; regular file, no service restart or hardware changes.\n' "$EUID"
 }
 
+# Homebrew lives in a shared prefix whose root must exist before the
+# unprivileged bootstrap clones into it. Prepared inside the single privileged
+# phase so the bootstrap itself never needs sudo. privileged_main passes the
+# fixed literal /home/linuxbrew; a static test pins that call site.
+prepare_homebrew_prefix() {
+  local root="$1" invoking_user="$2"
+  [[ "$root" == /* && "$root" != / && -n "$invoking_user" ]] || return 2
+  if [[ -e "$root" && ! -d "$root" ]]; then
+    printf 'Homebrew prefix root exists and is not a directory; refusing changes.\n' >&2
+    return 1
+  fi
+  if [[ ! -d "$root" ]]; then
+    install -d -m 0755 -o "$invoking_user" -g "$(id -gn "$invoking_user")" "$root" || return 1
+  fi
+  return 0
+}
+
 # Distribution plumbing the managed configuration needs beyond the manifest
 # tools: archives for upstream installers and the TLS trust store. Tool
 # packages themselves come from the components.sh catalog (tool_packages),

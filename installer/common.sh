@@ -286,6 +286,36 @@ sync_git_dependency() {
 # dedicated wrappers (opencode.sh, workstation.sh) and fnm: exists to satisfy
 # tool_requires dependencies on Node.js.
 
+# Homebrew is the update channel for current tool versions (Neovim 0.11+ and
+# friends) where the distro ships older ones. Like every dependency in the
+# catalog it is self-contained: on Linux the single privileged phase prepared
+# the prefix root and the clone runs as the invoking user, with no separate
+# manual installation. macOS keeps its documented requirement (see
+# homebrew_prefix) because there the standard prefixes are never empty enough
+# to bootstrap safely.
+ensure_homebrew() {
+  local prefix="$1"
+  if command -v brew >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ "${PLATFORM:-}" != linux ]]; then
+    die "Homebrew is required on macOS. Install it first, then re-run setup:
+         /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+  fi
+  if [[ ! -x "$prefix/bin/brew" ]]; then
+    [[ -d "$(dirname "$prefix")" ]] || die "Homebrew prefix root was not prepared; run the installer through setup.sh"
+    git clone --depth 1 https://github.com/Homebrew/brew "$prefix" >>"$LOG" 2>&1 \
+      || die "Homebrew bootstrap failed; see $LOG"
+  fi
+  eval "$("$prefix/bin/brew" shellenv)"
+  command -v brew >/dev/null 2>&1 || die 'Homebrew bootstrap did not expose brew'
+  # First run on a bare clone: fetch the formula metadata.
+  if [[ "${HOMEBREW_BOOTSTRAPPED:-}" != 1 ]]; then
+    brew update >>"$LOG" 2>&1 || warn "brew update failed; see $LOG"
+    HOMEBREW_BOOTSTRAPPED=1
+  fi
+}
+
 # Node.js through fnm in the user prefix: no sudo and no global system writes.
 # The fnm-managed runtime is placed first on PATH for the running installer.
 ensure_node_runtime() {

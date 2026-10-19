@@ -22,7 +22,7 @@ privileged_main() {
   [[ "$hardware_only" == false || ( "$hardware" == true && "$upgrade" == false && "$change_shell" == false ) ]] || return 2
   [[ "$repo" == /* && -d "$repo" && "$(id -u "$SUDO_USER")" == "${SUDO_UID:-}" ]] || return 2
   declare -F root_copy retire_legacy_rule install_packages harden_existing_service \
-    profile_components tool_packages >/dev/null || {
+    prepare_homebrew_prefix profile_components tool_packages >/dev/null || {
     printf 'Incomplete privileged payload; use setup.sh.\n' >&2; return 1;
   }
   local platform
@@ -46,6 +46,10 @@ privileged_main() {
 
   retire_legacy_rule /etc/sudoers.d/portillo-dots-setup "$SUDO_USER"
   if [[ "$hardware_only" == false ]]; then
+    # Homebrew's user-level bootstrap needs its prefix root to exist first.
+    if [[ "$manager" == brew && "$platform" == Linux ]]; then
+      prepare_homebrew_prefix /home/linuxbrew "$SUDO_USER" || return 1
+    fi
     case "$platform" in
       Linux) install_packages "$profile" "$manager" "$upgrade" ;;
       Darwin)

@@ -249,3 +249,56 @@ class CatalogInstallTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class HomebrewBootstrapTests(unittest.TestCase):
+    """Homebrew is a dependency like any other: provisioned, never assumed."""
+
+    def test_linux_bootstraps_homebrew_self_contained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            prefix = base / 'home/linuxbrew/.linuxbrew'
+            prefix.parent.mkdir(parents=True)
+            mocks = base / 'bin'
+            mocks.mkdir()
+            coreutils = base / 'coreutils'
+            coreutils.mkdir()
+            for name in ['cp', 'dirname', 'readlink', 'cat', 'grep', 'sed', 'mkdir', 'mktemp', 'mv', 'rm', 'stat']:
+                target = shutil.which(name)
+                if target:
+                    (coreutils / name).symlink_to(target)
+            brew_stub = base / 'brew-stub'
+            brew_stub.write_text(
+                '#!/bin/bash\n'
+                'if [ "$1" = "shellenv" ]; then\n'
+                '  printf \'export PATH="%s:$PATH"\\n\' "$(dirname "$0")"\n'
+                'else\n'
+                '  printf \'brew %s\\n\' "$*" >> "$MOCK_CALLS"\n'
+                'fi\n')
+            brew_stub.chmod(0o755)
+            (mocks / 'git').write_text(
+                '#!/bin/bash\n'
+                'printf \'git %s\\n\' "$*" >> "$MOCK_CALLS"\n'
+                'mkdir -p "$5/bin"\n'
+                'cp "$MOCK_BREW_STUB" "$5/bin/brew"\n')
+            (mocks / 'git').chmod(0o755)
+            script = ('source "$1/setup.sh"; PLATFORM=linux; LOG="$HOME/log"; '
+                      'ensure_homebrew "$2"')
+            env = {**os.environ, 'HOME': directory, 'PATH': f'{mocks}:{coreutils}',
+                   'MOCK_CALLS': str(base / 'calls'), 'MOCK_BREW_STUB': str(brew_stub)}
+            result = subprocess.run([shutil.which('bash'), '-euc', script, '_', str(ROOT), str(prefix)],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = (base / 'calls').read_text()
+            self.assertIn(f'git clone --depth 1 https://github.com/Homebrew/brew {prefix}', calls)
+            self.assertIn('brew update', calls)
+
+    def test_macos_keeps_the_preinstalled_homebrew_requirement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = ('source "$1/setup.sh"; PLATFORM=mac; LOG="$HOME/log"; '
+                      'ensure_homebrew "$HOME/nonexistent" ; exit 0')
+            env = {**os.environ, 'HOME': directory, 'PATH': '/usr/bin:/bin'}
+            result = subprocess.run([shutil.which('bash'), '-euc', script, '_', str(ROOT)],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Homebrew is required on macOS', result.stderr)

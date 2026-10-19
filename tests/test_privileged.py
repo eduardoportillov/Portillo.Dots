@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -436,6 +437,50 @@ class SudoTransportTests(unittest.TestCase):
             result = subprocess.run([BASH, '-euc', script, '_', str(ROOT), str(base)], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)  # It is still an unprivileged test process.
             self.assertFalse((base / 'executed').exists())
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+class HomebrewPrefixTests(unittest.TestCase):
+    """The privileged phase prepares the brew prefix root, nothing more."""
+
+    def shell(self, script, *args):
+        return subprocess.run([BASH, '-euc', 'source "$1"; ' + script, '_', str(CORE), *map(str, args)],
+                              capture_output=True, text=True, timeout=10)
+
+    def test_missing_prefix_root_is_created_for_the_invoking_user(self):
+        with tempdir() as directory:
+            root = Path(directory) / 'home/linuxbrew'
+            result = self.shell('prepare_homebrew_prefix "$2" "$USER"', root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(root.is_dir())
+            self.assertEqual(root.stat().st_uid, os.getuid())
+
+    def test_relative_or_root_paths_are_refused(self):
+        for path in ['relative/path', '/']:
+            with self.subTest(path=path):
+                result = self.shell('prepare_homebrew_prefix "$2" "$USER"', path)
+                self.assertEqual(result.returncode, 2)
+
+    def test_non_directory_root_is_refused(self):
+        with tempdir() as directory:
+            root = Path(directory) / 'home/linuxbrew'
+            root.parent.mkdir(parents=True)
+            root.write_text('not a directory\n')
+            result = self.shell('prepare_homebrew_prefix "$2" "$USER"', root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('refusing changes', result.stderr)
+
+    def test_privileged_entry_prepares_only_the_homebrew_literal(self):
+        # Root code must never prepare a path that comes from a variable: the
+        # call site is pinned to the fixed literal, like systemctl's guard.
+        text = (ROOT / 'installer/privileged.sh').read_text()
+        calls = [line.strip() for line in text.splitlines()
+                 if re.search(r'prepare_homebrew_prefix\s+[/~$.]', line)]
+        self.assertEqual(calls, ['prepare_homebrew_prefix /home/linuxbrew "$SUDO_USER" || return 1'],
+                         'the prefix root must be a fixed literal, never user-controlled')
 
 
 if __name__ == '__main__':
