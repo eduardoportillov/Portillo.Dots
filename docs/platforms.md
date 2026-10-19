@@ -86,6 +86,12 @@ La comparación (`version_at_least`) es Bash puro: funciona también en macOS, d
 `homebrew_prefix` centraliza esos valores. Si `brew --prefix` no coincide con el
 documentado, se avisa sin romper.
 
+**Linux: Homebrew es autocontenido.** Cuando se elige `--package-manager brew`,
+la fase privilegiada prepara la raíz del prefijo (`/home/linuxbrew`, propiedad
+del usuario invocante) y el instalador clona Homebrew en su prefijo estándar sin
+sudo — la misma regla que el resto de dependencias del catálogo: se proveen
+solas, nunca se dan por instaladas.
+
 ### macOS: requisitos y límites
 
 - **Homebrew debe venir preinstalado** con su instalador oficial. El instalador

@@ -447,9 +447,8 @@ preflight() {
   if needs_privileged_phase; then
     command -v sudo >/dev/null 2>&1 || die 'sudo is required for the single system phase'
   fi
-  if [[ "$PLATFORM" == linux && "$PACKAGE_MANAGER" == brew ]]; then
-    command -v brew >/dev/null 2>&1 || die 'Install Homebrew first, or use --package-manager native'
-  fi
+  # Homebrew needs no preflight on Linux: install_brew_tools bootstraps it
+  # self-contained (the privileged phase prepares its prefix root first).
   if [[ "$PLATFORM" == linux ]]; then
     command -v apt-get >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1 || command -v pacman >/dev/null 2>&1 \
       || die 'Supported native package managers: apt, dnf, pacman'
