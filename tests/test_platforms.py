@@ -255,26 +255,40 @@ class VersionGateTests(unittest.TestCase):
         return subprocess.run([BASH, '-euc', script, '_', str(ROOT), profile],
                               env=env, capture_output=True, text=True, timeout=30)
 
+    @staticmethod
+    def versions(nvim, tmux='3.6b'):
+        return {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
+                'tmux': tmux, 'nvim': nvim, 'rg': '14.0.0', 'fd': '9.0.0',
+                'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
+                'python3': '3.12.0', 'opencode': '2.0.28',
+                # Workstation-only manifest entries, so both profiles can verify.
+                'zsh': '5.9', 'node': '22.11.0', 'pnpm': '9.0.0', 'go': '1.23.0',
+                'rustup': '1.27.0', 'uv': '0.5.0', 'claude': '1.0.0', 'zed': '0.150.0',
+                'alacritty': '0.13.5'}
+
     def test_declared_minimums_are_enforced(self):
-        with tempfile.TemporaryDirectory() as directory:
-            versions = {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
-                        'tmux': '3.6b', 'nvim': '0.10.4', 'rg': '14.0.0', 'fd': '9.0.0',
-                        'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
-                        'python3': '3.12.0', 'opencode': '2.0.28'}
-            result = self.run_verify(directory, versions, profile='server')
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('nvim 0.10.4 is older than the declared minimum 0.11', result.stderr)
-            self.assertNotIn('tmux', result.stderr)
+        # Neovim minimum is per profile: LazyVim needs 0.11 on workstation, while
+        # the managed server config only needs 0.10 (OSC52, pcall-guarded).
+        cases = [('workstation', '0.10.4',
+                  'nvim 0.10.4 is older than the declared minimum 0.11'),
+                 ('server', '0.9.5',
+                  'nvim 0.9.5 is older than the declared minimum 0.10')]
+        for profile, nvim, expected in cases:
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
+                result = self.run_verify(directory, self.versions(nvim), profile=profile)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
+                self.assertNotIn('tmux', result.stderr)
 
     def test_passing_minimums_verify_cleanly(self):
-        with tempfile.TemporaryDirectory() as directory:
-            versions = {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
-                        'tmux': '3.3.0', 'nvim': '0.11.0', 'rg': '14.0.0', 'fd': '9.0.0',
-                        'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
-                        'python3': '3.12.0', 'opencode': '2.0.28'}
-            result = self.run_verify(directory, versions, profile='server')
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn('Verification passed: server', result.stdout)
+        # Each profile accepts exactly its declared boundary.
+        cases = [('workstation', '0.11.0'), ('server', '0.10.4')]
+        for profile, nvim in cases:
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
+                result = self.run_verify(directory, self.versions(nvim, tmux='3.3.0'),
+                                         profile=profile)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(f'Verification passed: {profile}', result.stdout)
 
     def test_undetectable_version_is_informational_not_fatal(self):
         with tempfile.TemporaryDirectory() as directory:

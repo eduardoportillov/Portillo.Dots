@@ -19,7 +19,7 @@ declaradas arriba:
 
 | Job | ubuntu-latest | macos-latest | Qué cubre |
 |---|---|---|---|
-| `tests` | ✅ | ✅ | 231 pruebas unitarias, de integración y de configuración |
+| `tests` | ✅ | ✅ | 241 pruebas unitarias, de integración y de configuración |
 | `shellcheck` | ✅ | — | lint de todos los `.sh` versionados |
 | `secret-scan` | ✅ | — | contenido versionado + blobs del historial |
 
@@ -60,7 +60,7 @@ sintaxis o API. No se inventan requisitos.
 | Herramienta | Mínimo | Por qué |
 |---|---|---|
 | `tmux` | 3.3 | `allow-passthrough` se añadió en 3.3 y lo usa `tmux/tmux.conf` |
-| `nvim` | 0.11 | LazyVim requiere Neovim 0.11 |
+| `nvim` | 0.11 (workstation) · 0.10 (server) | LazyVim requiere 0.11; la config de Server solo necesita 0.10 (`vim.ui.clipboard.osc52`, degradación elegante vía `pcall`) |
 | `opencode` | 2.0 | Los dotfiles usan la API y la config nativa de V2 |
 | `node` | 20 | Los servidores MCP del template se lanzan con `npx` |
 | `alacritty` | 0.13 | La clave `terminal.osc52` existe desde 0.13 |

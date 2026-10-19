@@ -56,6 +56,17 @@ class ProfileManifestTests(unittest.TestCase):
                 names = [name for _, name, _ in entries]
                 self.assertEqual(len(names), len(set(names)))
 
+    def test_minimum_versions_are_profile_specific(self):
+        def minimum(profile):
+            for _, name, rest in components(profile):
+                if name == 'nvim':
+                    return rest.split(' ', 1)[0]
+            self.fail('nvim missing from the manifest')
+        # LazyVim (workstation) needs 0.11; the server config only needs 0.10 for
+        # vim.ui.clipboard.osc52 and degrades gracefully below it (pcall guard).
+        self.assertEqual(minimum('workstation'), '0.11')
+        self.assertEqual(minimum('server'), '0.10')
+
     def test_manifest_drives_both_display_and_verification(self):
         profiles = (ROOT / 'installer/profiles.sh').read_text()
         display = profiles.split('show_components() {', 1)[1].split('\n}', 1)[0]

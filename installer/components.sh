@@ -17,13 +17,24 @@ profile_components() {
   case "$profile" in workstation|server) ;; *) printf 'Invalid profile: %s\n' "$profile" >&2; return 2 ;; esac
   case "$platform" in linux|mac) ;; *) printf 'Invalid platform: %s\n' "$platform" >&2; return 2 ;; esac
 
+  # Neovim minimum is per profile: only LazyVim (workstation) needs 0.11. The
+  # managed server config needs 0.10 for vim.ui.clipboard.osc52 and degrades
+  # gracefully on older builds (the require is guarded with pcall).
+  local nvim_minimum=0.10 nvim_reason='OSC52 clipboard needs 0.10'
+  if [[ "$profile" == workstation ]]; then
+    nvim_minimum=0.11
+    nvim_reason='LazyVim needs 0.11'
+  fi
+
   cat <<'EOF'
 required git - Version control
 required curl - Downloads and API calls
 required ssh - Remote access client
 required rsync - Remote file sync
 required tmux 3.3 Terminal multiplexer (allow-passthrough needs 3.3)
-required nvim 0.11 Neovim editor (LazyVim needs 0.11)
+EOF
+  printf 'required nvim %s Neovim editor (%s)\n' "$nvim_minimum" "$nvim_reason"
+  cat <<'EOF'
 required rg - ripgrep text search
 required fd - fd file search
 required fzf - Fuzzy finder

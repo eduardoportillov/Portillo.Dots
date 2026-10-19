@@ -104,8 +104,10 @@ sin instalar ni escribir nada.
 - macOS está cubierto por tests lógicos y por `--dry-run`, pero **no se ha
   instalado en un Mac real** durante esta refactorización; queda en la validación
   de integración.
-- El manifiesto describe herramientas, no versiones mínimas. La única gate de
-  versión explícita hoy es Neovim `>= 0.11` para LazyVim en Workstation.
+- Los mínimos de versión se declaran **por perfil** en `installer/components.sh`.
+  Neovim exige `>= 0.11` en Workstation (LazyVim) y `>= 0.10` en Server
+  (`vim.ui.clipboard.osc52`, con degradación elegante vía `pcall`); un Neovim
+  anterior a 0.10 solo pierde el portapapeles OSC 52 sobre SSH.
 - `--check` comprueba presencia de ejecutables, no que cada uno funcione en su
   contexto real (por ejemplo que un provider de OpenCode esté autenticado).
 - Los paquetes `optional` se intentan instalar solo en Workstation con gestor
