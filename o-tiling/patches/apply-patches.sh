@@ -29,8 +29,8 @@ fi
 patch_vertical_same_monitor() {
   local file="$EXT_DIR/engine/tiling.js"
   if [[ ! -f "$file" ]]; then
-    echo "  ⚠ $file no existe — skip"
-    return 0
+    echo "  ✗ $file no existe — el patch NO se aplicó" >&2
+    return 1
   fi
   if grep -q "PORTILLO.DOTS PATCH: same_monitor_window" "$file"; then
     echo "  ✓ tiling.js ya patched (skip)"
@@ -103,8 +103,8 @@ PY
 patch_defer_auto_tile() {
   local file="$EXT_DIR/window/window.js"
   if [[ ! -f "$file" ]]; then
-    echo "  ⚠ $file no existe — skip"
-    return 0
+    echo "  ✗ $file no existe — el patch NO se aplicó" >&2
+    return 1
   fi
   if grep -q "PORTILLO.DOTS PATCH: defer auto_tile" "$file"; then
     echo "  ✓ window.js ya patched (skip)"
@@ -160,6 +160,15 @@ PY
 }
 
 echo "Aplicando patches a o-tiling..."
-patch_vertical_same_monitor
-patch_defer_auto_tile
-echo "Patches aplicados."
+failed=0
+patch_vertical_same_monitor || failed=1
+patch_defer_auto_tile || failed=1
+
+if [[ "$failed" -ne 0 ]]; then
+  echo "" >&2
+  echo "✗ Al menos un patch NO se aplicó. El marcador de instalación no debe" >&2
+  echo "  considerarse válido hasta corregirlo (upstream pudo cambiar el código)." >&2
+  exit 1
+fi
+
+echo "Patches aplicados correctamente."
