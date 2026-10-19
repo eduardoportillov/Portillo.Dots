@@ -87,7 +87,10 @@ class OperationModeTests(unittest.TestCase):
                     path.symlink_to(shutil.which('python3'))
                 else:
                     path.write_text('#!/bin/sh\nexit 0\n')
-                path.chmod(0o755)
+                if not path.is_symlink():
+                    # chmod on a symlink would target the real interpreter, which
+                    # may be root-owned on other hosts.
+                    path.chmod(0o755)
             env = self.isolated(str(home))
             env['PATH'] = f'{stubs}:{coreutils}'
             result = self.run_setup(directory, ['--profile', 'server', '--check'], env=env)
@@ -151,7 +154,9 @@ class OperationModeTests(unittest.TestCase):
 
 class ArgumentValidationTests(unittest.TestCase):
     def run_setup(self, args, env=None):
-        return subprocess.run([BASH, str(ROOT / 'setup.sh'), *args],
+        # stdin is closed: a host running the suite from a terminal must see the
+        # same behaviour as CI (no interactive menu can block the run).
+        return subprocess.run([BASH, str(ROOT / 'setup.sh'), *args], stdin=subprocess.DEVNULL,
                               env=env, capture_output=True, text=True, timeout=30)
 
     def temp_env(self, directory):

@@ -5,6 +5,18 @@
 # shell. Contexts (zsh/.zshrc, server/shell.sh, remote/generate-rc.sh) add
 # their own extras around this file and never duplicate its contents.
 
+# Homebrew, when present, provides current tool versions beyond the distro
+# (Neovim 0.11+, bat, fd…). Its paths go first so brew-managed tools win over
+# older system packages; the user prefix below then keeps the final say.
+for _portillo_brew in /opt/homebrew/bin/brew /usr/local/Homebrew/bin/brew \
+  /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
+  if [ -x "$_portillo_brew" ]; then
+    eval "$("$_portillo_brew" shellenv)"
+    break
+  fi
+done
+unset _portillo_brew
+
 # User tool prefix plus the OpenCode runtime when present. The loop is
 # idempotent: a PATH that already carries the entry is left alone.
 for portillo_bin in "$HOME/.local/bin" "$HOME/.opencode/bin"; do

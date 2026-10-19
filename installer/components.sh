@@ -149,6 +149,22 @@ homebrew_prefix() {
 #   uv-tool:<package> uv tool install (Python CLI tools)
 #   portable:<name>   verified release binary (remote runtime only)
 
+# Append packages to a list keeping order and skipping duplicates, so a tool
+# that is both a manifest entry and build support installs only once. Lives in
+# the catalog because both the unprivileged flow and the privileged payload
+# (which concatenates this file) need it.
+append_unique() {
+  local -n target="$1"
+  shift
+  local item
+  for item in "$@"; do
+    if [[ -n "$item" ]]; then
+      case " ${target[*]-} " in *" $item "*) continue ;; esac
+      target+=("$item")
+    fi
+  done
+}
+
 # Native package names per package manager. Prints nothing when the tool is
 # provisioned through tool_source instead. Manager: apt|dnf|pacman|brew.
 tool_packages() {

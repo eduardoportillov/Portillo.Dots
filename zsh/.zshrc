@@ -35,14 +35,8 @@ else
   _PORTILLO_OS="linux"
 fi
 
-# Homebrew shellenv
-for _brew in /opt/homebrew/bin/brew /usr/local/Homebrew/bin/brew /home/linuxbrew/.linuxbrew/bin/brew "$HOME/.linuxbrew/bin/brew"; do
-  if [[ -x "$_brew" ]]; then
-    eval "$("$_brew" shellenv)"
-    break
-  fi
-done
-unset _brew
+# Homebrew shellenv comes from the shared baseline (shell-common.sh), so brew
+# tools and the user prefix keep one single definition across every host.
 
 # Oh My Zsh configuration
 export ZSH="$HOME/.oh-my-zsh"

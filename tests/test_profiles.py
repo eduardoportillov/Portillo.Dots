@@ -165,6 +165,7 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
                 # network/package side effects stubbed out.
                 run_installer() { printf 'download:%s\\n' "$1" >> "$MOCK_CALLS"; return 0; }
                 install_opencode() { return 0; }
+                install_source_tools() { return 0; }
                 install_profile
                 configure_profile
             '''
@@ -334,6 +335,17 @@ class CatalogDescriptorTests(unittest.TestCase):
                                  'source "$1/installer/components.sh"; tool_packages git apt64',
                                  '_', str(ROOT)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
+
+    def test_brew_formulas_come_from_the_catalog(self):
+        # The same promise for every channel: one declaration drives native
+        # packages, brew formulas, npm tools and their upgrades.
+        profiles = (ROOT / 'installer/profiles.sh').read_text()
+        body = profiles.split('install_brew_tools() {', 1)[1].split('\n}', 1)[0]
+        self.assertIn('tool_packages', body, 'brew formulas must map through the catalog')
+        self.assertIn('profile_components', body)
+        self.assertNotIn('packages=(git curl', body, 'the formula list must not be hardcoded')
+        core = (ROOT / 'installer/privileged-core.sh').read_text()
+        self.assertIn('tool_packages', core, 'native packages must map through the catalog')
 
     def test_pi_is_fully_catalog_owned_in_both_profiles(self):
         # Reference case for adding tools: one manifest line plus descriptors.

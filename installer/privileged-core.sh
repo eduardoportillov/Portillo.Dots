@@ -136,20 +136,6 @@ harden_existing_service() {
   printf 'Existing service script hardened: uid=%s; regular file, no service restart or hardware changes.\n' "$EUID"
 }
 
-# Append packages to a list keeping order and skipping duplicates, so a tool
-# that is both a manifest entry and build support installs only once.
-append_unique() {
-  local -n target="$1"
-  shift
-  local item
-  for item in "$@"; do
-    if [[ -n "$item" ]]; then
-      case " ${target[*]-} " in *" $item "*) continue ;; esac
-      target+=("$item")
-    fi
-  done
-}
-
 # Distribution plumbing the managed configuration needs beyond the manifest
 # tools: archives for upstream installers and the TLS trust store. Tool
 # packages themselves come from the components.sh catalog (tool_packages),

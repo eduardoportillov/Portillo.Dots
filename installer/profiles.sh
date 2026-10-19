@@ -81,9 +81,20 @@ install_brew_tools() {
     warn "Homebrew reports prefix '$(brew --prefix 2>/dev/null)' but the documented prefix is '$prefix'"
   fi
   export PATH="$prefix/bin:$prefix/sbin:$PATH"
-  local packages=(git curl unzip zip rsync tmux neovim ripgrep fd fzf bat jq htop python)
-  [[ "$PROFILE" != workstation ]] || packages+=(lazygit lazydocker zsh tree-sitter zoxide atuin go ffmpeg)
-  local package installed
+  # The manifest drives the formula list through the catalog; support packages
+  # (archives, treesitter tooling, ffmpeg) are plumbing, not manifest tools.
+  local packages=(unzip zip) kind name package
+  if [[ "$PROFILE" == workstation ]]; then
+    packages+=(tree-sitter ffmpeg)
+  fi
+  while read -r kind name _; do
+    [[ -n "$kind" ]] || continue
+    package="$(tool_packages "$name" brew)"
+    if [[ -n "$package" ]]; then
+      append_unique packages "$package"
+    fi
+  done < <(profile_components "$PROFILE" "$PLATFORM")
+  local installed
   [[ "$UPGRADE" == false ]] || brew update >>"$LOG" 2>&1
   # One brew query for the whole set; one invocation per package is the dominant
   # cost of a large install and returns data we already have in bulk.

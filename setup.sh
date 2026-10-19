@@ -64,8 +64,14 @@ require_value() {
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --profile) require_value "$@"; PROFILE="$2"; shift 2 ;;
-      --package-manager) require_value "$@"; PACKAGE_MANAGER="$2"; shift 2 ;;
+      --profile)
+        require_value "$@"; PROFILE="$2"; shift 2
+        case "$PROFILE" in workstation|server) ;; *) die "Invalid profile: $PROFILE" ;; esac
+        ;;
+      --package-manager)
+        require_value "$@"; PACKAGE_MANAGER="$2"; shift 2
+        case "$PACKAGE_MANAGER" in auto|native|brew) ;; *) die "Invalid package manager: $PACKAGE_MANAGER" ;; esac
+        ;;
       --config-only) CONFIG_ONLY=true; shift ;;
       --check) CHECK_ONLY=true; shift ;;
       --check-sudo) CHECK_SUDO=true; shift ;;
