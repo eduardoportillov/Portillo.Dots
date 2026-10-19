@@ -132,6 +132,7 @@ install_profile() {
 
 configure_profile() {
   symlink_file "$REPO_DIR/zsh/.dircolors" "$HOME/.dircolors"
+  symlink_file "$REPO_DIR/shared/shell/common.sh" "$CONFIG_HOME/portillo-dots/shell-common.sh"
   if [[ "$PROFILE" == server ]]; then
     symlink_file "$REPO_DIR/server/tmux.conf" "$HOME/.tmux.conf"
     prepare_config_directory "$CONFIG_HOME/nvim"
@@ -164,7 +165,8 @@ verify_configs() {
   local failed=0 pair destination source
   local _opencode_config=""
   verify_secret_permissions || failed=1
-  local checks=("$HOME/.dircolors:$REPO_DIR/zsh/.dircolors")
+  local checks=("$HOME/.dircolors:$REPO_DIR/zsh/.dircolors"
+                "$CONFIG_HOME/portillo-dots/shell-common.sh:$REPO_DIR/shared/shell/common.sh")
   if [[ "$PROFILE" == server ]]; then
     checks+=("$HOME/.tmux.conf:$REPO_DIR/server/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/server/nvim/init.lua")
   else

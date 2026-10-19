@@ -19,6 +19,14 @@ if [[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/load-secrets.sh" ]]; then
   source "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/load-secrets.sh"
 fi
 
+# Shared baseline (aliases, memtop, editor, user tool prefix, prompt defaults
+# and the Kanagawa Dragon dircolors). Sourced before Oh My Zsh so the LS_COLORS
+# rules are in place when it reads them; Powerlevel10k replaces the shared
+# prompt further below.
+if [[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/portillo-dots/shell-common.sh" ]]; then
+  source "${XDG_CONFIG_HOME:-$HOME/.config}/portillo-dots/shell-common.sh"
+fi
+
 # OS detection
 _PORTILLO_OS="$(uname -s)"
 if [[ "$_PORTILLO_OS" == "Darwin" ]]; then
@@ -35,15 +43,6 @@ for _brew in /opt/homebrew/bin/brew /usr/local/Homebrew/bin/brew /home/linuxbrew
   fi
 done
 unset _brew
-
-# Load the Kanagawa Dragon rules before Oh My Zsh reads LS_COLORS.
-if [[ -r "$HOME/.dircolors" ]]; then
-  if (( $+commands[dircolors] )); then
-    eval "$(dircolors -b "$HOME/.dircolors")"
-  elif (( $+commands[gdircolors] )); then
-    eval "$(gdircolors -b "$HOME/.dircolors")"
-  fi
-fi
 
 # Oh My Zsh configuration
 export ZSH="$HOME/.oh-my-zsh"
@@ -80,14 +79,8 @@ fi
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# fnm (Fast Node Manager)
-if [[ -d "$HOME/.local/share/fnm" ]]; then
-  export PATH="$HOME/.local/share/fnm:$PATH"
-fi
-
-if command -v fnm >/dev/null 2>&1; then
-  eval "$(fnm env --use-on-cd --shell zsh)"
-fi
+# fnm (Fast Node Manager): handled by the shared baseline (shell-common.sh),
+# which provisions the fnm-managed Node only when it exists.
 
 # pnpm — use explicitly; leave npm semantics unchanged for external tools.
 export PNPM_HOME="$HOME/.local/share/pnpm"
@@ -120,10 +113,8 @@ if [ -d "$HOME/.bun" ]; then
   [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 fi
 
-# opencode
-if [ -d "$HOME/.opencode/bin" ]; then
-  export PATH="$HOME/.opencode/bin:$PATH"
-fi
+# opencode runtime lives in ~/.opencode/bin — added to PATH by the shared
+# baseline (shell-common.sh).
 
 # tmux wrapper function for cross-platform session management
 function tm() {
@@ -144,34 +135,5 @@ function tm() {
 # Shell options
 setopt ignoreeof
 
-# Useful aliases
-alias ll='ls -lah'
-alias la='ls -lah'
-alias l='ls -lh'
-alias mkdir='mkdir -p'
-alias grep='grep --color=auto'
-alias ..='cd ..'
-alias ...='cd ../..'
+# Per-host overrides; always loaded last so they win over the managed config.
 [[ ! -r "${XDG_CONFIG_HOME:-$HOME/.config}/portillo-dots/local.zsh" ]] || source "${XDG_CONFIG_HOME:-$HOME/.config}/portillo-dots/local.zsh"
-
-# Top processes by resident memory. Usage: memtop [count], defaults to 10.
-function memtop() {
-  local limit="${1:-10}"
-
-  if ! [[ "$limit" =~ ^[0-9]+$ ]] || [[ "$limit" -lt 1 ]]; then
-    print -u2 "usage: memtop [count]"
-    return 2
-  fi
-
-  ps -axo pid=,rss=,comm= | LC_ALL=C sort -k2,2nr | awk -v limit="$limit" '
-    BEGIN {
-      printf "%-8s %8s %s\n", "PID", "MB", "CMD"
-    }
-    NR <= limit {
-      printf "%-8s %8.1f %s\n", $1, $2 / 1024, $3
-    }
-  '
-}
-
-# User-installed tools. No npm shim is installed by Portillo.Dots.
-export PATH="$HOME/.local/bin:$PATH"

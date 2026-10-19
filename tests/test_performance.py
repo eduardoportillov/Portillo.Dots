@@ -194,8 +194,10 @@ class SinglePassVerificationTests(unittest.TestCase):
             (config / 'opencode.jsonc').write_text(
                 '{"permissions":[{"action":"shell","resource":"*","effect":"ask"},'
                 '{"action":"edit","resource":"*","effect":"ask"}]}\n')
-            for name, source in [('.dircolors', 'zsh/.dircolors'), ('.tmux.conf', 'server/tmux.conf')]:
+            for name, source in [('.dircolors', 'zsh/.dircolors'), ('.tmux.conf', 'server/tmux.conf'),
+                                 ('.config/portillo-dots/shell-common.sh', 'shared/shell/common.sh')]:
                 link = home / name
+                link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(ROOT / source)
             nvim = home / '.config/nvim'
             nvim.mkdir(parents=True, exist_ok=True)

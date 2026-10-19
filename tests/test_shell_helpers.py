@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,11 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ShellHelperTests(unittest.TestCase):
     def test_memtop_sorts_numeric_rss_and_respects_limit(self):
-        sources = {
-            'zsh': (ROOT / 'zsh/.zshrc').read_text().split('function memtop() {', 1)[1].split('\n}', 1)[0],
-            'bash': (ROOT / 'remote/generate-rc.sh').read_text().split('memtop() {', 1)[1].split('\n}', 1)[0],
-        }
-        for shell, body in sources.items():
+        # One shared definition (shared/shell/common.sh) must behave identically
+        # in every shell that sources it.
+        text = (ROOT / 'shared/shell/common.sh').read_text()
+        body = text.split('memtop() {', 1)[1].split('\n}', 1)[0]
+        for shell in ('bash', 'zsh'):
             if not shutil.which(shell):
                 continue
             with self.subTest(shell=shell), tempfile.TemporaryDirectory() as directory:
@@ -73,3 +74,32 @@ class ShellHelperTests(unittest.TestCase):
                     self.assertFalse((base / 'clipboard-access').exists())
                 finally:
                     subprocess.run([*tmux, 'kill-server'], env=env, capture_output=True, timeout=10)
+
+
+class SharedBaselineTests(unittest.TestCase):
+    """The shared shell baseline is the single source of the common feel."""
+
+    def test_every_shell_context_consumes_the_shared_baseline(self):
+        # Installed hosts link it as portillo-dots/shell-common.sh; the remote
+        # runtime deploys the tree and sources shared/shell/common.sh.
+        pattern = re.compile(r'shared/shell/common\.sh|shell-common\.sh')
+        for name in ('zsh/.zshrc', 'server/shell.sh', 'remote/generate-rc.sh'):
+            with self.subTest(consumer=name):
+                text = (ROOT / name).read_text()
+                self.assertRegex(text, pattern,
+                                 f'{name} must source the shared baseline')
+
+    def test_no_context_redefines_the_shared_surface(self):
+        for name in ('zsh/.zshrc', 'remote/generate-rc.sh', 'server/shell.sh'):
+            with self.subTest(consumer=name):
+                text = (ROOT / name).read_text()
+                for snippet in ('alias ll=', 'alias mkdir=', 'memtop()', 'alias vim='):
+                    self.assertNotIn(snippet, text,
+                                     f'{name} must not duplicate {snippet}')
+
+    def test_shared_prompt_matches_the_tmux_status_palette(self):
+        shared = (ROOT / 'shared/shell/common.sh').read_text()
+        tmux = (ROOT / 'server/tmux.conf').read_text()
+        for color in ('8ba4b0', 'c5c9c5'):
+            self.assertIn(color, shared, 'the shared prompt must use the Kanagawa palette')
+            self.assertIn(color, tmux, 'tmux status must use the same Kanagawa palette')

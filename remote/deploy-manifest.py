@@ -8,6 +8,7 @@ EXACT = {
     'nvim/init.lua', 'nvim/lazy-lock.json', 'nvim/lazyvim.json',
     'nvim/stylua.toml', 'nvim/.neoconf.json',
     'zsh/.dircolors', '.markdownlint.jsonc', 'server/tmux.conf',
+    'shared/shell/common.sh',
 }
 
 
