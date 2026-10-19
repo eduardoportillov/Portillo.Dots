@@ -1,11 +1,17 @@
 # =====================================================================
-# Límite de carga de batería al 60% (config dura, vía udev)
+# Límite de carga de batería — CONFIGURACIÓN DE UN EQUIPO CONCRETO
 # =====================================================================
+# ⚠ Antes de instalarla en otra máquina, revisa y ajusta:
+#     - KERNEL=="BAT1"  → el nombre real de la batería en ese equipo
+#       (cat /sys/class/power_supply/ para verlo; puede ser BAT0, BATT, ...)
+#     - el valor "60"    → el umbral que quieras para ESE uso
+# Este archivo NO es una optimización universal ni un valor recomendado para
+# todos los portátiles: es la preferencia de salud de batería del autor.
+#
 # Se dispara cada vez que aparece/cambia el dispositivo de batería: en boot,
 # al volver de suspensión y al reconectar la batería. No depende de ningún
 # servicio systemd (que en este equipo se rompía por un ordering cycle).
 #
-# Equipo: ASUS TUF, batería en /sys/class/power_supply/BAT1 (confirmado).
 # El driver asus-wmi expone charge_control_end_threshold; escribir 60 limita
 # la carga máxima al 60% para preservar la salud de la batería.
 #
