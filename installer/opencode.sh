@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 
 install_opencode() {
+  local reported=""
   if command -v opencode >/dev/null 2>&1; then
-    opencode --version | grep -Eq '(^|v)2\.' \
+    # Probe the version once; a second call would spawn the CLI again.
+    reported="$(opencode --version 2>/dev/null || true)"
+    [[ "$reported" =~ (^|v)2\. ]] \
       || die 'Existing OpenCode is not V2; migrate/remove it explicitly before installing'
     if [[ "$UPGRADE" == false ]]; then
       record_event unchanged 'opencode V2 already installed'
       return 0
     fi
-    record_event updated 'opencode V2'
+    record_event updated "opencode V2 ($reported)"
     return 0
   fi
   # Official V2 installer, always as the invoking user. No npm global root writes.
@@ -81,37 +84,6 @@ configure_opencode_client() {
   fi
   symlink_file "$template" "$destination"
   symlink_file "$REPO_DIR/opencode/load-secrets.sh" "$CONFIG_HOME/opencode/load-secrets.sh"
-}
-
-# Report MCP command dependencies the template assumes (npx/Node, engram, ...).
-verify_opencode_dependencies() {
-  local config="$1" missing=()
-  [[ -f "$config" ]] || return 0
-  local command
-  while read -r command; do
-    [[ -n "$command" ]] || continue
-    command -v "$command" >/dev/null 2>&1 || missing+=("$command")
-  done < <(python3 -B - "$config" <<'PY'
-import json, re, sys
-from pathlib import Path
-text = Path(sys.argv[1]).read_text()
-text = re.sub(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/',
-              lambda m: m[0] if m[0].startswith('"') else ' ', text)
-text = re.sub(r'"(?:\\.|[^"\\])*"|,(?=\s*[}\]])',
-              lambda m: m[0] if m[0].startswith('"') else '', text)
-config = json.loads(text)
-for server in (config.get('mcp') or {}).get('servers', {}).values():
-    if isinstance(server, dict) and server.get('type') == 'local':
-        command = server.get('command')
-        if isinstance(command, list) and command and isinstance(command[0], str):
-            print(command[0])
-PY
-)
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    warn "MCP servers need commands not on PATH: ${missing[*]} (install them or disable those servers)"
-    return 1
-  fi
-  return 0
 }
 
 configure_opencode() {

@@ -225,6 +225,10 @@ class SecretsHandlingTests(unittest.TestCase):
             self.assertEqual(run.stderr, '')
 
 
+BASELINE = ('{"permissions":[{"action":"shell","resource":"*","effect":"ask"},'
+            '{"action":"edit","resource":"*","effect":"ask"}]')
+
+
 class SyncSafetyTests(unittest.TestCase):
     FORBIDDEN = re.compile(r'(^|/)(\.env($|\.)|secrets\.env$|opencode\.jsonc$|opencode\.db$|.*\.sqlite3?$)', re.I)
 
@@ -264,13 +268,32 @@ class SyncSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             config = home / 'opencode.jsonc'
-            config.write_text('{"mcp":{"servers":{"x":{"type":"local","command":["definitely-not-here-xyz"]}}}}')
-            script = 'source "$1/setup.sh"; verify_opencode_dependencies "$2"'
-            env = {**os.environ, 'HOME': str(home), 'PATH': '/usr/bin:/bin'}
-            result = subprocess.run([BASH, '-euc', script, '_', str(ROOT), str(config)],
-                                    env=env, capture_output=True, text=True, timeout=30)
-            self.assertNotEqual(result.returncode, 0)
+            config.write_text(BASELINE + ',"mcp":{"servers":{"x":{"type":"local","command":["definitely-not-here-xyz"]}}}}')
+            result = subprocess.run(
+                [sys.executable, '-B', str(ROOT / 'opencode/check-config.py'),
+                 str(config), 'server', '--deps'],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, 'PATH': '/usr/bin:/bin'})
+            self.assertEqual(result.returncode, 3)
             self.assertIn('definitely-not-here-xyz', result.stderr)
+            # Without --deps the config is still valid: dependencies are opt-in.
+            ok = subprocess.run(
+                [sys.executable, '-B', str(ROOT / 'opencode/check-config.py'),
+                 str(config), 'server'],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, 'PATH': '/usr/bin:/bin'})
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+
+    def test_mcp_dependency_check_passes_when_the_command_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            config = home / 'opencode.jsonc'
+            config.write_text(BASELINE + ',"mcp":{"servers":{"x":{"type":"local","command":["sh","-c","true"]}}}}')
+            result = subprocess.run(
+                [sys.executable, '-B', str(ROOT / 'opencode/check-config.py'),
+                 str(config), 'server', '--deps'],
+                capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == '__main__':

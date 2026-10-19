@@ -149,12 +149,37 @@ def validate(config, profile, template=False):
         validate_server_baseline(config)
 
 
+def local_mcp_commands(config):
+    """Executable names the configured local MCP servers expect on PATH."""
+    commands = []
+    servers = (config.get('mcp') or {}).get('servers')
+    if not isinstance(servers, dict):
+        return commands
+    for server in servers.values():
+        if not isinstance(server, dict) or server.get('type') != 'local':
+            continue
+        command = server.get('command')
+        if isinstance(command, list) and command and isinstance(command[0], str):
+            commands.append(command[0])
+    return commands
+
+
+def missing_commands(config):
+    import shutil as _shutil
+    return [c for c in local_mcp_commands(config) if _shutil.which(c) is None]
+
+
 if __name__ == '__main__':
-    if len(sys.argv) not in (3, 4) or sys.argv[2] not in ('server', 'workstation'):
-        sys.exit('Usage: check-config.py CONFIG server|workstation [--template]')
-    is_template = len(sys.argv) == 4 and sys.argv[3] == '--template'
+    argv = sys.argv[1:]
+    check_deps = False
+    if '--deps' in argv:
+        check_deps = True
+        argv = [a for a in argv if a != '--deps']
+    if len(argv) not in (2, 3) or argv[1] not in ('server', 'workstation'):
+        sys.exit('Usage: check-config.py CONFIG server|workstation [--template] [--deps]')
+    is_template = len(argv) == 3 and argv[2] == '--template'
     try:
-        parsed = renderer.load_jsonc(Path(sys.argv[1]).read_text())
+        parsed = renderer.load_jsonc(Path(argv[0]).read_text())
     except (OSError, ValueError):
         sys.exit('OpenCode config check failed: invalid JSONC. Content is not echoed because it may hold credentials.')
     for note in legacy_notes(parsed):
@@ -166,8 +191,14 @@ if __name__ == '__main__':
         sys.exit('OpenCode config check failed: the template lists V1-only plugins that cannot run in V2. '
                  'Remove them or replace them with V2 ports.')
     try:
-        validate(parsed, sys.argv[2], template=is_template)
+        validate(parsed, argv[1], template=is_template)
     except ValueError:
         sys.exit('OpenCode config check failed: malformed rules, literal secrets, or a missing '
                  'conservative Server shell/edit policy. Independent config preserved; '
                  'merge opencode/server.jsonc manually.')
+    if check_deps:
+        missing = missing_commands(parsed)
+        if missing:
+            print('MCP servers need commands not on PATH: ' + ' '.join(missing)
+                  + ' (install them or disable those servers)', file=sys.stderr)
+            sys.exit(3)

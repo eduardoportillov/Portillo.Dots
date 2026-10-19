@@ -77,10 +77,13 @@ install_brew_tools() {
   export PATH="$prefix/bin:$prefix/sbin:$PATH"
   local packages=(git curl unzip zip rsync tmux neovim ripgrep fd fzf bat jq htop python)
   [[ "$PROFILE" != workstation ]] || packages+=(lazygit lazydocker zsh tree-sitter zoxide atuin go ffmpeg)
-  local package
+  local package installed
   [[ "$UPGRADE" == false ]] || brew update >>"$LOG" 2>&1
+  # One brew query for the whole set; one invocation per package is the dominant
+  # cost of a large install and returns data we already have in bulk.
+  installed="$(brew list --versions 2>/dev/null || true)"
   for package in "${packages[@]}"; do
-    if ! brew list --versions "$package" >/dev/null 2>&1; then
+    if ! grep -q "^$package " <<<"$installed"; then
       brew install "$package" >>"$LOG" 2>&1
     elif [[ "$UPGRADE" == true ]]; then
       brew upgrade "$package" >>"$LOG" 2>&1
@@ -152,6 +155,7 @@ configure_server_shell() {
 
 verify_configs() {
   local failed=0 pair destination source
+  local _opencode_config=""
   verify_secret_permissions || failed=1
   local checks=("$HOME/.dircolors:$REPO_DIR/zsh/.dircolors")
   if [[ "$PROFILE" == server ]]; then
@@ -174,15 +178,16 @@ verify_configs() {
          record_event failed 'OpenCode global config missing'
          failed=1; }
   if [[ -f "$CONFIG_HOME/opencode/opencode.jsonc" ]]; then
-    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.jsonc" "$PROFILE" \
-      || { record_event failed "OpenCode config check failed ($PROFILE baseline)"; failed=1; }
-    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.jsonc" \
-      || { record_event failed "OpenCode MCP command dependency missing"; failed=1; }
+    _opencode_config="$CONFIG_HOME/opencode/opencode.jsonc"
   elif [[ -f "$CONFIG_HOME/opencode/opencode.json" ]]; then
-    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.json" "$PROFILE" \
-      || { record_event failed "OpenCode config check failed ($PROFILE baseline)"; failed=1; }
-    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.json" \
-      || { record_event failed "OpenCode MCP command dependency missing"; failed=1; }
+    _opencode_config="$CONFIG_HOME/opencode/opencode.json"
+  fi
+  if [[ -n "${_opencode_config:-}" ]]; then
+    # One Python invocation covers shape, Server baseline, secrets and MCP deps.
+    if ! python3 -B "$REPO_DIR/opencode/check-config.py" "$_opencode_config" "$PROFILE" --deps; then
+      record_event failed "OpenCode config check failed ($PROFILE baseline or MCP dependency)"
+      failed=1
+    fi
   fi
   return "$failed"
 }

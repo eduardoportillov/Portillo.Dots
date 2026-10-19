@@ -27,7 +27,11 @@ with open(os.environ['MOCK_CALLS'], 'a') as output:
     output.write(json.dumps([name, *sys.argv[1:]]) + '\\n')
 if name == 'fnm' and sys.argv[1] == 'env': print(':')
 if name == 'uv' and sys.argv[1:] == ['tool', 'list']: print('markitdown v1.0')
-if name == 'brew' and sys.argv[1] == 'list': sys.exit(0 if os.environ['MOCK_INSTALLED'] == 'true' else 1)
+if name == 'brew' and sys.argv[1] == 'list':
+    if os.environ['MOCK_INSTALLED'] == 'true':
+        for app in ('alacritty', 'zed', 'aerospace', 'copyq'):
+            print(app + ' 1.0.0')
+    sys.exit(0 if os.environ['MOCK_INSTALLED'] == 'true' else 1)
 if name == 'sudo': sys.exit(99)
 '''
                 for name in ['fnm', 'node', 'pnpm', 'rustup', 'uv', 'claude', 'brew', 'sudo']:

@@ -80,13 +80,41 @@ version_at_least() {
 
 # Print the reported version of a tool, or fail when it cannot be determined.
 # A directory result (macOS app bundle without CLI) has no parseable version.
+#
+# Some CLIs are slow to report a version (opencode alone costs ~70 ms). Probe
+# once and cache the answer keyed by the executable's mtime+size, so an upgrade
+# invalidates the entry automatically. The cache holds no credentials and is
+# derived data only; read-only modes may populate it.
+TOOL_VERSION_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/portillo-dots/tool-versions.tsv"
+
 tool_version() {
-  local command="$1" executable flag output
+  local command="$1" executable flag output version key cached temporary
   executable="$(tool_executable "$command")" || return 1
   [[ -f "$executable" ]] || return 1
+  key="$command|$executable|$(stat -c '%Y:%s' "$executable" 2>/dev/null \
+    || stat -f '%m:%z' "$executable" 2>/dev/null || echo '?')"
+  if [[ -r "$TOOL_VERSION_CACHE" ]]; then
+    cached="$(awk -F'\t' -v key="$key" '$1 == key { print $2; exit }' "$TOOL_VERSION_CACHE")"
+    if [[ -n "$cached" ]]; then
+      printf '%s\n' "$cached"
+      return 0
+    fi
+  fi
   flag="$(tool_version_flag "$command")"
   output="$("$executable" "$flag" 2>/dev/null | head -n 1)" || return 1
-  extract_version "$output"
+  version="$(extract_version "$output")" || return 1
+  mkdir -p "$(dirname "$TOOL_VERSION_CACHE")" 2>/dev/null || true
+  temporary="${TOOL_VERSION_CACHE}.tmp.$$"
+  if {
+    [[ ! -r "$TOOL_VERSION_CACHE" ]] || awk -F'\t' -v key="$key" '$1 != key' "$TOOL_VERSION_CACHE"
+    printf '%s\t%s\n' "$key" "$version"
+  } > "$temporary" 2>/dev/null; then
+    chmod 0600 "$temporary" 2>/dev/null || true
+    mv -f "$temporary" "$TOOL_VERSION_CACHE" 2>/dev/null || rm -f "$temporary" 2>/dev/null
+  else
+    rm -f "$temporary" 2>/dev/null
+  fi
+  printf '%s\n' "$version"
 }
 
 detect_platform() {

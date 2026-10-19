@@ -45,8 +45,11 @@ install_workstation() {
   command -v rustup >/dev/null 2>&1 || die 'rustup installation did not expose rustup'
   # Zed extension development needs these targets, but only fetch them when
   # missing: re-running setup must not make a network round-trip every time.
-  if ! rustup target list --installed 2>/dev/null | grep -qx wasm32-wasip1 \
-    || ! rustup target list --installed 2>/dev/null | grep -qx wasm32-wasip2; then
+  # One query covers both targets; asking twice would spawn rustup twice.
+  local installed_targets
+  installed_targets="$(rustup target list --installed 2>/dev/null || true)"
+  if ! grep -qx 'wasm32-wasip1' <<<"$installed_targets" \
+    || ! grep -qx 'wasm32-wasip2' <<<"$installed_targets"; then
     rustup target add wasm32-wasip1 wasm32-wasip2 >>"$LOG" 2>&1
   fi
   if ! command -v uv >/dev/null 2>&1; then
@@ -82,8 +85,11 @@ install_workstation() {
     # These casks are user applications, not system packages. Do not require a
     # second authentication just to copy them into a root-owned /Applications.
     mkdir -p "$HOME/Applications"
+    # One brew query for the whole cask set instead of one invocation per app.
+    local installed_casks
+    installed_casks="$(brew list --cask --versions 2>/dev/null || true)"
     for app in alacritty zed aerospace copyq; do
-      if ! brew list --cask "$app" >/dev/null 2>&1; then
+      if ! grep -q "^$app " <<<"$installed_casks"; then
         brew install --cask --appdir="$HOME/Applications" "$app" >>"$LOG" 2>&1
       elif [[ "$UPGRADE" == true ]]; then
         brew upgrade --cask --appdir="$HOME/Applications" "$app" >>"$LOG" 2>&1
