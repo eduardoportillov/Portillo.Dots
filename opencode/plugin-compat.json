@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "OpenCode V2 plugin compatibility, recorded from the npm registry.",
+    "V1 plugin implementations do not run in V2 (see the plugin migration guide).",
+    "checked = date of the registry lookup, latest = version inspected."
+  ],
+  "packages": {
+    "@franlol/opencode-md-table-formatter": {
+      "v2": false,
+      "latest": "0.0.6",
+      "checked": "2026-10-16",
+      "reason": "peer @opencode-ai/plugin >=0.13.7 is the V1 plugin API; V1 implementations do not run in V2"
+    },
+    "opencode-pty": {
+      "v2": false,
+      "latest": "0.4.0",
+      "checked": "2026-10-16",
+      "reason": "depends on @opencode-ai/sdk and @opencode-ai/plugin ^1.x, the V1 API"
+    },
+    "@mohak34/opencode-notifier": {
+      "v2": true,
+      "latest": "1.1.0",
+      "checked": "2026-10-16",
+      "reason": "peer includes @opencode/plugin >=2.0.18 <3, the V2 API"
+    }
+  }
+}
