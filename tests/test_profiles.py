@@ -262,5 +262,79 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
             self.assertNotIn(f'Missing required tool: {omitted_optional}', result.stderr)
 
 
+class CatalogDescriptorTests(unittest.TestCase):
+    """The provisioning descriptors must cover every manifest command.
+
+    Adding a tool is one manifest line plus its descriptor entries; these tests
+    make a half-added tool fail the suite before it can break an installation.
+    """
+
+    METHODS = re.compile(r'^(installer:https://\S+|npm:[A-Za-z0-9@/._-]+'
+                         r'|fnm:[0-9]+|uv-tool:[A-Za-z0-9@/._-]+'
+                         r'|portable:[A-Za-z0-9._-]+)$')
+    UPGRADES = re.compile(r'^(manager|none|self:.+|installer:https://\S+)$')
+    REQUIRES = re.compile(r'^[a-z0-9_-]+(>=[0-9]+(\.[0-9]+)*)?$')
+
+    @staticmethod
+    def call(function, *args):
+        # bash -c puts the first extra argument in $0, so $@ starts at the repo
+        # root: the helpers must be called with the remaining arguments.
+        script = f'source "$1/installer/components.sh"; {function} "${{@:2}}"'
+        result = subprocess.run([BASH, '-euc', script, '_', str(ROOT), *args],
+                                capture_output=True, text=True, check=True)
+        return result.stdout.strip()
+
+    def manifest_tools(self):
+        tools = set()
+        for profile in ('server', 'workstation'):
+            tools.update(name for _, name, _ in components(profile))
+        return tools
+
+    def test_every_tool_has_a_provisioning_path(self):
+        managers = ('apt', 'dnf', 'pacman', 'brew')
+        for name in sorted(self.manifest_tools()):
+            with self.subTest(tool=name):
+                source = self.call('tool_source', name)
+                packaged = [m for m in managers if self.call('tool_packages', name, m)]
+                self.assertTrue(source or packaged,
+                                f'{name} declares neither tool_packages nor tool_source')
+
+    def test_every_tool_declares_an_upgrade_method(self):
+        for name in sorted(self.manifest_tools()):
+            with self.subTest(tool=name):
+                upgrade = self.call('tool_upgrade', name)
+                self.assertRegex(upgrade, self.UPGRADES,
+                                 f'{name} has no usable tool_upgrade entry')
+
+    def test_sources_and_dependencies_use_the_declared_vocabulary(self):
+        for name in sorted(self.manifest_tools()):
+            with self.subTest(tool=name):
+                source = self.call('tool_source', name)
+                if source:
+                    self.assertRegex(source, self.METHODS)
+                for dependency in self.call('tool_requires', name).split():
+                    self.assertRegex(dependency, self.REQUIRES)
+                    self.assertIn(dependency.split('>=')[0], self.manifest_tools(),
+                                  f'{name} requires a tool outside the manifest')
+
+    def test_native_package_names_match_each_distro(self):
+        cases = [('nvim', 'apt', 'neovim'), ('nvim', 'pacman', 'neovim'),
+                 ('rg', 'apt', 'ripgrep'), ('fd', 'apt', 'fd-find'),
+                 ('fd', 'pacman', 'fd'), ('python3', 'apt', 'python3'),
+                 ('python3', 'pacman', 'python'), ('go', 'apt', 'golang-go'),
+                 ('go', 'dnf', 'golang'), ('go', 'pacman', 'go'),
+                 ('ssh', 'apt', 'openssh-client'), ('ssh', 'dnf', 'openssh-clients'),
+                 ('ssh', 'pacman', 'openssh'), ('ssh', 'brew', 'openssh')]
+        for tool, manager, package in cases:
+            with self.subTest(tool=tool, manager=manager):
+                self.assertEqual(self.call('tool_packages', tool, manager), package)
+
+    def test_package_lookup_rejects_unknown_managers(self):
+        result = subprocess.run([BASH, '-euc',
+                                 'source "$1/installer/components.sh"; tool_packages git apt64',
+                                 '_', str(ROOT)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+
+
 if __name__ == '__main__':
     unittest.main()

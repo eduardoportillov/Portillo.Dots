@@ -132,3 +132,104 @@ homebrew_prefix() {
     *)             return 1 ;;
   esac
 }
+
+# Provisioning descriptors: the single source for HOW each tool is obtained and
+# upgraded. Adding a tool is one manifest line plus the entries below; tests
+# enforce that every manifest command declares a provisioning path and an
+# upgrade method, so a half-added tool fails the suite before it can break an
+# installation. Consumers: privileged-core.sh (native packages),
+# workstation.sh/opencode.sh installers (tool_source) and remote.sh (portable
+# and npm provisioning inside the runtime).
+#
+# Methods accepted by tool_source:
+#   installer:<url>   official installer fetched by run_installer
+#   npm:<package>     npm --global --ignore-scripts --prefix ~/.local
+#   fnm:<version>     Node.js through fnm (workstation.sh installs Node 24)
+#   uv-tool:<package> uv tool install (Python CLI tools)
+#   portable:<name>   verified release binary (remote runtime only)
+
+# Native package names per package manager. Prints nothing when the tool is
+# provisioned through tool_source instead. Manager: apt|dnf|pacman|brew.
+tool_packages() {
+  case "$2" in apt|dnf|pacman|brew) ;; *) return 2 ;; esac
+  case "$1" in
+    git|curl|rsync|tmux|fzf|jq|htop|zsh|bat|lazygit|lazydocker|zoxide|atuin)
+      printf '%s\n' "$1" ;;
+    ssh)
+      case "$2" in
+        apt)   printf '%s\n' openssh-client ;;
+        dnf)   printf '%s\n' openssh-clients ;;
+        pacman|brew) printf '%s\n' openssh ;;
+      esac ;;
+    nvim|rg)
+      # Upstream names: neovim, ripgrep. Homebrew uses them too.
+      [[ "$1" == nvim ]] && printf '%s\n' neovim || printf '%s\n' ripgrep ;;
+    python3)
+      case "$2" in
+        pacman|brew) printf '%s\n' python ;;
+        *)           printf '%s\n' python3 ;;
+      esac ;;
+    fd)
+      case "$2" in
+        pacman|brew) printf '%s\n' fd ;;
+        *)           printf '%s\n' fd-find ;;
+      esac ;;
+    go)
+      case "$2" in
+        apt)   printf '%s\n' golang-go ;;
+        dnf)   printf '%s\n' golang ;;
+        pacman|brew) printf '%s\n' go ;;
+      esac ;;
+    alacritty)
+      # macOS ships it as an application bundle, never as a brew formula here.
+      [[ "$2" == brew ]] || printf '%s\n' alacritty ;;
+    node|pnpm|rustup|uv|claude|zed|opencode)
+      : ;;
+    *) return 0 ;;
+  esac
+}
+
+# Non-native provisioning channel, as "method:spec". Empty when the tool is
+# provisioned only as a native package.
+tool_source() {
+  case "$1" in
+    node)     printf '%s\n' 'fnm:24' ;;
+    pnpm)     printf '%s\n' 'npm:pnpm' ;;
+    rustup)   printf '%s\n' 'installer:https://sh.rustup.rs' ;;
+    uv)       printf '%s\n' 'installer:https://astral.sh/uv/install.sh' ;;
+    claude)   printf '%s\n' 'installer:https://claude.ai/install.sh' ;;
+    zed)      printf '%s\n' 'installer:https://zed.dev/install.sh' ;;
+    opencode) printf '%s\n' 'installer:https://opencode.ai/v2/install' ;;
+    *) return 0 ;;
+  esac
+}
+
+# Dependencies on other manifest commands, as "name>=version" or bare "name".
+# Empty when the tool has no managed dependency. version_at_least enforces the
+# declared floor before provisioning.
+tool_requires() {
+  case "$1" in
+    pnpm) printf '%s\n' 'node' ;;
+    *) return 0 ;;
+  esac
+}
+
+# Upgrade channel consumed by --upgrade:
+#   manager            native package manager / Homebrew
+#   self:<command>     the tool's own updater
+#   installer:<url>    re-run the official installer
+#   none               no supported upgrade path
+tool_upgrade() {
+  case "$1" in
+    node)     printf '%s\n' 'none' ;;
+    pnpm)     printf '%s\n' 'self:pnpm self-update' ;;
+    rustup)   printf '%s\n' 'self:rustup update' ;;
+    uv)       printf '%s\n' 'self:uv self update' ;;
+    claude)   printf '%s\n' 'self:claude update' ;;
+    zed)      printf '%s\n' 'installer:https://zed.dev/install.sh' ;;
+    opencode) printf '%s\n' 'installer:https://opencode.ai/v2/install' ;;
+    git|curl|ssh|rsync|tmux|nvim|rg|fd|fzf|bat|jq|htop|python3|zsh|go|alacritty|lazygit|lazydocker|zoxide|atuin)
+      printf '%s\n' 'manager' ;;
+    *) return 0 ;;
+  esac
+}
