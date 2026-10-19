@@ -138,5 +138,21 @@ class RemoteTests(unittest.TestCase):
             self.assertEqual(config.read_text(), 'hostX2=/path[one]\nhost.2=/another\n')
 
 
+class RuntimeToolsetTests(unittest.TestCase):
+    def test_runtime_toolset_comes_from_the_catalog(self):
+        script = 'source "$1/installer/components.sh"; remote_runtime_components'
+        result = subprocess.run(['bash', '-euc', script, '_', str(ROOT)],
+                                capture_output=True, text=True, check=True)
+        required = [line.split()[1] for line in result.stdout.splitlines()
+                    if line.startswith('required ')]
+        self.assertEqual(required, ['nvim', 'rg', 'fd', 'fzf', 'lazygit', 'node', 'npm', 'stylua'])
+        for path in (ROOT / 'remote.sh', ROOT / 'remote/install-binaries.sh'):
+            text = path.read_text()
+            self.assertNotIn('for bin in nvim rg', text)
+            self.assertNotIn('for binary in nvim rg', text)
+            self.assertIn('PORTILLO_RUNTIME_BINS', text,
+                          f'{path.name} must take the toolset from the catalog')
+
+
 if __name__ == '__main__':
     unittest.main()

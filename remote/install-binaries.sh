@@ -336,8 +336,10 @@ main() {
   install_zig_cc
   install_stylua
 
-  local binary
-  for binary in nvim rg fd fzf lazygit node npm stylua; do
+  local binary runtime_bins=()
+  read -r -a runtime_bins <<< "${PORTILLO_RUNTIME_BINS:-}"
+  [[ ${#runtime_bins[@]} -gt 0 ]] || { error 'Runtime toolset not provided by remote.sh'; return 1; }
+  for binary in "${runtime_bins[@]}"; do
     [[ -x "$REMOTE_BIN/$binary" ]] || { error "Required remote binary missing: $binary"; return 1; }
     "$REMOTE_BIN/$binary" --version >/dev/null || { error "Remote binary cannot run: $binary"; return 1; }
   done

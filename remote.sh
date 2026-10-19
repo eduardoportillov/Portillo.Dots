@@ -12,6 +12,19 @@ REMOTE_DIR="$REPO_DIR/remote"
 HOSTS_CONF="$REMOTE_DIR/hosts.conf"
 HOSTS_LOCAL_CONF="$REMOTE_DIR/hosts.local.conf"
 
+# Provisioning catalog: single source for the runtime toolset. The remote
+# scripts run on the host without the repo, so the list travels with each call
+# through PORTILLO_RUNTIME_BINS (same pattern as PORTILLO_EXPECTED_DIRCOLORS_VERSION).
+source "$REPO_DIR/installer/components.sh"
+
+runtime_bins() {
+  local kind name
+  while read -r kind name; do
+    [[ -n "$kind" && "$kind" == required ]] && printf '%s ' "$name"
+  done < <(remote_runtime_components)
+  return 0
+}
+
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
@@ -817,7 +830,7 @@ deploy_binaries() {
   fi
 
   info "Installing binaries on remote host..."
-  cat "$REMOTE_DIR/lib.sh" "$REMOTE_DIR/install-binaries.sh" | ssh_cmd "bash -s"
+  cat "$REMOTE_DIR/lib.sh" "$REMOTE_DIR/install-binaries.sh" | ssh_cmd "PORTILLO_RUNTIME_BINS='$(runtime_bins)' bash -s"
   local rc=$?
 
   if [[ $rc -ne 0 ]]; then
@@ -1172,7 +1185,7 @@ cmd_status() {
     < "$REMOTE_DIR/shell-environment.sh" || rc=1
   echo ""
 
-  ssh_cmd bash -s <<'STATUS_EOF' || rc=1
+  ssh_cmd "PORTILLO_RUNTIME_BINS='$(runtime_bins)' bash -s" <<'STATUS_EOF' || rc=1
 RC=0
 REMOTE_BASE="$HOME/.portillo-remote"
 STATE_DIR="$HOME/.portillo-dots-remote-state"
@@ -1184,7 +1197,8 @@ else
 fi
 
 if [[ -d "$REMOTE_BASE" ]]; then
-  for bin in nvim rg fd fzf lazygit node npm stylua; do
+  read -r -a runtime_bins <<< "${PORTILLO_RUNTIME_BINS:-}"
+  for bin in "${runtime_bins[@]}"; do
     if [[ -x "$REMOTE_BASE/bin/$bin" ]]; then
       echo -e "\033[0;32m✓\033[0m $bin"
     elif command -v "$bin" &>/dev/null; then

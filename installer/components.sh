@@ -237,3 +237,22 @@ tool_upgrade() {
     *) return 0 ;;
   esac
 }
+
+# Remote runtime toolset (remote.sh): portable binaries the transient runtime
+# provides, as "kind name". This is the single source for the install
+# verification and remote.sh status lists; per-tool downloads (URLs, checksums,
+# extraction) stay bespoke in remote.sh. Passed to the remote scripts through
+# PORTILLO_RUNTIME_BINS because they run on the host without the repo.
+remote_runtime_components() {
+  cat <<'EOF'
+required nvim
+required rg
+required fd
+required fzf
+required lazygit
+required node
+required npm
+required stylua
+optional tmux
+EOF
+}
