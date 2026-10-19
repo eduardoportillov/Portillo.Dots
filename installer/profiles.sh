@@ -126,6 +126,7 @@ install_profile() {
   if [[ "$PROFILE" == workstation ]]; then
     install_workstation
   fi
+  install_source_tools "$PROFILE"
   install_opencode
 }
 

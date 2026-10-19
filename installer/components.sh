@@ -43,6 +43,7 @@ required jq - JSON processor
 required htop - Process monitor
 required python3 - Python runtime
 required opencode 2.0 OpenCode V2 agent client
+required pi - Pi agent harness
 EOF
 
   if [[ "$profile" == workstation ]]; then
@@ -183,7 +184,7 @@ tool_packages() {
     alacritty)
       # macOS ships it as an application bundle, never as a brew formula here.
       [[ "$2" == brew ]] || printf '%s\n' alacritty ;;
-    node|pnpm|rustup|uv|claude|zed|opencode)
+    node|pnpm|rustup|uv|claude|zed|opencode|pi)
       : ;;
     *) return 0 ;;
   esac
@@ -200,6 +201,7 @@ tool_source() {
     claude)   printf '%s\n' 'installer:https://claude.ai/install.sh' ;;
     zed)      printf '%s\n' 'installer:https://zed.dev/install.sh' ;;
     opencode) printf '%s\n' 'installer:https://opencode.ai/v2/install' ;;
+    pi)       printf '%s\n' 'npm:@earendil-works/pi-coding-agent' ;;
     *) return 0 ;;
   esac
 }
@@ -210,6 +212,7 @@ tool_source() {
 tool_requires() {
   case "$1" in
     pnpm) printf '%s\n' 'node' ;;
+    pi)   printf '%s\n' 'node>=22.19' ;;
     *) return 0 ;;
   esac
 }
@@ -228,6 +231,7 @@ tool_upgrade() {
     claude)   printf '%s\n' 'self:claude update' ;;
     zed)      printf '%s\n' 'installer:https://zed.dev/install.sh' ;;
     opencode) printf '%s\n' 'installer:https://opencode.ai/v2/install' ;;
+    pi)       printf '%s\n' 'self:pi update' ;;
     git|curl|ssh|rsync|tmux|nvim|rg|fd|fzf|bat|jq|htop|python3|zsh|go|alacritty|lazygit|lazydocker|zoxide|atuin)
       printf '%s\n' 'manager' ;;
     *) return 0 ;;

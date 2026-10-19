@@ -6,33 +6,10 @@ install_workstation() {
     && grep -qF '# npm shim — transparently delegates to pnpm' "$HOME/.local/bin/npm"; then
     backup "$HOME/.local/bin/npm"
   fi
-  if ! command -v fnm >/dev/null 2>&1 && [[ ! -x "$HOME/.local/share/fnm/fnm" ]]; then
-    run_installer fnm https://raw.githubusercontent.com/Schniz/fnm/master/.ci/install.sh --skip-shell
-  fi
-  local fnm_bin
-  fnm_bin="$(command -v fnm || true)"
-  [[ -n "$fnm_bin" ]] || fnm_bin="$HOME/.local/share/fnm/fnm"
-  [[ -x "$fnm_bin" ]] || die 'fnm installation did not provide a binary'
-  eval "$("$fnm_bin" env --shell bash)"
-  if ! command -v node >/dev/null 2>&1; then
-    "$fnm_bin" install 24 >>"$LOG" 2>&1
-    "$fnm_bin" default 24 >>"$LOG" 2>&1
-    "$fnm_bin" use 24 >>"$LOG" 2>&1
-    command -v node >/dev/null 2>&1 || die 'Node.js installation did not expose node'
-  fi
-  if ! command -v pnpm >/dev/null 2>&1; then
-    # A user prefix avoids sudo and leaves Node's own npm semantics untouched.
-    # Resolve npm explicitly: a Node install may not expose it on PATH.
-    local npm_bin
-    npm_bin="$(command -v npm || true)"
-    [[ -n "$npm_bin" ]] || npm_bin="$(dirname "$(command -v node)")/npm"
-    [[ -x "$npm_bin" ]] || die 'npm is required to install pnpm; check the Node.js installation'
-    "$npm_bin" install --global --prefix "$HOME/.local" pnpm >>"$LOG" 2>&1
-    export PATH="$HOME/.local/bin:$PATH"
-    command -v pnpm >/dev/null 2>&1 || die 'pnpm installation did not expose pnpm'
-  elif [[ "$UPGRADE" == true ]]; then
-    pnpm self-update >>"$LOG" 2>&1
-  fi
+  export PATH="$HOME/.local/bin:$PATH"
+  # Node and pnpm come from the provisioning catalog (install_source_tools).
+  # ensure_node_runtime provides the fnm-managed Node their npm channel needs.
+  ensure_node_runtime 24
   if [[ ! -s "$HOME/.sdkman/bin/sdkman-init.sh" ]]; then
     run_installer sdkman https://get.sdkman.io
   fi

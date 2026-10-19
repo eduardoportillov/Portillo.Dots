@@ -148,6 +148,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 detect_platform; initialize_state
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
+                install_source_tools() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -182,6 +183,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 detect_platform; initialize_state
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
+                install_source_tools() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -213,6 +215,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 detect_platform; initialize_state
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
+                install_source_tools() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -260,7 +263,7 @@ class VersionGateTests(unittest.TestCase):
         return {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
                 'tmux': tmux, 'nvim': nvim, 'rg': '14.0.0', 'fd': '9.0.0',
                 'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
-                'python3': '3.12.0', 'opencode': '2.0.28',
+                'python3': '3.12.0', 'opencode': '2.0.28', 'pi': '1.0.0',
                 # Workstation-only manifest entries, so both profiles can verify.
                 'zsh': '5.9', 'node': '22.11.0', 'pnpm': '9.0.0', 'go': '1.23.0',
                 'rustup': '1.27.0', 'uv': '0.5.0', 'claude': '1.0.0', 'zed': '0.150.0',
@@ -297,7 +300,7 @@ class VersionGateTests(unittest.TestCase):
             versions = {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
                         'nvim': '0.11.0', 'rg': '14.0.0', 'fd': '9.0.0',
                         'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
-                        'python3': '3.12.0', 'opencode': '2.0.28'}
+                        'python3': '3.12.0', 'opencode': '2.0.28', 'pi': '1.0.0'}
             self.make_stubs(stubs, versions)
             # tmux exists but prints no parsable version.
             (stubs / 'tmux').write_text('#!/bin/sh\nif [ "$1" = "-V" ]; then echo "custom build"; fi\n')

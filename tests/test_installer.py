@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -151,6 +152,99 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn('sudo tee', shell)
         self.assertNotIn('timestamp_timeout', shell)
         self.assertNotIn('NOPASSWD: ALL" |', shell)
+
+
+class CatalogInstallTests(unittest.TestCase):
+    """install_source_tools owns the npm/uv-tool channels end to end.
+
+    pi is the reference consumer: adding an npm tool to the catalog must
+    install, depend and upgrade without installer changes.
+    """
+
+    COREUTILS = ['awk', 'basename', 'cat', 'chmod', 'cut', 'dirname', 'env', 'grep',
+                 'head', 'id', 'ln', 'mkdir', 'mktemp', 'mv', 'readlink', 'rm',
+                 'sed', 'sort', 'stat', 'touch', 'tr', 'uname', 'wc']
+
+    def harness(self, directory, node='22.19.0', installed_pi=False, upgrade=False):
+        home = Path(directory)
+        stubs = home / 'bin'
+        stubs.mkdir()
+        coreutils = home / 'coreutils'
+        coreutils.mkdir()
+        for name in self.COREUTILS:
+            target = shutil.which(name)
+            if target:
+                (coreutils / name).symlink_to(target)
+        (stubs / 'npm').write_text(
+            '#!/bin/bash\n'
+            'printf \'npm %s\\n\' "$*" >> "$MOCK_CALLS"\n'
+            'mkdir -p "$HOME/.local/bin"\n'
+            'printf \'#!/bin/sh\\necho pi-stub\\n\' > "$HOME/.local/bin/pi"\n'
+            'chmod +x "$HOME/.local/bin/pi"\n')
+        (stubs / 'fnm').write_text(
+            '#!/bin/bash\n'
+            'printf \'fnm %s\\n\' "$*" >> "$MOCK_CALLS"\n'
+            'if [ "$1" = "env" ]; then echo ":"; fi\n'
+            'if [ "$1" = "install" ]; then\n'
+            '  printf \'#!/bin/sh\\nif [ "$1" = "--version" ]; then echo "v24.0.0"; fi\\n\' > "$MOCK_BIN/node"\n'
+            '  chmod +x "$MOCK_BIN/node"\n'
+            'fi\n')
+        if node:
+            (stubs / 'node').write_text(
+                f'#!/bin/sh\nif [ "$1" = "--version" ]; then echo "v{node}"; fi\n')
+        for name in ['npm', 'fnm', 'node']:
+            path = stubs / name
+            if path.exists():
+                path.chmod(0o755)
+        if installed_pi:
+            (home / '.local/bin').mkdir(parents=True)
+            (home / '.local/bin/pi').write_text(
+                '#!/bin/bash\nprintf \'pi %s\\n\' "$*" >> "$MOCK_CALLS"\n')
+            (home / '.local/bin/pi').chmod(0o755)
+        script = ('source "$1/setup.sh"; LOG="$HOME/install.log"; '
+                  f'UPGRADE={"true" if upgrade else "false"}; install_source_tools server')
+        env = {**os.environ, 'HOME': directory,
+               'PATH': f'{home / ".local/bin"}:{stubs}:{coreutils}',
+               'MOCK_CALLS': str(home / 'calls'), 'MOCK_BIN': str(stubs)}
+        result = subprocess.run([shutil.which('bash'), '-euc', script, '_', str(ROOT)],
+                                env=env, capture_output=True, text=True, timeout=30)
+        calls = (home / 'calls').read_text().splitlines() if (home / 'calls').exists() else []
+        return result, calls
+
+    def test_npm_tool_installs_with_ignored_scripts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, calls = self.harness(directory)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('npm install --global --ignore-scripts --prefix '
+                          f'{directory}/.local @earendil-works/pi-coding-agent', calls)
+            self.assertTrue((Path(directory) / '.local/bin/pi').exists())
+
+    def test_missing_node_is_provisioned_through_fnm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, calls = self.harness(directory, node=None)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('fnm install 24', calls)
+            self.assertTrue(any(call.startswith('npm install') for call in calls), calls)
+
+    def test_node_below_the_floor_is_provisioned_through_fnm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, calls = self.harness(directory, node='18.19.0')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('fnm install 24', calls)
+            self.assertTrue(any(call.startswith('npm install') for call in calls), calls)
+
+    def test_upgrade_runs_the_declared_updater_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, calls = self.harness(directory, installed_pi=True, upgrade=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('pi update', calls)
+            self.assertFalse(any(call.startswith('npm install') for call in calls), calls)
+
+    def test_installed_tool_is_left_untouched_without_upgrade(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, calls = self.harness(directory, installed_pi=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(calls, [])
 
 
 if __name__ == '__main__':

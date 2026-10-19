@@ -19,7 +19,7 @@ declaradas arriba:
 
 | Job | ubuntu-latest | macos-latest | Qué cubre |
 |---|---|---|---|
-| `tests` | ✅ | ✅ | 249 pruebas unitarias, de integración y de configuración |
+| `tests` | ✅ | ✅ | 255 pruebas unitarias, de integración y de configuración |
 | `shellcheck` | ✅ | — | lint de todos los `.sh` versionados |
 | `secret-scan` | ✅ | — | contenido versionado + blobs del historial |
 
@@ -105,6 +105,7 @@ documentado, se avisa sin romper.
 |---|---|---|
 | fnm + Node 24 | instalador oficial, prefijo de usuario | — (ya instalado) |
 | pnpm | `npm install -g --prefix ~/.local` | `pnpm self-update` |
+| pi | `npm install -g --ignore-scripts --prefix ~/.local` (requiere Node ≥ 22.19, provisto vía fnm si falta) | `pi update` |
 | SDKMAN | instalador oficial | `sdk selfupdate` (manual) |
 | rustup | instalador oficial, `--no-modify-path` | `rustup update` |
 | Go | paquete nativo o brew | según el gestor |

@@ -31,7 +31,7 @@ class ProfileManifestTests(unittest.TestCase):
                      'lazygit', 'lazydocker', 'zoxide', 'atuin']:
             self.assertNotIn(name, server)
             self.assertIn(name, workstation)
-        for name in ['git', 'tmux', 'nvim', 'rg', 'fd', 'fzf', 'bat', 'opencode', 'python3']:
+        for name in ['git', 'tmux', 'nvim', 'rg', 'fd', 'fzf', 'bat', 'opencode', 'pi', 'python3']:
             self.assertIn(name, server)
             self.assertIn(name, workstation)
 
@@ -334,6 +334,16 @@ class CatalogDescriptorTests(unittest.TestCase):
                                  'source "$1/installer/components.sh"; tool_packages git apt64',
                                  '_', str(ROOT)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
+
+    def test_pi_is_fully_catalog_owned_in_both_profiles(self):
+        # Reference case for adding tools: one manifest line plus descriptors.
+        for profile in ('server', 'workstation'):
+            with self.subTest(profile=profile):
+                self.assertIn('pi', [name for _, name, _ in components(profile)])
+        self.assertEqual(self.call('tool_source', 'pi'),
+                         'npm:@earendil-works/pi-coding-agent')
+        self.assertEqual(self.call('tool_requires', 'pi'), 'node>=22.19')
+        self.assertEqual(self.call('tool_upgrade', 'pi'), 'self:pi update')
 
 
 if __name__ == '__main__':

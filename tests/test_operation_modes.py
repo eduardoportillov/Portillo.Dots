@@ -79,7 +79,7 @@ class OperationModeTests(unittest.TestCase):
                     (coreutils / name).symlink_to(target)
             versions = {'tmux': '3.6b', 'nvim': '0.11.0', 'opencode': '2.0.28'}
             for name in ['curl', 'ssh', 'rsync', 'tmux', 'nvim', 'rg', 'fd',
-                         'fzf', 'bat', 'jq', 'htop', 'python3', 'opencode']:
+                         'fzf', 'bat', 'jq', 'htop', 'python3', 'opencode', 'pi']:
                 path = stubs / name
                 if name in versions:
                     path.write_text(f'#!/bin/sh\necho "{name} {versions[name]}"\n')

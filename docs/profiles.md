@@ -20,17 +20,38 @@
 `show_actions` la muestra y `verify_profile` la comprueba. Añadir una herramienta
 en ese archivo la refleja en ambos lados, así no pueden divergir.
 
-### Server — 14 herramientas requeridas
+### Añadir una herramienta
+
+Una herramienta nueva es **una línea de manifiesto + sus descriptores** en
+`installer/components.sh` (más nada):
+
+```bash
+required pi - Pi agent harness                 # manifiesto (perfil, nombre, mínimo, descripción
+tool_packages pi ...                           # paquete nativo por gestor (vacío si no aplica)
+tool_source    pi npm:@earendil-works/pi-coding-agent   # canal de instalación
+tool_requires  pi node>=22.19                  # dependencias con gate de versión
+tool_upgrade   pi self:pi update               # canal de actualización
+```
+
+Canales que `install_source_tools` posee por completo (instalación y
+actualización automáticas): `npm:` y `uv-tool:`. El canal `installer:` se sirve
+de `run_installer` y las herramientas con lógica propia conservan su wrapper
+(`installer/opencode.sh`, `installer/workstation.sh`); `fnm:` existe para
+proveer Node a las dependencias. Los tests del catálogo exigen que cada
+herramienta declare ruta de aprovisionamiento y método de actualización, así
+que una herramienta añadida a medias rompe la suite antes que una instalación.
+
+### Server — 15 herramientas requeridas
 
 ```text
-git curl ssh rsync tmux nvim rg fd fzf bat jq htop python3 opencode
+git curl ssh rsync tmux nvim rg fd fzf bat jq htop python3 opencode pi
 ```
 
 Sin escritorio, sin toolchains de desarrollo y sin instaladores de apps gráficas.
 
-### Workstation — 22 requeridas + 4 opcionales
+### Workstation — 23 requeridas + 4 opcionales
 
-Requeridas (las 14 anteriores, más):
+Requeridas (las 15 anteriores, más):
 
 ```text
 zsh node pnpm go rustup uv claude zed
