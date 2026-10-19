@@ -62,6 +62,30 @@ tmux. Como los scripts de instalación corren en el host remoto sin el repo, la
 lista viaja con la llamada en `PORTILLO_RUNTIME_BINS` y el perfil en
 `PORTILLO_RUNTIME_PROFILE`.
 
+## Coexistencia con `setup.sh`
+
+Un host puede tener el perfil `server` instalado (`setup.sh --profile server`) y
+recibir además un runtime `remote.sh`. No se rompe nada ni se pierde nada:
+
+- **`~/.tmux.conf` es solo de `setup.sh`**: un test prohíbe a `remote.sh`
+  escribirlo. Las sesiones remote usan el servidor dedicado `tmux -L
+  portillo-dots` con la **misma base compartida** (`shared/tmux/base.conf`).
+- **Bloques de shell con marcadores distintos** (`Portillo.Dots Remote Server`
+  frente a `Portillo.Dots ls colors`): conviven y ninguno pisa al otro.
+- **`~/.dircolors` lo gestionan ambos temporalmente**: `remote.sh` lo respalda y
+  `teardown` lo restaura (ida y vuelta sin pérdida; el contenido de colores es
+  el mismo `zsh/.dircolors`).
+- **Mientras un runtime esté desplegado manda su experiencia**: su bloque
+  antepone sus binarios al PATH y exporta `NVIM_APPNAME`, así que `nvim` usa la
+  config del runtime. Con `--like server` esa config **es la misma base
+  compartida** que la instalada (sesión indistinguible); con `--like
+  workstation` es LazyVim, el entorno de desarrollo remoto.
+- `setup.sh --check` avisa si `~/.dircolors` lo está gestionando un runtime:
+  la verificación describe el estado real, no un fallo.
+
+Práctica recomendada en hosts ya instalados: `remote.sh connect HOST --like
+server`, y `remote.sh teardown HOST -f` para volver al estado instalado puro.
+
 ## Ciclo de vida del runtime
 
 ```text
