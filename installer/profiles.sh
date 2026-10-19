@@ -132,6 +132,8 @@ configure_profile() {
     configure_workstation
   fi
   configure_opencode
+  # Tighten credential files last: generation must have happened first.
+  secure_known_secrets || warn 'Some credential paths could not be restricted'
 }
 
 configure_server_shell() {
@@ -150,6 +152,7 @@ configure_server_shell() {
 
 verify_configs() {
   local failed=0 pair destination source
+  verify_secret_permissions || failed=1
   local checks=("$HOME/.dircolors:$REPO_DIR/zsh/.dircolors")
   if [[ "$PROFILE" == server ]]; then
     checks+=("$HOME/.tmux.conf:$REPO_DIR/server/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/server/nvim/init.lua")

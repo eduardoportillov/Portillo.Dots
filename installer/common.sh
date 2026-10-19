@@ -98,6 +98,74 @@ backup() {
   info "Backup: $destination"
 }
 
+# Restrict a credential-bearing file to the owner. Only the mode is changed, only
+# ever tightened, and never through a symlink or on a file we do not own.
+secure_file() {
+  local path="$1" mode="${2:-0600}" current
+  [[ -e "$path" && ! -L "$path" && -O "$path" ]] || return 0
+  current="$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null || echo '')"
+  [[ "$current" =~ ^[0-7]{3,4}$ ]] || return 0
+  # Already private to the owner: nothing to tighten.
+  (( (8#$current & 0077) == 0 )) && return 0
+  chmod "$mode" "$path" || { warn "Could not restrict $path (still mode $current)"; return 1; }
+  info "Restricted $path: $current -> $mode"
+}
+
+secure_dir() {
+  local path="$1" current
+  [[ -d "$path" && ! -L "$path" && -O "$path" ]] || return 0
+  current="$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null || echo '')"
+  [[ "$current" =~ ^[0-7]{3,4}$ ]] || return 0
+  (( (8#$current & 0077) == 0 )) && return 0
+  chmod 0700 "$path" || { warn "Could not restrict directory $path"; return 1; }
+  info "Restricted $path: $current -> 0700"
+}
+
+# Known credential locations: repo sources, generated config and the log.
+# Anything we cannot verify is reported, never silently ignored.
+known_secret_paths() {
+  printf '%s\n' \
+    "$REPO_DIR/opencode/.env" \
+    "$REPO_DIR/opencode/opencode.jsonc" \
+    "$REPO_DIR/logs" \
+    "${XDG_STATE_HOME:-$HOME/.local/state}/portillo-dots" \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/secrets.env"
+}
+
+secure_known_secrets() {
+  local path failed=0
+  while read -r path; do
+    [[ -n "$path" ]] || continue
+    if [[ -L "$path" ]]; then
+      warn "Credential path is a symlink, refusing to touch it: $path"
+      failed=1
+      continue
+    fi
+    if [[ -d "$path" ]]; then
+      secure_dir "$path" || failed=1
+    else
+      secure_file "$path" || failed=1
+    fi
+  done < <(known_secret_paths)
+  return "$failed"
+}
+
+# Report credential paths that are still group/world accessible. This is a check,
+# not a mutation: --check must never change the system.
+verify_secret_permissions() {
+  local path failed=0 current
+  while read -r path; do
+    [[ -n "$path" && -e "$path" && ! -L "$path" ]] || continue
+    current="$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null || echo '')"
+    [[ "$current" =~ ^[0-7]{3,4}$ ]] || continue
+    if (( (8#$current & 0077) != 0 )); then
+      warn "Credential path is group/world accessible ($current): $path"
+      failed=1
+    fi
+  done < <(known_secret_paths)
+  return "$failed"
+}
+
 symlink_file() {
   local source="$1" destination="$2"
   [[ -e "$source" ]] || die "Missing config: $source"
