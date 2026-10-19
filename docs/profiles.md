@@ -9,6 +9,28 @@
 | Comando | `bash setup.sh --profile workstation` | `bash setup.sh --profile server` |
 | Objetivo | Entorno completo de desarrollo | Administración y trabajo por SSH |
 
+## La base compartida: todo host se siente como el mismo host
+
+`shared/` es el baseline que todos los contextos consumen, para que una
+workstation, un server instalado y un runtime `remote.sh` sean indistinguibles
+en el uso diario:
+
+| Base | Contenido | Consumidores |
+|---|---|---|
+| `shared/shell/common.sh` | Aliases, `memtop`, `EDITOR/VISUAL`, colores Kanagawa, PATH del usuario, fnm bajo demanda, **PS1 Kanagawa** | `zsh/.zshrc`, `server/shell.sh`, `remote/generate-rc.sh` |
+| `shared/tmux/base.conf` | Prefix `C-a`, splits, índices, copy-mode con backends de clipboard, popup scratch, status Kanagawa | `tmux/tmux.conf` (+ plugins), `server/tmux.conf`, generación del tmux remoto |
+| `shared/nvim/base.lua` | Opciones, leader, keymaps base, OSC 52 copy-only sobre SSH | `server/nvim/init.lua`, `nvim/lua/config/options.lua` (LazyVim encima), runtime `--like server` |
+
+Lo que cambia entre contextos es **solo el overlay**: la pila de plugins de tmux
+y LazyVim en workstation, y nada en server. El prompt y el status de tmux
+comparten la paleta Kanagawa Dragon (`#8ba4b0`, `#c5c9c5`); workstation conserva
+Powerlevel10k, que se monta encima del prompt compartido. `setup.sh` despliega
+las bases en `~/.config/portillo-dots/` (`shell-common.sh`, `tmux-base.conf`,
+`nvim-base.lua`) y `remote.sh` lleva el mismo árbol dentro del runtime.
+
+Los contextos **no** pueden redefinir la superficie compartida: un test lo
+vigila (`SharedBaselineTests`).
+
 ## Fuente única de componentes
 
 `installer/components.sh` declara las herramientas de cada perfil con el formato

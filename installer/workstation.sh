@@ -13,12 +13,12 @@ install_workstation() {
   if [[ ! -s "$HOME/.sdkman/bin/sdkman-init.sh" ]]; then
     run_installer sdkman https://get.sdkman.io
   fi
+  export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
   if ! command -v rustup >/dev/null 2>&1 && [[ ! -x "$HOME/.cargo/bin/rustup" ]]; then
     run_installer rustup https://sh.rustup.rs -y --no-modify-path
   elif [[ "$UPGRADE" == true ]]; then
-    "$(command -v rustup || printf '%s' "$HOME/.cargo/bin/rustup")" update >>"$LOG" 2>&1
+    apply_tool_upgrade rustup
   fi
-  export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
   command -v rustup >/dev/null 2>&1 || die 'rustup installation did not expose rustup'
   # Zed extension development needs these targets, but only fetch them when
   # missing: re-running setup must not make a network round-trip every time.
@@ -32,7 +32,7 @@ install_workstation() {
   if ! command -v uv >/dev/null 2>&1; then
     run_installer uv https://astral.sh/uv/install.sh
   elif [[ "$UPGRADE" == true ]]; then
-    uv self update >>"$LOG" 2>&1
+    apply_tool_upgrade uv
   fi
   if ! uv tool list | grep -q '^markitdown'; then
     uv tool install 'markitdown[all]' >>"$LOG" 2>&1
@@ -55,7 +55,7 @@ install_workstation() {
   if ! command -v claude >/dev/null 2>&1; then
     run_installer claude https://claude.ai/install.sh
   elif [[ "$UPGRADE" == true ]]; then
-    claude update >>"$LOG" 2>&1
+    apply_tool_upgrade claude
   fi
   if [[ "$PLATFORM" == mac ]]; then
     local app

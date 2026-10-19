@@ -1,8 +1,11 @@
 # tmux
 
 Configuración de tmux de estos dotfiles. El archivo principal es [`tmux.conf`](./tmux.conf),
-que se enlaza a `~/.tmux.conf` (lo hace `setup.sh`). Los plugins se gestionan con **TPM** y se
-instalan en `~/.tmux/plugins/` (no se versionan; quedan declarados por las líneas `@plugin`).
+que se enlaza a `~/.tmux.conf` (lo hace `setup.sh`). La base común (prefix, splits,
+keymaps, status) vive en `shared/tmux/base.conf` y se despliega como
+`~/.config/portillo-dots/tmux-base.conf`; `tmux.conf` la carga con `source-file`
+y encima añade los plugins, que se gestionan con **TPM** y se instalan en
+`~/.tmux/plugins/` (no se versionan; quedan declarados por las líneas `@plugin`).
 
 > **Prefix:** `Ctrl-a` (reemplaza al `Ctrl-b` por defecto).
 
@@ -24,7 +27,7 @@ instalan en `~/.tmux/plugins/` (no se versionan; quedan declarados por las líne
 
 ---
 
-## Atajos propios (definidos en `tmux.conf`, no de plugins)
+## Atajos propios (definidos en `shared/tmux/base.conf`, no de plugins)
 
 | Acción | Tecla |
 |--------|-------|

@@ -356,12 +356,31 @@ ensure_requirement() {
     || die "$name $have does not satisfy the required >=$floor"
 }
 
+# Apply the upgrade channel declared in the catalog for a tool. self: runs the
+# tool's own updater; installer: re-runs the official installer. Always as the
+# invoking user, and a failed upgrade warns instead of aborting the rest.
+apply_tool_upgrade() {
+  local name="$1" upgrade_spec
+  upgrade_spec="$(tool_upgrade "$name")" || upgrade_spec=''
+  case "$upgrade_spec" in
+    self:*)
+      local updater=()
+      read -r -a updater <<< "${upgrade_spec#self:}"
+      "${updater[@]}" >>"$LOG" 2>&1 || warn "$name upgrade failed; see $LOG" ;;
+    installer:*)
+      provision_source "$name" "$upgrade_spec" ;;
+    none|'')
+      : ;;
+    manager)
+      warn "$name upgrades through the native package manager" ;;
+  esac
+}
+
 # Provision the npm/uv-tool tools of a profile manifest. These channels are
 # fully catalog-owned: a tool added with a tool_source entry installs here with
 # no installer changes, and --upgrade applies its tool_upgrade command.
 install_source_tools() {
-  local profile="$1" kind name source method upgrade_spec dependency
-  local updater=()
+  local profile="$1" kind name source method dependency
   while read -r kind name _; do
     [[ -n "$kind" ]] || continue
     source="$(tool_source "$name")" || source=''
@@ -376,13 +395,7 @@ install_source_tools() {
       tool_executable "$name" >/dev/null || die "$name installation did not expose the executable"
       record_event installed "$name"
     elif [[ "$UPGRADE" == true ]]; then
-      upgrade_spec="$(tool_upgrade "$name")" || upgrade_spec=''
-      case "$upgrade_spec" in
-        self:*)
-          # The declared updater runs as the invoking user.
-          read -r -a updater <<< "${upgrade_spec#self:}"
-          "${updater[@]}" >>"$LOG" 2>&1 || warn "$name upgrade failed; see $LOG" ;;
-      esac
+      apply_tool_upgrade "$name"
     fi
   done < <(profile_components "$profile" linux)
 }

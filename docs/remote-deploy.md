@@ -34,10 +34,16 @@ modela el servidor. No hay red ni servidor real.
 
 `remote/deploy-manifest.py` emite una lista NUL-delimitada de archivos
 **versionados y sin secretos**. `rsync --from0 --files-from` transmite solo esos.
+El argumento de perfil selecciona la carga:
 
-Incluye: `nvim/init.lua`, `nvim/lua/**/*.lua`, `nvim/lazy-lock.json`,
-`nvim/lazyvim.json`, `nvim/stylua.toml`, `nvim/.neoconf.json`, `zsh/.dircolors`,
-`.markdownlint.jsonc` y `server/tmux.conf`.
+| Perfil (`--like`) | Contenido |
+|---|---|
+| `workstation` (por defecto) | La base compartida + el árbol LazyVim (`nvim/init.lua`, `nvim/lua/**/*.lua`, `nvim/lazy-lock.json`, `nvim/lazyvim.json`, `nvim/stylua.toml`, `nvim/.neoconf.json`) |
+| `server` | Solo la base compartida: `shared/shell/common.sh`, `shared/tmux/base.conf`, `shared/nvim/base.lua` |
+
+Ambos perfiles incluyen además `zsh/.dircolors` y `.markdownlint.jsonc`. La base
+compartida es la misma que `setup.sh` despliega en `~/.config/portillo-dots/`,
+de modo que un runtime remoto se siente idéntico a un host instalado.
 
 Excluye siempre: `opencode/`, `.env`, `secrets.env`, `nvim/db_ui/connections.lua`,
 `.claude/`, logs, backups y cualquier archivo no versionado. El manifiesto falla si
@@ -45,6 +51,16 @@ un archivo permitido no existe o es un symlink.
 
 Los binarios se transfieren con `rsync --include` explícito por nombre de artefacto
 — nunca un directorio completo de caché.
+
+## Toolset del runtime
+
+El conjunto de binarios portátiles lo declara `remote_runtime_components` en
+`installer/components.sh` (una sola fuente, compartida con `remote.sh status`):
+el runtime `workstation` lleva la toolchain de LazyVim (nvim, rg, fd, fzf,
+lazygit, node/npm, stylua, tmux); el runtime `server` solo nvim, rg, fd, fzf y
+tmux. Como los scripts de instalación corren en el host remoto sin el repo, la
+lista viaja con la llamada en `PORTILLO_RUNTIME_BINS` y el perfil en
+`PORTILLO_RUNTIME_PROFILE`.
 
 ## Ciclo de vida del runtime
 
@@ -106,6 +122,8 @@ python3 -B -m unittest discover -s tests -p 'test_remote.py' -v
 - Los nombres de archivo permitidos se contrastan con `git ls-files`; un archivo
   renombrado en el repo requiere actualizar `deploy-manifest.py` o las pruebas
   fallarán, que es el comportamiento deseado.
-- `install-binaries.sh` sigue instalando LazyVim/TPM para el caso de "desarrollo
-  remoto"; no es el perfil `server` de `setup.sh`, que es más ligero. Son dos
-  flujos distintos y no deben confundirse.
+- `remote.sh --like server` replica la experiencia del perfil server de
+  `setup.sh` (base compartida, sin LazyVim ni toolchains), pero no instala los
+  paquetes nativos del perfil ni sus herramientas de catálogo (`opencode`,
+  `pi`): son dos mecanismos distintos — runtime transitorio sin sudo frente a
+  instalación de sistema — y no deben confundirse.

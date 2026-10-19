@@ -322,7 +322,7 @@ This recreates all symlinks to point to the new location without reinstalling pa
 - **Prompt**: Configure `zsh/p10k.zsh` with `p10k configure` or edit directly
 - **Editor**: Add/modify plugins in `nvim/lua/plugins/` (LazyVim spec format)
 - **Terminal**: Adjust colors, fonts, opacity in `alacritty/alacritty.toml`
-- **Multiplexer**: Edit `tmux/tmux.conf` for bindings, plugins, theme
+- **Multiplexer**: Edit `shared/tmux/base.conf` for bindings, terminal and status; `tmux/tmux.conf` for plugins and theme
 
 ## Alternativa: Starship
 
