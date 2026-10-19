@@ -82,4 +82,4 @@ class LuaConfigTests(unittest.TestCase):
                     else
                       assert(vim.g.clipboard == nil)
                     end
-                ''', ROOT / 'server/nvim/init.lua', str(available).lower())
+                ''', ROOT / 'shared/nvim/base.lua', str(available).lower())

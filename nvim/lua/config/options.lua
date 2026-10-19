@@ -2,6 +2,20 @@
 -- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
 -- Add any additional options here
 
+-- Shared baseline (options, leader, core keymaps, SSH clipboard): identical on
+-- every host, deployed by setup.sh or by the remote runtime. LazyVim layers on
+-- top of it. The dynamic clipboard below then replaces the baseline's copy
+-- behaviour with its desktop-aware superset.
+for _, candidate in ipairs({
+  vim.fn.expand("~/.config/portillo-dots/nvim-base.lua"),
+  vim.fn.expand("~/.portillo-remote/shared/nvim/base.lua"),
+}) do
+  if vim.fn.filereadable(candidate) == 1 then
+    dofile(candidate)
+    break
+  end
+end
+
 -- Format on save. Edit this option here if you want to disable it later.
 -- LazyVim uses this global option to call conform.nvim automatically.
 vim.g.autoformat = true

@@ -38,7 +38,7 @@ class ShellHelperTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('tmux'), 'tmux is needed to check its copy bindings')
     def test_tmux_clipboard_backend_selection_without_touching_real_clipboard(self):
-        text = (ROOT / 'tmux/tmux.conf').read_text()
+        text = (ROOT / 'shared/tmux/base.conf').read_text()
         block = text.split('# Modo vim\n', 1)[1].split('\n# Keymaps', 1)[0]
         cases = [('Darwin', '', '', 'pbcopy'), ('Linux', ':0', '', 'xclip'),
                  ('Linux', ':0', 'wayland-test', 'wl-copy'), ('Linux', '', '', 'copy-selection-and-cancel')]
@@ -99,7 +99,28 @@ class SharedBaselineTests(unittest.TestCase):
 
     def test_shared_prompt_matches_the_tmux_status_palette(self):
         shared = (ROOT / 'shared/shell/common.sh').read_text()
-        tmux = (ROOT / 'server/tmux.conf').read_text()
+        tmux = (ROOT / 'shared/tmux/base.conf').read_text()
         for color in ('8ba4b0', 'c5c9c5'):
             self.assertIn(color, shared, 'the shared prompt must use the Kanagawa palette')
             self.assertIn(color, tmux, 'tmux status must use the same Kanagawa palette')
+
+
+class SharedConfigBaselineTests(unittest.TestCase):
+    """tmux and Neovim behave the same because both consume the shared base."""
+
+    def test_both_tmux_configs_source_the_shared_baseline(self):
+        for name in ('tmux/tmux.conf', 'server/tmux.conf'):
+            with self.subTest(config=name):
+                text = (ROOT / name).read_text()
+                self.assertIn('source-file ~/.config/portillo-dots/tmux-base.conf', text)
+
+    def test_shared_tmux_baseline_is_plugin_free(self):
+        base = (ROOT / 'shared/tmux/base.conf').read_text()
+        self.assertNotIn('@plugin', base, 'the baseline must not carry plugin stack')
+        self.assertNotIn('tpm', base.lower(), 'the baseline must not boot a plugin manager')
+
+    def test_both_nvim_consumers_load_the_shared_baseline(self):
+        server = (ROOT / 'server/nvim/init.lua').read_text()
+        self.assertIn('nvim-base.lua', server, 'the server profile layers nothing on the base')
+        workstation = (ROOT / 'nvim/lua/config/options.lua').read_text()
+        self.assertIn('nvim-base.lua', workstation, 'LazyVim must layer on the same base')

@@ -103,7 +103,7 @@ class DeployLifecycleTests(unittest.TestCase):
             self.deploy(remote)
             runtime = remote.runtime()
             self.assertTrue((runtime / 'zsh/.dircolors').is_file())
-            self.assertTrue((runtime / 'server/tmux.conf').is_file())
+            self.assertTrue((runtime / 'shared/tmux/base.conf').is_file())
             self.assertTrue((runtime / 'nvim/init.lua').is_file())
             self.assertFalse((remote.home / '.tmux.conf').exists(),
                              'remote deploy must not own the host tmux config')
@@ -433,7 +433,7 @@ class RedeployTests(unittest.TestCase):
             self.assertFalse(any(remote.home.glob('.portillo-remote-stage-*')))
             self.assertFalse(any(remote.home.glob('.portillo-remote-old-*')),
                              'a successful redeploy must not leave rollback dirs')
-            self.assertTrue((runtime / 'server/tmux.conf').is_file())
+            self.assertTrue((runtime / 'shared/tmux/base.conf').is_file())
 
 
 class TmuxIsolationTests(unittest.TestCase):

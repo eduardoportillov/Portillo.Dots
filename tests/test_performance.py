@@ -195,7 +195,9 @@ class SinglePassVerificationTests(unittest.TestCase):
                 '{"permissions":[{"action":"shell","resource":"*","effect":"ask"},'
                 '{"action":"edit","resource":"*","effect":"ask"}]}\n')
             for name, source in [('.dircolors', 'zsh/.dircolors'), ('.tmux.conf', 'server/tmux.conf'),
-                                 ('.config/portillo-dots/shell-common.sh', 'shared/shell/common.sh')]:
+                                 ('.config/portillo-dots/shell-common.sh', 'shared/shell/common.sh'),
+                                 ('.config/portillo-dots/tmux-base.conf', 'shared/tmux/base.conf'),
+                                 ('.config/portillo-dots/nvim-base.lua', 'shared/nvim/base.lua')]:
                 link = home / name
                 link.parent.mkdir(parents=True, exist_ok=True)
                 link.symlink_to(ROOT / source)
