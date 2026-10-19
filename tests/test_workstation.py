@@ -53,13 +53,31 @@ if name == 'sudo': sys.exit(99)
                     self.assertIn(['rustup', 'update'], calls)
 
     def test_neovim_version_gate(self):
-        for version, accepted in [('NVIM v0.10.4', False), ('NVIM v0.11.0', True),
-                                  ('NVIM v0.12.0-dev', True), ('NVIM v1.0.0', True), ('unexpected', False)]:
-            with self.subTest(version=version):
-                script = 'source "$1/setup.sh"; nvim() { printf "%s\\n" "$MOCK_VERSION"; }; check_workstation_neovim'
-                result = subprocess.run(['bash', '-euc', script, '_', str(ROOT)],
-                                        env={**os.environ, 'MOCK_VERSION': version}, capture_output=True, text=True)
+        cases = [('0.10.4', '0.11.0', False), ('0.11.0', '0.11.0', True),
+                 ('0.12.0', '0.11.0', True), ('1.0.0', '0.11.0', True),
+                 ('0.11.0', '0.12.0', False), ('3.6.0', '3.3.0', True),
+                 ('2.0.28', '2.0.0', True), ('24.19.0', '20.0.0', True)]
+        for have, want, accepted in cases:
+            with self.subTest(have=have, want=want):
+                script = ('source "$1/installer/components.sh"; source "$1/installer/common.sh"; '
+                          'version_at_least "$2" "$3"')
+                result = subprocess.run(['bash', '-euc', script, '_', str(ROOT), have, want],
+                                        capture_output=True, text=True)
                 self.assertEqual(result.returncode == 0, accepted, result.stderr)
+
+    def test_version_extraction_normalises_vendor_suffixes(self):
+        for text, expected in [('NVIM v0.11.0', '0.11.0'), ('tmux 3.6b', '3.6.0'),
+                               ('opencode v2.0.28', '2.0.28'), ('v24.19.0', '24.19.0'),
+                               ('alacritty 0.16.1', '0.16.1'), ('not a version', None)]:
+            with self.subTest(text=text):
+                script = 'source "$1/installer/common.sh"; extract_version "$2"'
+                result = subprocess.run(['bash', '-euc', script, '_', str(ROOT), text],
+                                        capture_output=True, text=True)
+                if expected is None:
+                    self.assertNotEqual(result.returncode, 0)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), expected)
 
     def test_linux_diagnostics_are_not_installed_on_macos(self):
         for platform in ['linux', 'mac']:

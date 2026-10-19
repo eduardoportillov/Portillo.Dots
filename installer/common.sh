@@ -6,6 +6,44 @@ info() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*" >&2; }
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
+# Extract a canonical X.Y.Z from arbitrary version text ("tmux 3.6b" -> 3.6.0).
+extract_version() {
+  local text="$1"
+  if [[ "$text" =~ ([0-9]+)\.([0-9]+)([.]([0-9]+))? ]]; then
+    printf '%s.%s.%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[4]:-0}"
+    return 0
+  fi
+  return 1
+}
+
+# Pure-bash comparison so it works on BSD/macOS where `sort -V` is unavailable.
+version_at_least() {
+  local have="$1" want="$2" i have_part want_part
+  local have_parts=() want_parts=()
+  IFS='.' read -r -a have_parts <<< "$have"
+  IFS='.' read -r -a want_parts <<< "$want"
+  for (( i = 0; i < 3; i++ )); do
+    have_part="${have_parts[i]:-0}"
+    want_part="${want_parts[i]:-0}"
+    [[ "$have_part" =~ ^[0-9]+$ ]] || have_part=0
+    [[ "$want_part" =~ ^[0-9]+$ ]] || want_part=0
+    if (( 10#$have_part > 10#$want_part )); then return 0; fi
+    if (( 10#$have_part < 10#$want_part )); then return 1; fi
+  done
+  return 0
+}
+
+# Print the reported version of a tool, or fail when it cannot be determined.
+# A directory result (macOS app bundle without CLI) has no parseable version.
+tool_version() {
+  local command="$1" executable flag output
+  executable="$(tool_executable "$command")" || return 1
+  [[ -f "$executable" ]] || return 1
+  flag="$(tool_version_flag "$command")"
+  output="$("$executable" "$flag" 2>/dev/null | head -n 1)" || return 1
+  extract_version "$output"
+}
+
 detect_platform() {
   case "$(uname -s)" in
     Linux) PLATFORM=linux ;;
@@ -93,19 +131,34 @@ sync_git_dependency() {
   fi
 }
 
+# Root is only needed for Linux system packages, hardware tuning and a login
+# shell change. macOS installs packages through user-level Homebrew, so a normal
+# macOS install must not prompt for a password at all.
+needs_privileged_phase() {
+  [[ "$HARDWARE" == true || "$CHANGE_SHELL" == true ]] && return 0
+  [[ "$PLATFORM" == linux && "$CONFIG_ONLY" == false ]]
+}
+
 preflight() {
   if [[ "$CONFIG_ONLY" == true ]]; then
     # No privileged phase is used; Python is needed only for OpenCode config.
     command -v python3 >/dev/null 2>&1 || die 'Install python3 before --config-only'
     return 0
   fi
-  command -v sudo >/dev/null 2>&1 || die 'sudo is required for the single system phase'
+  if needs_privileged_phase; then
+    command -v sudo >/dev/null 2>&1 || die 'sudo is required for the single system phase'
+  fi
   if [[ "$PLATFORM" == linux && "$PACKAGE_MANAGER" == brew ]]; then
     command -v brew >/dev/null 2>&1 || die 'Install Homebrew first, or use --package-manager native'
   fi
   if [[ "$PLATFORM" == linux ]]; then
     command -v apt-get >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1 || command -v pacman >/dev/null 2>&1 \
       || die 'Supported native package managers: apt, dnf, pacman'
+  fi
+  if [[ "$PLATFORM" == mac ]]; then
+    # Homebrew and most toolchains compile against the Apple Command Line Tools.
+    command -v xcode-select >/dev/null 2>&1 && xcode-select -p >/dev/null 2>&1 \
+      || die 'Apple Command Line Tools are required on macOS: xcode-select --install'
   fi
   if [[ "$OPENCODE_TEMPLATE" == true ]]; then
     [[ -f "$REPO_DIR/opencode/.env" ]] || die 'Create opencode/.env before using --opencode-template'

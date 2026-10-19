@@ -2,15 +2,19 @@
 
 # Print the exact tool manifest of the active profile as two aligned lists.
 show_components() {
-  local kind name description
-  local required=() optional=()
-  while read -r kind name description; do
+  local kind name minimum description
+  local required=() optional=() gated=()
+  while read -r kind name minimum description; do
     [[ -n "$kind" ]] || continue
     if [[ "$kind" == required ]]; then required+=("$name"); else optional+=("$name"); fi
+    [[ "$minimum" == - ]] || gated+=("$name>=$minimum")
   done < <(profile_components "$PROFILE" "$PLATFORM")
   info "Required tools (${#required[@]}): ${required[*]}"
   if [[ ${#optional[@]} -gt 0 ]]; then
     info "Optional tools (${#optional[@]}, absence is not fatal): ${optional[*]}"
+  fi
+  if [[ ${#gated[@]} -gt 0 ]]; then
+    info "Declared minimum versions (${#gated[@]}): ${gated[*]}"
   fi
 }
 
@@ -58,15 +62,19 @@ privileged_phase() {
 }
 
 install_brew_tools() {
+  local prefix
+  prefix="$(homebrew_prefix "$PLATFORM" "$ARCH")" || die "No documented Homebrew prefix for $PLATFORM/$ARCH"
   if [[ "$PLATFORM" == mac ]] && ! command -v brew >/dev/null 2>&1; then
-    local prefix
-    if [[ "$ARCH" == aarch64 ]]; then prefix=/opt/homebrew; else prefix=/usr/local/Homebrew; fi
-    [[ -d "$prefix" && -w "$prefix" && ! -L "$prefix" && -z "$(ls -A "$prefix")" ]] \
-      || die "Homebrew prefix is not an empty writable directory: $prefix"
-    git clone https://github.com/Homebrew/brew.git "$prefix" >>"$LOG" 2>&1
-    export PATH="$prefix/bin:$PATH"
-    eval "$("$prefix/bin/brew" shellenv)"
+    # Homebrew must be pre-installed with its official installer. Bootstrapping
+    # by cloning would land in a prefix we cannot verify on an untested platform,
+    # and macOS Intel requires /usr/local, which is never empty enough to clone.
+    die "Homebrew is required on macOS. Install it first, then re-run setup:
+         /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
   fi
+  if [[ "$PLATFORM" == mac ]] && [[ "$(brew --prefix 2>/dev/null)" != "$prefix" ]]; then
+    warn "Homebrew reports prefix '$(brew --prefix 2>/dev/null)' but the documented prefix is '$prefix'"
+  fi
+  export PATH="$prefix/bin:$prefix/sbin:$PATH"
   local packages=(git curl unzip zip rsync tmux neovim ripgrep fd fzf bat jq htop python)
   [[ "$PROFILE" != workstation ]] || packages+=(lazygit lazydocker zsh tree-sitter zoxide atuin go ffmpeg)
   local package
@@ -83,29 +91,33 @@ install_brew_tools() {
 install_profile() {
   [[ "$PACKAGE_MANAGER" != brew ]] || install_brew_tools
   mkdir -p "$HOME/.local/bin"
-  # Debian names the executables differently; don't overwrite user binaries.
-  local pair original alias
-  for pair in 'fdfind:fd' 'batcat:bat'; do
-    original="${pair%:*}" alias="${pair#*:}"
-    if ! command -v "$alias" >/dev/null 2>&1 && command -v "$original" >/dev/null 2>&1; then
-      [[ ! -e "$HOME/.local/bin/$alias" && ! -L "$HOME/.local/bin/$alias" ]] || die "Conflicting executable: $alias"
-      ln -s "$(command -v "$original")" "$HOME/.local/bin/$alias"
-    fi
-  done
+  # Some distributions ship different executable names. Create non-destructive
+  # shims in ~/.local/bin; an entry the user already owns is never replaced.
+  local command_name alias resolved target
+  while read -r kind command_name minimum description; do
+    [[ -n "$command_name" ]] || continue
+    while read -r alias; do
+      [[ -n "$alias" ]] || continue
+      target="$HOME/.local/bin/$command_name"
+      if [[ -e "$target" || -L "$target" ]]; then
+        # Owned by the user or created by a previous run: leave it exactly as is.
+        [[ -x "$target" ]] \
+          || warn "Not replacing non-executable $target; make it executable or remove it"
+        continue
+      fi
+      if ! command -v "$command_name" >/dev/null 2>&1; then
+        resolved="$(command -v "$alias" 2>/dev/null || true)"
+        if [[ -n "$resolved" ]]; then
+          ln -s "$resolved" "$target"
+        fi
+      fi
+    done < <(tool_aliases "$command_name")
+  done < <(profile_components "$PROFILE" "$PLATFORM")
   export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
   if [[ "$PROFILE" == workstation ]]; then
-    check_workstation_neovim || die 'Upgrade Neovim before configuring LazyVim (native package too old; consider Homebrew)'
     install_workstation
   fi
   install_opencode
-}
-
-check_workstation_neovim() {
-  local version major minor
-  version="$(nvim --version | sed -n '1s/.*v\([0-9]*\.[0-9]*\).*/\1/p')"
-  major="${version%%.*}" minor="${version#*.}"
-  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || return 1
-  [[ "$major" -gt 0 || "$minor" -ge 11 ]]
 }
 
 configure_profile() {
@@ -161,28 +173,31 @@ verify_configs() {
 }
 
 verify_profile() {
-  local failed=0 kind name description
+  local failed=0 kind name minimum description installed
   # The manifest drives verification, so a tool added to show_actions can never
   # silently escape the checks (and vice versa).
-  while read -r kind name description; do
+  while read -r kind name minimum description; do
     [[ -n "$kind" ]] || continue
-    if command -v "$name" >/dev/null 2>&1; then
+    if ! tool_executable "$name" >/dev/null; then
+      if [[ "$kind" == required ]]; then
+        warn "Missing required tool: $name ($description)"
+        failed=1
+      else
+        info "Optional tool not present: $name ($description)"
+      fi
       continue
-    elif [[ "$kind" == required ]]; then
-      warn "Missing required tool: $name ($description)"
+    fi
+    [[ "$minimum" == - ]] && continue
+    if ! installed="$(tool_version "$name")"; then
+      # An app bundle or an unusual build may expose no parseable version.
+      info "Version not detectable for $name; declared minimum is $minimum"
+      continue
+    fi
+    if ! version_at_least "$installed" "$minimum"; then
+      warn "$name $installed is older than the declared minimum $minimum ($description)"
       failed=1
-    else
-      info "Optional tool not present: $name ($description)"
     fi
   done < <(profile_components "$PROFILE" "$PLATFORM")
-  if command -v opencode >/dev/null 2>&1; then
-    opencode --version | grep -Eq '(^|v)2\.' || { warn 'OpenCode V2 is required'; failed=1; }
-  fi
-  if [[ "$PROFILE" == workstation ]] && command -v nvim >/dev/null 2>&1; then
-    if ! check_workstation_neovim; then
-      warn 'LazyVim requires Neovim >= 0.11; use a newer distro package or Homebrew'; failed=1
-    fi
-  fi
   verify_configs || failed=1
   [[ "$failed" -ne 0 ]] || info "Verification passed: $PROFILE"
   return "$failed"
