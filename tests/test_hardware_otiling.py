@@ -1,18 +1,19 @@
 """Independent hardware and o-tiling scripts.
 
 Every desktop/extension command is stubbed: the tests never touch GNOME, dconf,
-udev, sysfs or the network.
+udev, sysfs or the network. o-tiling is installed byte-for-byte from its upstream
+release — these tests assert that no local patch mechanism exists at all.
 """
-import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import unittest
 
 from _support import tempdir
-import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BASH = shutil.which('bash')
@@ -30,18 +31,14 @@ done
 
 
 class OtiringInstallTests(unittest.TestCase):
-    def make_install(self, directory, patch_body=None):
+    def make_install(self, directory):
         base = Path(directory) / 'src'
-        (base / 'patches').mkdir(parents=True, exist_ok=True)
+        base.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / 'o-tiling/install.sh', base / 'install.sh')
-        if patch_body is None:
-            (base / 'patches/apply-patches.sh').write_text('#!/usr/bin/env bash\nexit 0\n')
-        else:
-            (base / 'patches/apply-patches.sh').write_text(patch_body)
         return base / 'install.sh'
 
-    def run_install(self, directory, args=(), patch_body=None, extra_env=None):
-        install = self.make_install(directory, patch_body)
+    def run_install(self, directory, args=(), extra_env=None):
+        install = self.make_install(directory)
         stubs = Path(directory) / 'stubs'
         stubs.mkdir(exist_ok=True)
         (Path(directory) / 'calls').write_text('')
@@ -56,14 +53,11 @@ class OtiringInstallTests(unittest.TestCase):
                                env=env, capture_output=True, text=True, timeout=30)
         return result, Path(directory) / 'calls'
 
-    def calls(self, path):
-        return path.read_text()
-
     def test_default_run_touches_no_other_extension_or_global_setting(self):
         with tempdir() as directory:
             result, calls = self.run_install(directory, ['--force'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            log = self.calls(calls)
+            log = calls.read_text()
             self.assertNotIn('rm -rf', log)
             self.assertNotIn('disable-extension-version-validation', log)
             self.assertNotIn('ding@rastersoft.com', log)
@@ -76,49 +70,54 @@ class OtiringInstallTests(unittest.TestCase):
                 directory, ['--force', '--remove-tiling-shell', '--disable-ding',
                             '--allow-version-mismatch'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            log = self.calls(calls)
+            log = calls.read_text()
             self.assertIn('disable-extension-version-validation', log)
             self.assertIn('ding@rastersoft.com', log)
             self.assertIn('Desmontando Tiling Shell', result.stdout)
 
-    def test_patch_failure_fails_the_install_and_writes_no_marker(self):
+    def test_marker_records_only_the_upstream_version(self):
         with tempdir() as directory:
-            result, calls = self.run_install(directory, ['--force'],
-                                             patch_body='#!/usr/bin/env bash\necho "patch failed" >&2\nexit 1\n')
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('NO se considera completa', result.stdout + result.stderr)
-            home = Path(directory) / 'home'
-            markers = list(home.glob('.local/share/gnome-shell/extensions/*/.installed-version'))
-            self.assertEqual(markers, [], 'a failed install must not record a success marker')
-
-    def test_marker_records_the_patch_digest(self):
-        with tempdir() as directory:
-            result, calls = self.run_install(directory, ['--force'])
+            result, _ = self.run_install(directory, ['--force'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             home = Path(directory) / 'home'
             marker = next(home.glob('.local/share/gnome-shell/extensions/*/.installed-version'))
-            content = marker.read_text().strip()
-            self.assertTrue(content.startswith('version=v2.9.21 patches='))
-            digest = content.split('patches=', 1)[1]
-            source = Path(directory) / 'src/patches/apply-patches.sh'
-            self.assertEqual(digest, hashlib.sha256(source.read_bytes()).hexdigest())
+            self.assertEqual(marker.read_text().strip(), 'version=v2.12.01',
+                             'the marker tracks the upstream release and nothing else')
 
-    def test_changed_patches_retrigger_without_redownloading(self):
+    def test_install_writes_only_the_marker_into_the_extension_dir(self):
         with tempdir() as directory:
-            self.run_install(directory, ['--force'])
-            install = self.make_install(directory, 'exit 0')  # new digest
-            stubs = Path(directory) / 'stubs2'
-            stubs.mkdir()
-            (Path(directory) / 'calls2').write_text('')
-            home = Path(directory) / 'home'
-            env = {**os.environ, 'HOME': str(home), 'STUB_DIR': str(stubs),
-                   'CALLS': str(Path(directory) / 'calls2'), 'PATH': f'{stubs}:/usr/bin:/bin'}
-            prelude = STUBS.replace('$STUB_DIR', str(stubs))
-            result = subprocess.run([BASH, '-euc', prelude + f'\nbash "{install}"', '_'],
-                                    env=env, capture_output=True, text=True, timeout=30)
+            result, _ = self.run_install(directory, ['--force'])
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn('cambiaron los patches', result.stdout)
-            self.assertNotIn('Descargando', result.stdout)
+            home = Path(directory) / 'home'
+            ext_dir = next(home.glob('.local/share/gnome-shell/extensions/*'))
+            entries = sorted(p.name for p in ext_dir.iterdir())
+            self.assertEqual(entries, ['.installed-version'],
+                             f'no patch or edit may land in the extension dir: {entries}')
+            self.assertFalse((Path(directory) / 'src/patches').exists(),
+                             'the patches directory must not exist')
+
+    def test_no_local_patch_mechanism_exists(self):
+        self.assertFalse((ROOT / 'o-tiling/patches').exists(),
+                         'local patches are out of scope: upstream only')
+        text = (ROOT / 'o-tiling/install.sh').read_text()
+        for forbidden in ['apply_local_patches', 'PATCH_SCRIPT', 'apply-patches',
+                         'patch_digest', 'reapply_only']:
+            self.assertNotIn(forbidden, text,
+                             f'install.sh still references local patching: {forbidden}')
+
+    def test_pinned_version_is_the_latest_known_release(self):
+        text = (ROOT / 'o-tiling/install.sh').read_text()
+        self.assertIn('OTILING_VERSION="${OTILING_VERSION:-v2.12.01}"', text)
+        self.assertIn('version=${OTILING_VERSION}', text)
+
+    def test_help_states_that_the_extension_is_not_patched(self):
+        with tempdir() as directory:
+            install = self.make_install(directory)
+            result = subprocess.run([BASH, str(install), '--help'],
+                                    capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('No parchea ni modifica ningún archivo', result.stdout)
+            self.assertIn('verify.sh', result.stdout)
 
     def test_unknown_option_is_rejected(self):
         with tempdir() as directory:
@@ -127,34 +126,109 @@ class OtiringInstallTests(unittest.TestCase):
             self.assertIn('Opción desconocida', result.stderr)
 
 
-class ApplyPatchesTests(unittest.TestCase):
-    def run_patches(self, directory, patch_text, files=None):
-        base = Path(directory) / 'ext'
-        base.mkdir(parents=True, exist_ok=True)
-        for name, body in (files or {}).items():
-            path = base / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(body)
-        script = ROOT / 'o-tiling/patches/apply-patches.sh'
-        return subprocess.run([BASH, str(script), str(base)],
-                              capture_output=True, text=True, timeout=30)
+class VerifyScriptTests(unittest.TestCase):
+    SCRIPT = ROOT / 'o-tiling/verify.sh'
 
-    def test_missing_target_file_is_a_failure_not_a_skip(self):
-        with tempdir() as directory:
-            # The extension directory exists but neither target file does.
-            result = self.run_patches(directory, '', files={})
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn('NO se aplicó', result.stdout + result.stderr)
-            self.assertNotIn('Patches aplicados correctamente', result.stdout)
+    def fake_gnome(self, directory):
+        stubs = Path(directory) / 'bin'
+        stubs.mkdir(parents=True, exist_ok=True)
+        calls = Path(directory) / 'calls'
+        calls.write_text('')
+        stub = (
+            '#!/bin/sh\n'
+            f'printf \'%s %s\\n\' "$1" "$2" >> "{calls}"\n'
+            'case "$1" in\n'
+            '  info) echo "  State:        ENABLED" ;;\n'
+            '  install|enable|disable) exit 0 ;;\n'
+            'esac\n'
+        )
+        gnome = stubs / 'gnome-extensions'
+        gnome.write_text(stub)
+        gnome.chmod(0o755)
+        return stubs
 
-    def test_success_is_only_announced_when_every_patch_applies(self):
-        # Give patch 1 a real target so it can run, but leave patch 2 missing.
+    def prepared_env(self, directory, journal_output):
+        stubs = self.fake_gnome(directory)
+        state = Path(directory) / '.state/portillo-dots/otiling-verify'
+        state.mkdir(parents=True, exist_ok=True)
+        (state / 'started-at').write_text('2026-10-16T00:00:00Z\n')
+        journal = stubs / 'journalctl'
+        journal.write_text('#!/bin/sh\ncat <<JOURNAL\n' + journal_output + 'JOURNAL\n')
+        journal.chmod(0o755)
+        return {**os.environ, 'HOME': str(directory),
+                'XDG_STATE_HOME': str(Path(directory) / '.state'),
+                'PATH': f'{stubs}:/usr/bin:/bin'}
+
+    def test_verify_script_exists_is_executable_and_documents_the_flow(self):
+        self.assertTrue(self.SCRIPT.is_file())
+        self.assertTrue(os.access(self.SCRIPT, os.X_OK), 'verify.sh must be executable')
+        result = subprocess.run([BASH, str(self.SCRIPT), 'help'],
+                                capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for expected in ['prepare', 'integrity', 'report', 'status', 'logout + login']:
+            self.assertIn(expected, result.stdout)
+
+    def test_report_without_prepare_fails_clearly(self):
         with tempdir() as directory:
-            files = {'engine/tiling.js': 'function move_window_or_monitor() {}\n'}
-            result = self.run_patches(directory, '', files=files)
+            env = self.prepared_env(directory, '')
+            (Path(directory) / '.state/portillo-dots/otiling-verify/started-at').unlink()
+            result = subprocess.run([BASH, str(self.SCRIPT), 'report'],
+                                    env=env, capture_output=True, text=True, timeout=20)
             self.assertNotEqual(result.returncode, 0)
-            self.assertNotIn('Patches aplicados correctamente', result.stdout)
-            self.assertIn('un patch no se aplicó', (result.stdout + result.stderr).lower())
+            self.assertIn('prepare', result.stderr)
+
+    def test_journal_assertion_disables_the_extension(self):
+        with tempdir() as directory:
+            env = self.prepared_env(
+                directory,
+                'meta_window_set_stack_position_no_sync: assertion failed\n')
+            result = subprocess.run([BASH, str(self.SCRIPT), 'report'],
+                                    env=env, input='PASS\nPASS\nskip\nskip\nskip\n',
+                                    capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Deshabilitando la extensión', result.stdout)
+            self.assertIn('espera de upstream', result.stdout)
+            self.assertIn('disable', (Path(directory) / 'calls').read_text())
+
+    def test_core_block_failure_disables_the_extension(self):
+        with tempdir() as directory:
+            env = self.prepared_env(directory, '')
+            result = subprocess.run([BASH, str(self.SCRIPT), 'report'],
+                                    env=env, input='FAIL\nA1\nPASS\nskip\nskip\nskip\n',
+                                    capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Deshabilitando la extensión', result.stdout)
+
+    def test_clean_run_keeps_the_extension_enabled(self):
+        with tempdir() as directory:
+            env = self.prepared_env(directory, '')
+            result = subprocess.run([BASH, str(self.SCRIPT), 'report'],
+                                    env=env, input='PASS\nPASS\nPASS\nPASS\nPASS\n',
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('queda HABILITADA', result.stdout)
+            self.assertNotIn('disable', (Path(directory) / 'calls').read_text())
+
+    def test_c2_monitor_crossing_is_not_treated_as_core_failure(self):
+        with tempdir() as directory:
+            env = self.prepared_env(directory, '')
+            # Block C fails on C2 — upstream behaviour after removing the local
+            # patch — while core blocks A/B pass. Not a failure.
+            result = subprocess.run(
+                [BASH, str(self.SCRIPT), 'report'], env=env,
+                input='PASS\nPASS\nFAIL\nC2\nPASS\nPASS\n',
+                capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('queda HABILITADA', result.stdout)
+
+    def test_status_reports_without_mutating(self):
+        with tempdir() as directory:
+            env = self.prepared_env(directory, '')
+            result = subprocess.run([BASH, str(self.SCRIPT), 'status'],
+                                    env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Versión pin', result.stdout)
+            self.assertNotIn('disable', (Path(directory) / 'calls').read_text())
 
 
 class HardwareProfileTests(unittest.TestCase):
@@ -207,13 +281,6 @@ class IndependentScriptsTests(unittest.TestCase):
 
     def test_otiling_script_defaults_to_non_destructive(self):
         text = (ROOT / 'o-tiling/install.sh').read_text()
-        # The unconditional forms of these commands must not exist.
         self.assertNotIn('\nrm -rf "$HOME', text)
-        self.assertNotIn('gsettings set org.gnome.shell disable-extension-version-validation true 2>/dev/null || true\n[[ "$OTILING_AUTO_ENABLE"',
-                         text)
         self.assertIn('--remove-tiling-shell', text)
         self.assertIn('--allow-version-mismatch', text)
-
-
-if __name__ == '__main__':
-    unittest.main()

@@ -34,7 +34,7 @@ SHELL_FILES = [
     'server/shell.sh', 'linux/graphical-environment.sh',
     'linux/optimize.sh', 'linux/dots-diag.sh', 'linux/dots-fix-tiling.sh',
     'linux/restore-gnome-keybindings.sh',
-    'o-tiling/install.sh', 'o-tiling/configure.sh', 'o-tiling/patches/apply-patches.sh',
+    'o-tiling/install.sh', 'o-tiling/configure.sh', 'o-tiling/verify.sh',
     'remote/generate-ls-colors.sh',
     'gnome/configure.sh',
 ]

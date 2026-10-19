@@ -12,7 +12,12 @@ set -euo pipefail
 # el window-stack de Mutter en multi-monitor; Tiling Shell funciona pero usa
 # layouts/zonas fijas (no splits dinámicos), que no es lo que el usuario quiere.
 #
-# Idempotente: si ya está la versión pineada y los patches actuales, no reinstala.
+# Idempotente: si ya está la versión pineada, no reinstala.
+#
+# IMPORTANTE: la extensión se instala BYTE A BYTE como la publica upstream.
+# Este repo NO aplica parches locales, NO modifica tilting.js/window.js y NO
+# desactiva la validación de versiones de GNOME salvo petición explícita. Si el
+# release tiene un bug, se reporta y se espera al fix de upstream.
 #
 # Uso:   bash o-tiling/install.sh [opciones]
 # Opciones:
@@ -28,13 +33,12 @@ set -euo pipefail
 #
 # Vars:
 #   OTILING_UUID      (default: o-tiling@oliwebd.github.com)
-#   OTILING_VERSION   tag del release a fijar (default: v2.9.21, build para shell 50)
+#   OTILING_VERSION   tag del release a fijar (default: v2.12.01)
 #   TS_UUID           Tiling Shell (solo se toca con --remove-tiling-shell)
-#   OTILING_AUTO_ENABLE  auto-habilitar tras instalar (default: false — ver TODO.md,
-#                        "o-tiling: corrompe stack_position en cada ventana nueva")
+#   OTILING_AUTO_ENABLE  auto-habilitar tras instalar (default: false — ver TODO.md)
 
 OTILING_UUID="${OTILING_UUID:-o-tiling@oliwebd.github.com}"
-OTILING_VERSION="${OTILING_VERSION:-v2.9.21}"
+OTILING_VERSION="${OTILING_VERSION:-v2.12.01}"
 TS_UUID="${TS_UUID:-tilingshell@ferrarodomenico.com}"
 OTILING_AUTO_ENABLE="${OTILING_AUTO_ENABLE:-false}"
 
@@ -47,8 +51,9 @@ usage() {
   cat <<'EOF'
 Uso: bash o-tiling/install.sh [opciones]
 
-Instala o-tiling (tiling BSP dinámico para GNOME) desde su release de GitHub y
-aplica patches locales. No toca otras extensiones salvo que se lo pidas.
+Instala o-tiling (tiling BSP dinámico para GNOME) tal cual lo publica upstream.
+No parchea ni modifica ningún archivo de la extensión. No toca otras extensiones
+salvo que se lo pidas.
 
 Opciones:
   --force                    Reinstalar aunque el marcador coincida
@@ -60,9 +65,11 @@ Opciones:
 
 Variables:
   OTILING_UUID        (o-tiling@oliwebd.github.com)
-  OTILING_VERSION     tag del release a fijar (v2.9.21)
+  OTILING_VERSION     tag del release a fijar (v2.12.01)
   TS_UUID             Tiling Shell (solo con --remove-tiling-shell)
   OTILING_AUTO_ENABLE habilitar al terminar (false por defecto)
+
+Verificación de aceptación: bash o-tiling/verify.sh
 EOF
 }
 
@@ -80,8 +87,6 @@ done
 
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$OTILING_UUID"
 MARKER="$EXT_DIR/.installed-version"
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-PATCH_SCRIPT="$SCRIPT_DIR/patches/apply-patches.sh"
 
 # === Sanity ===
 if ! command -v gnome-extensions >/dev/null 2>&1; then
@@ -144,24 +149,13 @@ if [[ "$ALLOW_VERSION_MISMATCH" == true ]]; then
 fi
 
 # === Estado de instalación ===
-# El marcador registra la versión del release Y el contenido del script de
-# patches. Así, cambiar un patch dispara su re-aplicación aunque la extensión
-# siga en la misma versión.
-patch_digest="none"
-if [[ -f "$PATCH_SCRIPT" ]]; then
-  patch_digest="$(sha256sum "$PATCH_SCRIPT" 2>/dev/null | awk '{print $1}')" || patch_digest="unknown"
-  [[ -n "$patch_digest" ]] || patch_digest="unknown"
-fi
-expected_marker="version=${OTILING_VERSION} patches=${patch_digest}"
+# Solo la versión del release. No hay digest de patches porque no hay patches:
+# la extensión se usa tal cual la publica upstream.
+expected_marker="version=${OTILING_VERSION}"
 current_marker="$(cat "$MARKER" 2>/dev/null || true)"
 
-apply_local_patches() {
-  [[ -f "$PATCH_SCRIPT" ]] || { echo "✗ No se encontró $PATCH_SCRIPT" >&2; return 1; }
-  bash "$PATCH_SCRIPT" "$EXT_DIR"
-}
-
 if [[ "$FORCE" != true && -f "$MARKER" && "$current_marker" == "$expected_marker" ]]; then
-  echo "o-tiling ya instalado ($OTILING_VERSION) con los patches actuales. Saltando."
+  echo "o-tiling ya instalado ($OTILING_VERSION). Saltando."
   echo "Para reinstalar: bash $0 --force"
   if [[ "$OTILING_AUTO_ENABLE" == true ]]; then
     gnome-extensions enable "$OTILING_UUID" 2>/dev/null || true
@@ -169,46 +163,27 @@ if [[ "$FORCE" != true && -f "$MARKER" && "$current_marker" == "$expected_marker
   exit 0
 fi
 
-reapply_only=false
-if [[ "$FORCE" != true && -f "$MARKER" ]] && [[ "$current_marker" == "version=${OTILING_VERSION} patches="* ]]; then
-  echo "La versión coincide pero cambiaron los patches; re-aplicándolos sin descargar."
-  reapply_only=true
-fi
-
 # =====================================================================
-# 2. DESCARGAR E INSTALAR (release ZIP de GitHub)
+# 2. DESCARGAR E INSTALAR (release ZIP de GitHub, sin modificar)
 # =====================================================================
-if [[ "$reapply_only" != true ]]; then
-  ZIP_URL="https://github.com/oliwebd/o-tiling/releases/download/${OTILING_VERSION}/${OTILING_UUID}-${OTILING_VERSION}.zip"
-  TMPZIP="$(mktemp --suffix=.zip)"
-  trap 'rm -f "$TMPZIP"' EXIT
-  echo "Descargando $ZIP_URL ..."
-  curl -fsSL "$ZIP_URL" -o "$TMPZIP"
+ZIP_URL="https://github.com/oliwebd/o-tiling/releases/download/${OTILING_VERSION}/${OTILING_UUID}-${OTILING_VERSION}.zip"
+TMPZIP="$(mktemp --suffix=.zip)"
+trap 'rm -f "$TMPZIP"' EXIT
+echo "Descargando $ZIP_URL ..."
+curl -fsSL "$ZIP_URL" -o "$TMPZIP"
 
-  echo "Instalando extensión..."
-  gnome-extensions install --force "$TMPZIP"
+echo "Instalando extensión (contenido upstream, sin parches)..."
+gnome-extensions install --force "$TMPZIP"
 
-  # El ZIP trae el schema .xml; aseguramos que esté compilado (gschemas.compiled)
-  # para poder aplicar gsettings antes del logout/login.
-  if [[ -d "$EXT_DIR/schemas" ]] && command -v glib-compile-schemas >/dev/null 2>&1; then
-    glib-compile-schemas "$EXT_DIR/schemas" 2>/dev/null || true
-  fi
+# El ZIP trae el schema .xml; aseguramos que esté compilado (gschemas.compiled)
+# para poder aplicar gsettings antes del logout/login. Compilar un schema no
+# modifica el código de la extensión.
+if [[ -d "$EXT_DIR/schemas" ]] && command -v glib-compile-schemas >/dev/null 2>&1; then
+  glib-compile-schemas "$EXT_DIR/schemas" 2>/dev/null || true
 fi
 
 if [[ "$OTILING_AUTO_ENABLE" == true ]]; then
   gnome-extensions enable "$OTILING_UUID" 2>/dev/null || true
-fi
-
-# =====================================================================
-# 3. APLICAR PATCHS LOCALES (fixes sobre el código instalado)
-# =====================================================================
-# El fallo de un patch es un fallo de la instalación: no se escribe un marcador
-# de éxito que haría que la próxima ejecución lo diera por bueno.
-if ! apply_local_patches; then
-  echo "" >&2
-  echo "✗ La instalación NO se considera completa: falló la aplicación de patches." >&2
-  echo "  No se escribió el marcador; la próxima ejecución reintentará." >&2
-  exit 1
 fi
 
 # === Marker idempotencia ===
@@ -216,5 +191,6 @@ mkdir -p "$EXT_DIR"
 printf '%s\n' "$expected_marker" > "$MARKER"
 chmod 0644 "$MARKER"
 
-echo "o-tiling instalado ($OTILING_VERSION) con patches: $patch_digest"
+echo "o-tiling instalado ($OTILING_VERSION) — contenido upstream sin modificar."
 echo "NOTA: en Wayland necesitás logout+login para que gnome-shell lo cargue."
+echo "Siguiente paso: bash o-tiling/verify.sh para la verificación de aceptación."
