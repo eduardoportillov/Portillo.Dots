@@ -139,9 +139,11 @@ failed` se dispara al 100% con **cualquier ventana nueva**, y el tiling/atajos
    se dispara ningún error**, el tiling y los atajos (`Ctrl+Alt+H/J/K/L`) tampoco
    funcionan — sin ningún error visible en `journalctl` ni en Looking Glass.
 
-El patch 2 (`window.js`, `wm_class_changed`) sigue aplicado (no hace daño, no resolvió
-el bug). El patch 3 se sacó de `apply-patches.sh`: dejó de aplicar limpio contra
-v2.9.21 porque el fix del maintainer reescribió esa misma zona.
+> **Parches locales eliminados (2026-10-16).** Se probaron dos parches sobre el
+> código de la extensión y ninguno resolvió el bug. Por decisión, se retiran:
+> o-tiling se usa **tal cual la publica upstream**, sin modificar sus archivos.
+> Se pierde la contención de `J/K` al monitor actual; ese comportamiento pasa a
+> ser el de upstream.
 
 **Pista concreta para el fix, reportada en el comentario de seguimiento**: el fix
 `8483c91` solo protege el `raise()` dentro de `grab_focus()` (camino de ventana nueva).
@@ -166,14 +168,18 @@ ya está en el sistema, deshabilitada) no dispara el bug en uso normal — pero 
 paradigma distinto (snap manual arrastrando/atajos, sin auto-tile ni foco direccional
 `Ctrl+Alt+HJKL`), no un reemplazo transparente.
 
-**Próximos pasos**: revisar el issue #50 de tanto en tanto. Si upstream manda un fix
-nuevo, `bash o-tiling/install.sh --force` con la versión nueva y `OTILING_AUTO_ENABLE=true
-gnome-extensions enable o-tiling@oliwebd.github.com` para reactivar y volver a probar
-(idealmente con `journalctl --user -f` corriendo en vivo mientras se reproduce, no
-revisando el log después — así se distingue si el assertion se dispara de si el tiling
-simplemente no hace nada). Si no hay movimiento, evaluar migrar a Tiling Assistant en
-serio (requiere reconfigurar atajos desde cero, ver conversación de auditoría del
-2026-07-17/29 para el detalle de por qué no es 1:1).
+**Próximos pasos (2026-10-16)**: hay **9 releases posteriores** a `v2.9.21`, con
+cambios en `stacking sync` (`v2.10.1`), `restack` (`v2.10.7`), `window stacking and
+layout reconstruction` (`v2.10.8`) y un guard en `raise()` (`v2.12.01`) — justo las
+zonas implicadas. El pin se sube a **`v2.12.01`** y se valida con
+`bash o-tiling/verify.sh` (prepare → logout/login → bloques A–E → report).
+
+- Si la aceptación pasa: la extensión queda habilitada y este TODO se cierra.
+- Si falla: `verify.sh` la deshabilita automáticamente, el pin queda en `v2.12.01`
+  y **se espera al fix de upstream**. Sin parches ni workarounds.
+
+El issue [#50](https://github.com/oliwebd/o-tiling/issues/50) sigue **abierto** y
+sin confirmar; las notas de release no lo mencionan explícitamente.
 
 ---
 
@@ -183,4 +189,4 @@ serio (requiere reconfigurar atajos desde cero, ver conversación de auditoría 
 |---|---|---|---|
 | Alacritty | 0.16.1 (apt) | 0.17.0 | ❌ No (apt Ubuntu no tiene 0.17 todavía) — ver TODO #1 |
 | tmux | 3.6b (brew) | 3.6b | ✅ Sí |
-| o-tiling | v2.9.21 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar. **Deshabilitada por bug, ver TODO #3** |
+| o-tiling | v2.12.01 (release ZIP) | mismo | ❌ Skip si ya instalado — `bash o-tiling/install.sh --force` para forzar. **Upstream sin parches; validar con `verify.sh` (TODO #3)** |

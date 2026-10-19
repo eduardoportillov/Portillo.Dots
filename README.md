@@ -363,9 +363,9 @@ monitor). En Wayland: **logout + login** tras instalar para que cargue.
 
 Gaps de tiling = **1px** (`gap-inner`/`gap-outer`).
 
-**Mover H/L vs J/K** (parche local `o-tiling/patches/apply-patches.sh`):
+**Mover H/L vs J/K** (comportamiento upstream, sin parches locales):
 - `Alt+Shift+H/L` (horizontal): si no hay ventana al lado, cruza al **otro monitor** (deseado, monitores lado a lado).
-- `Alt+Shift+J/K` (vertical): reacomoda arriba/abajo **solo en el mismo monitor**; si no hay vecina, no hace nada (patcheado para NO saltar de monitor — el `move_up/move_down` upstream caía al monitor).
+- `Alt+Shift+J/K` (vertical): reacomoda arriba/abajo; **al llegar al borde puede cruzar al otro monitor**. Eso es upstream. (La versión anterior mantenía J/K dentro del monitor mediante un parche local; se eliminó para usar la extensión tal cual la publica su autor.)
 
 **Cómo apilar ventanas en VERTICAL** (arriba/abajo en el mismo monitor):
 o-tiling es BSP: el eje lo decide **`Alt+/`**. Enfocá una ventana, apretá `Alt+/` para

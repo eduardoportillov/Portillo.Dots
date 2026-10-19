@@ -9,59 +9,72 @@ resolver el fallo upstream que sigue abierto.
 
 ### Estado real del proyecto
 
-`TODO.md` documenta que **o-tiling sigue deshabilitado** por un bug que corrompe
-`stack_position` en cada ventana nueva bajo GNOME 50.1. Se probaron cuatro
-mitigaciones, incluidos patches locales y un fix upstream, y **ninguna funcionó**.
+`TODO.md` documenta que `meta_window_set_stack_position_no_sync` es un bug
+**abierto** ([oliwebd/o-tiling#50](https://github.com/oliwebd/o-tiling/issues/50)).
+Se probaron cuatro mitigaciones —incluidas dos en código local y un fix
+upstream— y **ninguna resolvió el problema** en `v2.9.21`.
 
-Por eso:
+La versión actual es **`v2.12.01`** (28-sep-2026). Trae cambios en `stacking
+sync`, `layout reconstruction`, un guard en `raise()` y soporte para GNOME 51,
+pero **el issue sigue abierto y sin confirmar**. Por eso no se da por buena sin
+verificar.
 
-- `OTILING_AUTO_ENABLE=false` por defecto: instalar no habilita la extensión.
-- El script no afirma que los patches resuelvan el bug; son mejoras puntuales de
-  comportamiento (J/K sin saltar de monitor, `auto_tile` diferido).
-- La activación es manual y consciente: `gnome-extensions enable <uuid>`.
+### Upstream puro: cero parches manuales
 
-### Acciones destructivas: ahora opt-in
+Decisión tomada: **la extensión se usa tal cual la publica su autor**.
 
-La versión anterior hacía tres cosas sin preguntar sobre software ajeno:
+| Se hace | No se hace |
+|---|---|
+| Instalar el ZIP del release | Modificar `tiling.js` / `window.js` |
+| Aplicar `configure.sh` (gsettings) | Aplicar parches o workarounds |
+| Verificar con `verify.sh` | Desactivar validación de versiones de GNOME |
+| Deshabilitar y esperar si falla | Mantener una copia parcheada de código ajeno |
 
-| Acción | Antes | Ahora |
-|---|---|---|
-| Deshabilitar y **borrar** Tiling Shell | automático | `--remove-tiling-shell` |
-| Deshabilitar `ding` (iconos de escritorio) | automático | `--disable-ding` |
-| Desactivar la validación de versión de extensiones de GNOME | automático | `--allow-version-mismatch` |
+Por eso se eliminó el directorio `o-tiling/patches/`. Se pierde el comportamiento
+que aportaban esos parches: `Alt+Shift+J/K` ya no queda limitado al monitor
+actual y **puede cruzar de monitor en el borde**. Ese es el comportamiento
+upstream y se acepta.
 
-La última es especialmente delicada: `disable-extension-version-validation` es
-**global**, afecta a todas las extensiones del usuario, no solo a o-tiling. Se
-documenta con un aviso antes de aplicarse.
-
-Sin esos flags el script solo instala/configura o-tiling e imprime qué quedó
-intacto.
-
-### Patches: propagación de fallos
-
-Antes, `apply-patches.sh` terminaba con `echo "Patches aplicados."` y código 0
-**incluso si ambos patches fallaban**, y `install.sh` escribía igualmente el
-marcador `version=`. La próxima ejecución lo daba por bueno.
-
-Ahora:
-
-- Un archivo objetivo que no existe es un **fallo**, no un skip silencioso.
-- Cualquier patch que no aplique hace que `apply-patches.sh` salga con código 1.
-- `install.sh` **no escribe el marcador** si los patches fallan: la próxima
-  ejecución reintenta en lugar de darlo por instalado.
-- El mensaje de éxito solo aparece cuando **todos** los patches aplicaron.
-
-### El marcador detecta cambios en los patches
-
-El marcador guarda dos cosas:
+El marcador de instalación contiene solo la versión:
 
 ```text
-version=v2.9.21 patches=<sha256 de patches/apply-patches.sh>
+version=v2.12.01
 ```
 
-Si cambia el script de patches pero la versión de la extensión no, el script
-**reaplica los patches sin volver a descargar**. Esto resuelve el caso en que
-iterabas sobre un patch y el marcador seguía diciendo "ya instalado".
+### Verificación de aceptación
+
+`o-tiling/verify.sh` orquesta la prueba y emite veredicto:
+
+```bash
+bash o-tiling/verify.sh prepare      # instala, habilita e imprime la lista
+# ... logout + login, seguir bloques A-E ...
+bash o-tiling/verify.sh integrity    # opcional: ¿la extensión está intacta?
+bash o-tiling/verify.sh report       # journal + veredicto + retirada si falla
+```
+
+- **`integrity`** descarga el ZIP del release y compara hashes contra lo
+  instalado. Detecta cualquier modificación manual, incluidos los artefactos que
+  generamos nosotros (`.installed-version`, `gschemas.compiled`) y los excluye.
+- **`report`** escanea `journalctl --user` en busca de `stack_position` /
+  `_syncStacking` / `JS ERROR`, pide PASS/FAIL por bloque y decide.
+
+**Regla de retirada automática:** si falla el bloque A o B, o aparece una
+assertion en el journal, `verify.sh` **deshabilita la extensión** y registra
+«esperando parche upstream». Un fallo en C2 (`Alt+Shift+J/K` cruzando monitor)
+**no** cuenta como fallo: es comportamiento upstream.
+
+### Acciones destructivas: opt-in
+
+Tres acciones afectan a software ajeno y siguen tras flags explícitos:
+
+| Acción | Flag |
+|---|---|
+| Deshabilitar y **borrar** Tiling Shell | `--remove-tiling-shell` |
+| Deshabilitar `ding` (iconos de escritorio) | `--disable-ding` |
+| Desactivar la validación de versión de extensiones de GNOME | `--allow-version-mismatch` |
+
+La última es global — afecta a todas las extensiones del usuario — y se avisa
+antes de aplicarse.
 
 ## Hardware: un perfil personal, no una optimización universal
 
@@ -117,11 +130,20 @@ Cubren:
 
 - La ejecución por defecto no borra ni deshabilita nada ajeno.
 - Cada acción destructiva está detrás de su flag.
-- Un patch fallido aborta la instalación y **no** escribe marcador.
-- El marcador contiene el digest correcto del script de patches.
-- Cambiar los patches reactiva su aplicación sin descargar.
+- El marcador contiene **solo** la versión del release upstream.
+- El directorio de la extensión instalada solo recibe `.installed-version`:
+  ninguna escritura de código, ningún parche.
+- `o-tiling/patches/` no existe y el instalador no referencia ningún mecanismo
+  de parcheo local.
+- El pin es `v2.12.01`, la última release conocida.
+- El help afirma explícitamente que no se modifica ningún archivo.
+- `verify.sh` existe, es ejecutable y documenta prepare/integrity/report/status.
+- Un assertion del bug conocido en el journal **deshabilita** la extensión.
+- Un fallo en el bloque A o B **deshabilita** la extensión.
+- Una ejecución limpia la **mantiene habilitada**.
+- C2 (J/K cruzando de monitor) **no** se trata como fallo del núcleo.
+- Ninguna referencia al flujo de parches retirado sobrevive en el repo.
 - Las opciones desconocidas se rechazan con código 2.
-- Un objetivo de patch ausente es fallo, no skip.
 - `--list` no escribe nada y respeta las variables de entorno.
 - El help ya no afirma optimizaciones universales.
 - `optimize.sh` no gestiona servicios ni cuentas.
@@ -139,3 +161,5 @@ Cubren:
   `asus-wmi`; en otro hardware se omiten sin error.
 - La validación de los scripts es estática y con stubs: no se ha ejecutado
   `--apply` real ni se ha instalado la extensión durante esta refactorización.
+- **`v2.12.01` no está validada en el escritorio.** El veredicto depende de la
+  ejecución manual de `verify.sh`; hasta entonces el bug se considera abierto.
