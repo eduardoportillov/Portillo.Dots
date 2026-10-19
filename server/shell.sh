@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 # Remote Server environment; sourced by Bash or Zsh without changing login shell.
+if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/load-secrets.sh" ]; then
+  . "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/load-secrets.sh"
+fi
 for portillo_bin in "$HOME/.local/bin" "$HOME/.opencode/bin"; do
   case ":$PATH:" in *":$portillo_bin:"*) ;; *) PATH="$portillo_bin:$PATH" ;; esac
 done

@@ -13,6 +13,12 @@ if [[ -n "${TMUX:-}" && -z "${SSH_CONNECTION:-}${SSH_TTY:-}" ]]; then
   unset _portillo_graphical_helper
 fi
 
+# OpenCode references provider credentials as {env:NAME}; load them from the
+# per-host file when it exists. Strictly opt-out by deleting secrets.env.
+if [[ -r "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/load-secrets.sh" ]]; then
+  source "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/load-secrets.sh"
+fi
+
 # OS detection
 _PORTILLO_OS="$(uname -s)"
 if [[ "$_PORTILLO_OS" == "Darwin" ]]; then

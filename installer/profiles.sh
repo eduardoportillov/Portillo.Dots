@@ -166,8 +166,10 @@ verify_configs() {
     || { warn 'OpenCode global config missing'; failed=1; }
   if [[ -f "$CONFIG_HOME/opencode/opencode.jsonc" ]]; then
     python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.jsonc" "$PROFILE" || failed=1
+    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.jsonc" || failed=1
   elif [[ -f "$CONFIG_HOME/opencode/opencode.json" ]]; then
     python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.json" "$PROFILE" || failed=1
+    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.json" || failed=1
   fi
   return "$failed"
 }

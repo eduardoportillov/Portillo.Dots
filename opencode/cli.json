@@ -1,0 +1,18 @@
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+
+  // Terminal CLIENT preferences only. This file is separate from
+  // opencode.jsonc, which holds server/project configuration (agents, MCP,
+  // permissions, plugins). Never put credentials in either file.
+
+  "prompt": {
+    "image_preview": true
+  },
+  "session": {
+    "image_preview": true
+  },
+  "terminal": {
+    "title": true,
+    "copy": "select"
+  }
+}
