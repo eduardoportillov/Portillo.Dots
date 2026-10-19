@@ -49,13 +49,19 @@ show_actions() {
 
 privileged_phase() {
   info 'System phase: sudo may request your password once; no sudoers rule is created'
+  local catalog="$REPO_DIR/installer/components.sh"
   local core="$REPO_DIR/installer/privileged-core.sh" entry="$REPO_DIR/installer/privileged.sh"
+  [[ -f "$catalog" && -r "$catalog" && ! -L "$catalog" ]] \
+    || die 'Missing or unsafe provisioning catalog; sudo was not invoked'
   [[ -f "$core" && -r "$core" && ! -L "$core" && -f "$entry" && -r "$entry" && ! -L "$entry" ]] \
     || die 'Missing or unsafe privileged payload; sudo was not invoked'
-  /bin/bash -p -n "$core" && /bin/bash -p -n "$entry" || die 'Invalid privileged payload; sudo was not invoked'
+  /bin/bash -p -n "$catalog" && /bin/bash -p -n "$core" && /bin/bash -p -n "$entry" \
+    || die 'Invalid privileged payload; sudo was not invoked'
   # -p ignores imported shell functions and BASH_ENV before any root code runs.
   # Functions are parsed before the final entrypoint call; its children get EOF.
-  cat "$core" "$entry" | \
+  # The catalog ships inside the payload so package names resolve with no
+  # additional root-time sourcing.
+  cat "$catalog" "$core" "$entry" | \
     sudo /bin/bash -p -s -- "$PROFILE" "$PACKAGE_MANAGER" "$HARDWARE" "$HARDWARE_ONLY" \
     "$CHANGE_SHELL" "$UPGRADE" "$REPO_DIR" "${1:-install}" \
     2>&1 | tee -a "$LOG"

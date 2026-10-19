@@ -19,7 +19,7 @@ declaradas arriba:
 
 | Job | ubuntu-latest | macos-latest | Qué cubre |
 |---|---|---|---|
-| `tests` | ✅ | ✅ | 246 pruebas unitarias, de integración y de configuración |
+| `tests` | ✅ | ✅ | 249 pruebas unitarias, de integración y de configuración |
 | `shellcheck` | ✅ | — | lint de todos los `.sh` versionados |
 | `secret-scan` | ✅ | — | contenido versionado + blobs del historial |
 
@@ -32,8 +32,9 @@ el historial; con un clone superficial esa comprobación no vería nada.
 
 ## Gestores de paquetes nativos
 
-`installer/privileged-core.sh` cubre tres familias con los nombres correctos de
-cada distribución:
+`installer/components.sh` (`tool_packages`) cubre tres familias con los nombres
+correctos de cada distribución, y `installer/privileged-core.sh` la consume al
+instalar:
 
 | Herramienta | apt (Debian/Ubuntu) | dnf (Fedora) | pacman (Arch) | Ejecutable |
 |---|---|---|---|---|

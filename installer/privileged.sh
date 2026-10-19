@@ -21,7 +21,8 @@ privileged_main() {
   [[ "$profile" != server || ( "$hardware" == false && "$hardware_only" == false && "$change_shell" == false ) ]] || return 2
   [[ "$hardware_only" == false || ( "$hardware" == true && "$upgrade" == false && "$change_shell" == false ) ]] || return 2
   [[ "$repo" == /* && -d "$repo" && "$(id -u "$SUDO_USER")" == "${SUDO_UID:-}" ]] || return 2
-  declare -F root_copy retire_legacy_rule install_packages harden_existing_service >/dev/null || {
+  declare -F root_copy retire_legacy_rule install_packages harden_existing_service \
+    profile_components tool_packages >/dev/null || {
     printf 'Incomplete privileged payload; use setup.sh.\n' >&2; return 1;
   }
   local platform

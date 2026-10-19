@@ -20,10 +20,13 @@ No usa `sudo -v`, keepalive, `sudo -k`, cambios de timeout ni reglas nuevas
 
 ## Cómo se carga el código privilegiado
 
-`privileged_phase` verifica la presencia y sintaxis de los dos archivos que
-forman el payload antes de solicitar autenticación. Envía las definiciones de
-`installer/privileged-core.sh` y el entrypoint `installer/privileged.sh` por stdin
-a `/bin/bash -p -s`.
+`privileged_phase` verifica la presencia y sintaxis de los tres archivos que
+forman el payload antes de solicitar autenticación: el catálogo de aprovisionamiento
+`installer/components.sh` (nombres de paquetes por gestor y fuentes de
+instalación), las definiciones de `installer/privileged-core.sh` y el entrypoint
+`installer/privileged.sh`. Se envían por stdin a `/bin/bash -p -s`, de modo que la
+resolución de paquetes no necesita cargar nada más como root en tiempo de
+ejecución.
 
 El modo `-p` impide importar funciones del entorno o ejecutar `BASH_ENV` antes de
 las comprobaciones. El entrypoint fija PATH/IFS, elimina variables de arranque,

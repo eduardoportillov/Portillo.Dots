@@ -136,52 +136,118 @@ harden_existing_service() {
   printf 'Existing service script hardened: uid=%s; regular file, no service restart or hardware changes.\n' "$EUID"
 }
 
+# Append packages to a list keeping order and skipping duplicates, so a tool
+# that is both a manifest entry and build support installs only once.
+append_unique() {
+  local -n target="$1"
+  shift
+  local item
+  for item in "$@"; do
+    if [[ -n "$item" ]]; then
+      case " ${target[*]-} " in *" $item "*) continue ;; esac
+      target+=("$item")
+    fi
+  done
+}
+
+# Distribution plumbing the managed configuration needs beyond the manifest
+# tools: archives for upstream installers and the TLS trust store. Tool
+# packages themselves come from the components.sh catalog (tool_packages),
+# which the privileged payload loads.
+support_packages() {
+  case "$1" in
+    apt|dnf|pacman) printf '%s\n' unzip zip ca-certificates ;;
+    *) return 2 ;;
+  esac
+}
+
 install_packages() {
-  local profile="$1" manager="$2" upgrade="$3" pm package
-  local required=(git curl unzip zip rsync tmux neovim ripgrep fzf python3 jq htop)
-  local optional=() build=() warnings=()
-  if [[ "$manager" == brew ]]; then required=(git curl unzip zip rsync python3); fi
+  local profile="$1" manager="$2" upgrade="$3" pm package kind name
+  local packages=() optional=() warnings=()
   if command -v apt-get >/dev/null 2>&1; then
     pm=apt
-    required+=(ca-certificates openssh-client)
-    [[ "$manager" != native ]] || required+=(fd-find bat)
-    [[ "$profile" != workstation ]] || build+=(build-essential zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig)
-    [[ "$profile:$manager" != workstation:native ]] || build+=(golang-go)
-    optional=(lazygit lazydocker zoxide atuin tree-sitter-cli)
+  elif command -v dnf >/dev/null 2>&1; then
+    pm=dnf
+  elif command -v pacman >/dev/null 2>&1; then
+    pm=pacman
+  else
+    printf 'Unsupported package manager\n' >&2; return 1
+  fi
+  declare -F profile_components tool_packages >/dev/null || {
+    printf 'Incomplete privileged payload; use setup.sh.\n' >&2
+    return 1
+  }
+  while read -r package; do
+    append_unique packages "$package"
+  done < <(support_packages "$pm")
+
+  if [[ "$manager" == brew ]]; then
+    # Homebrew provisions the tools as the invoking user; the native pass only
+    # bootstraps what the remaining installer steps need.
+    for name in git curl ssh rsync python3; do
+      package="$(tool_packages "$name" "$pm")"
+      if [[ -n "$package" ]]; then
+        append_unique packages "$package"
+      fi
+    done
+  else
+    # The manifest drives installation: every required tool maps to its native
+    # package through the catalog. Tools with no native package (or provided by
+    # another channel, like opencode) contribute nothing here.
+    while read -r kind name _; do
+      [[ -n "$kind" && "$kind" == required ]] || continue
+      package="$(tool_packages "$name" "$pm")"
+      if [[ -n "$package" ]]; then
+        append_unique packages "$package"
+      fi
+    done < <(profile_components "$profile" linux)
+    if [[ "$profile" == workstation ]]; then
+      while read -r kind name _; do
+        [[ "$kind" == optional ]] || continue
+        package="$(tool_packages "$name" "$pm")"
+        if [[ -n "$package" ]]; then
+          append_unique optional "$package"
+        fi
+      done < <(profile_components "$profile" linux)
+      case "$pm" in
+        pacman) append_unique optional tree-sitter ;;
+        *)      append_unique optional tree-sitter-cli ;;
+      esac
+    fi
+  fi
+  if [[ "$profile" == workstation ]]; then
+    # Build support for workstation features (compilers for treesitter, desktop
+    # clipboard helpers, fonts); not manifest tools themselves.
+    case "$pm" in
+      apt)    append_unique packages build-essential zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig ;;
+      dnf)    append_unique packages gcc gcc-c++ make zsh ffmpeg-free alacritty xclip wl-clipboard copyq fontconfig ;;
+      pacman) append_unique packages base-devel zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig ;;
+    esac
+  fi
+
+  if [[ "$pm" == apt ]]; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update || return $?
     local apt_options=(-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
     [[ "$upgrade" == true ]] || apt_options+=(--no-upgrade)
-    apt-get install "${apt_options[@]}" "${required[@]}" ${build[@]+"${build[@]}"} || return $?
-  elif command -v dnf >/dev/null 2>&1; then
-    pm=dnf
-    required+=(ca-certificates openssh-clients)
-    [[ "$manager" != native ]] || required+=(fd-find bat)
-    [[ "$profile" != workstation ]] || build+=(gcc gcc-c++ make zsh ffmpeg-free alacritty xclip wl-clipboard copyq fontconfig)
-    [[ "$profile:$manager" != workstation:native ]] || build+=(golang)
-    optional=(lazygit lazydocker zoxide atuin tree-sitter-cli)
-    dnf install -y "${required[@]}" ${build[@]+"${build[@]}"} || return $?
-    if [[ "$upgrade" == true ]]; then dnf upgrade -y "${required[@]}" ${build[@]+"${build[@]}"} || return $?; fi
-  elif command -v pacman >/dev/null 2>&1; then
-    pm=pacman
-    required+=(ca-certificates openssh)
-    [[ "$manager" != native ]] || required+=(fd bat)
-    [[ "$profile" != workstation ]] || build+=(base-devel zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig)
-    [[ "$profile:$manager" != workstation:native ]] || build+=(go)
-    optional=(lazygit lazydocker zoxide atuin tree-sitter)
+    apt-get install "${apt_options[@]}" "${packages[@]}" || return $?
+    for package in ${optional[@]+"${optional[@]}"}; do
+      apt-get install "${apt_options[@]}" "$package" || warnings+=("$package")
+    done
+  elif [[ "$pm" == dnf ]]; then
+    dnf install -y "${packages[@]}" || return $?
+    if [[ "$upgrade" == true ]]; then dnf upgrade -y "${packages[@]}" || return $?; fi
+    for package in ${optional[@]+"${optional[@]}"}; do
+      dnf install -y "$package" || warnings+=("$package")
+    done
+  elif [[ "$pm" == pacman ]]; then
     # Syncing Arch's metadata requires a full upgrade, never a partial one.
-    pacman -Syu --needed --noconfirm "${required[@]}" ${build[@]+"${build[@]}"} || return $?
+    pacman -Syu --needed --noconfirm "${packages[@]}" || return $?
+    for package in ${optional[@]+"${optional[@]}"}; do
+      pacman -S --needed --noconfirm "$package" || warnings+=("$package")
+    done
   else
     printf 'Unsupported package manager\n' >&2; return 1
-  fi
-  if [[ "$profile" == workstation && "$manager" == native ]]; then
-    for package in "${optional[@]}"; do
-      case "$pm" in
-        apt) apt-get install "${apt_options[@]}" "$package" || warnings+=("$package") ;;
-        dnf) dnf install -y "$package" || warnings+=("$package") ;;
-        pacman) pacman -S --needed --noconfirm "$package" || warnings+=("$package") ;;
-      esac
-    done
   fi
   if [[ ${#warnings[@]} -gt 0 ]]; then printf 'Optional packages unavailable: %s\n' "${warnings[*]}" >&2; fi
   return 0

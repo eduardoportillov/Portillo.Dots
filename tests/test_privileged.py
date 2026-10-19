@@ -11,6 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'installer/privileged-core.sh'
+CATALOG = ROOT / 'installer/components.sh'
 BASH = shutil.which('bash')
 
 
@@ -231,24 +232,87 @@ if os.environ.get('FAIL_ARG') in sys.argv[1:]:
     sys.exit(47)
 ''')
             mock.chmod(0o755)
+            # The catalog emits the manifest through cat(1); keep the PATH
+            # minimal but complete enough for the privileged package logic.
+            (base / 'cat').symlink_to(shutil.which('cat'))
             log = base / 'calls'
             env = {**os.environ, 'PATH': directory, 'CALLS': str(log), 'FAIL_ARG': fail_arg}
-            script = 'source "$1"; install_packages "$2" "$3" "$4"'
-            result = subprocess.run([BASH, '-euc', script, '_', str(CORE), profile, manager, str(upgrade).lower()],
+            script = ('source "$1"; source "$2"; install_packages "$3" "$4" "$5"')
+            result = subprocess.run([BASH, '-euc', script, '_', str(CATALOG), str(CORE),
+                                     profile, manager, str(upgrade).lower()],
                                     env=env, capture_output=True, text=True, timeout=10)
             calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, calls
 
+    @staticmethod
+    def package_names(calls):
+        return [value for call in calls for value in call]
+
     def test_supported_backends_do_not_install_desktop_in_server_profile(self):
+        python = {'apt-get': 'python3', 'dnf': 'python3', 'pacman': 'python'}
         for backend in ['apt-get', 'dnf', 'pacman']:
             with self.subTest(backend=backend):
                 result, calls = self.run_packages(backend)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                packages = [value for call in calls for value in call]
-                for name in ['git', 'python3', 'neovim', 'tmux']:
+                packages = self.package_names(calls)
+                for name in ['git', python[backend], 'neovim', 'tmux']:
                     self.assertIn(name, packages)
                 for name in ['alacritty', 'copyq', 'zsh', 'golang-go', 'base-devel']:
                     self.assertNotIn(name, packages)
+
+    def test_native_package_names_come_from_the_catalog(self):
+        expectations = {
+            'apt-get': (['openssh-client', 'fd-find', 'bat', 'python3'],
+                        ['openssh', 'fd', 'python']),
+            'dnf': (['openssh-clients', 'fd-find', 'bat', 'python3'],
+                    ['openssh', 'fd', 'python']),
+            'pacman': (['openssh', 'fd', 'bat', 'python'],
+                       ['openssh-client', 'fd-find', 'python3']),
+        }
+        for backend, (expected, forbidden) in expectations.items():
+            with self.subTest(backend=backend):
+                result, calls = self.run_packages(backend)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                packages = self.package_names(calls)
+                for name in expected:
+                    self.assertIn(name, packages)
+                for name in forbidden:
+                    self.assertNotIn(name, packages)
+
+    def test_workstation_native_adds_optional_tools_and_go(self):
+        go = {'apt-get': 'golang-go', 'dnf': 'golang', 'pacman': 'go'}
+        treesitter = {'apt-get': 'tree-sitter-cli', 'dnf': 'tree-sitter-cli',
+                      'pacman': 'tree-sitter'}
+        for backend in ['apt-get', 'dnf', 'pacman']:
+            with self.subTest(backend=backend):
+                result, calls = self.run_packages(backend, profile='workstation')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                packages = self.package_names(calls)
+                for name in ['lazygit', go[backend], treesitter[backend]]:
+                    self.assertIn(name, packages)
+
+    def test_packages_fail_closed_without_the_provisioning_catalog(self):
+        result, calls = self.run_packages_without_catalog()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Incomplete privileged payload', result.stderr)
+        self.assertEqual(calls, [])
+
+    def run_packages_without_catalog(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            mock = base / 'apt-get'
+            mock.write_text(f'#!{sys.executable}\n' + 'import json, os, sys\n'
+                            'with open(os.environ["CALLS"], "a") as output:\n'
+                            '    output.write(json.dumps(sys.argv[1:]) + "\\n")\n')
+            mock.chmod(0o755)
+            (base / 'cat').symlink_to(shutil.which('cat'))
+            env = {**os.environ, 'PATH': directory, 'CALLS': str(base / 'calls')}
+            script = 'source "$1"; install_packages server native false'
+            result = subprocess.run([BASH, '-euc', script, '_', str(CORE)],
+                                    env=env, capture_output=True, text=True, timeout=10)
+            log = base / 'calls'
+            calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+            return result, calls
 
     def test_apt_preserves_conffiles_and_does_not_upgrade_implicitly(self):
         result, calls = self.run_packages('apt-get')
@@ -341,6 +405,8 @@ class SudoTransportTests(unittest.TestCase):
             self.assertTrue(calls[0].endswith(' check'))
             payload = (base / 'payload').read_text()
             self.assertIn('root_copy()', payload)
+            self.assertIn('tool_packages()', payload)
+            self.assertIn('profile_components()', payload)
             self.assertIn('privileged_main "$@" </dev/null', payload)
 
     def test_authentication_failure_and_interrupt_do_not_retry_or_continue(self):
