@@ -110,8 +110,10 @@ main() {
   [[ "$HARDWARE" == false || "$PLATFORM" == linux ]] || die 'Hardware settings require Linux'
   [[ "$HARDEN_EXISTING_SERVICE" == false || "$PLATFORM" == linux ]] || die 'Existing service hardening requires Linux'
   if [[ "$CHECK_ONLY" == true ]]; then
-    verify_profile
-    return
+    local outcome=0
+    verify_profile || outcome=1
+    print_summary
+    return "$outcome"
   fi
   show_actions
   [[ "$DRY_RUN" == false ]] || return 0
@@ -139,12 +141,19 @@ main() {
     install_profile
   fi
   configure_profile
+  local outcome=0
   if [[ "$CONFIG_ONLY" == false ]]; then
-    verify_profile
+    verify_profile || outcome=1
   else
-    verify_configs
+    verify_configs || outcome=1
   fi
-  info "Completed: $PROFILE. Log: $LOG"
+  print_summary
+  if [[ "$outcome" -eq 0 ]]; then
+    info "Completed: $PROFILE. Log: $LOG"
+  else
+    warn "Completed WITH FAILURES: $PROFILE. Log: $LOG"
+  fi
+  return "$outcome"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

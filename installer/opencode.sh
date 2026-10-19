@@ -4,13 +4,19 @@ install_opencode() {
   if command -v opencode >/dev/null 2>&1; then
     opencode --version | grep -Eq '(^|v)2\.' \
       || die 'Existing OpenCode is not V2; migrate/remove it explicitly before installing'
-    [[ "$UPGRADE" == true ]] || return 0
+    if [[ "$UPGRADE" == false ]]; then
+      record_event unchanged 'opencode V2 already installed'
+      return 0
+    fi
+    record_event updated 'opencode V2'
+    return 0
   fi
   # Official V2 installer, always as the invoking user. No npm global root writes.
   run_installer opencode https://opencode.ai/v2/install
   export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"
   command -v opencode >/dev/null 2>&1 || die 'OpenCode installer did not expose the executable'
   opencode --version | grep -Eq '(^|v)2\.' || die 'OpenCode V2 verification failed'
+  record_event installed 'opencode V2'
 }
 
 # The generated config references secrets as {env:NAME}; it must never contain
@@ -56,6 +62,7 @@ PY
   mv -f "$temporary" "$destination"
   chmod 0600 "$destination"
   info "Wrote $destination (0600); loaded automatically by ~/.config/opencode/load-secrets.sh"
+  record_event installed "opencode secrets env (0600)"
 }
 
 # Client preferences (cli.json) are separate from server/project configuration
@@ -65,8 +72,11 @@ configure_opencode_client() {
   mkdir -p "$(dirname "$destination")"
   if [[ -e "$destination" || -L "$destination" ]]; then
     [[ ! -L "$destination" && -f "$destination" ]] \
-      || { warn "Preserving existing cli.json: $destination"; return 0; }
+      || { warn "Preserving existing cli.json: $destination"
+           record_event preserved "$destination (independent client config)"
+           return 0; }
     info "Preserving independent cli.json: $destination"
+    record_event preserved "$destination (independent client config)"
     return 0
   fi
   symlink_file "$template" "$destination"
@@ -114,12 +124,14 @@ configure_opencode() {
   # permission to overwrite the user's actual credentials or custom plugins.
   if [[ -e "$directory/opencode.json" || -L "$directory/opencode.json" ]]; then
     warn 'Preserving existing opencode.json; merge profile permissions manually'
+    record_event preserved "$directory/opencode.json (independent config kept)"
     configure_opencode_client
     return 0
   fi
   if [[ -e "$destination" || -L "$destination" ]]; then
     if [[ ! -L "$destination" || "$(readlink "$destination")" != "$STATE_DIR"/opencode-*.jsonc ]]; then
       warn 'Preserving independent opencode.jsonc; merge profile permissions manually'
+      record_event preserved "$destination (independent config kept; merge manually)"
       configure_opencode_client
       return 0
     fi
@@ -135,6 +147,7 @@ configure_opencode() {
   python3 -B "$REPO_DIR/opencode/check-config.py" "$generated" "$PROFILE" "${check_args[@]+"${check_args[@]}"}" \
     || die 'Generated OpenCode config failed its own checks; not installing it'
   symlink_file "$generated" "$destination"
+  record_event installed "opencode config ($PROFILE)"
   if [[ "$OPENCODE_TEMPLATE" == true ]]; then
     install_opencode_secrets "$REPO_DIR/opencode/.env" "$directory/secrets.env"
   fi

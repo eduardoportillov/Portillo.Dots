@@ -162,17 +162,27 @@ verify_configs() {
   for pair in "${checks[@]}"; do
     destination="${pair%%:*}" source="${pair#*:}"
     if [[ ! -L "$destination" || "$(readlink "$destination")" != "$source" ]]; then
-      warn "Config missing or different: $destination"; failed=1
+      warn "Config missing or different: $destination"
+      record_event failed "config link missing or different: $destination"
+      failed=1
+    else
+      record_event unchanged "link $destination"
     fi
   done
   [[ -f "$CONFIG_HOME/opencode/opencode.jsonc" || -f "$CONFIG_HOME/opencode/opencode.json" ]] \
-    || { warn 'OpenCode global config missing'; failed=1; }
+    || { warn 'OpenCode global config missing'
+         record_event failed 'OpenCode global config missing'
+         failed=1; }
   if [[ -f "$CONFIG_HOME/opencode/opencode.jsonc" ]]; then
-    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.jsonc" "$PROFILE" || failed=1
-    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.jsonc" || failed=1
+    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.jsonc" "$PROFILE" \
+      || { record_event failed "OpenCode config check failed ($PROFILE baseline)"; failed=1; }
+    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.jsonc" \
+      || { record_event failed "OpenCode MCP command dependency missing"; failed=1; }
   elif [[ -f "$CONFIG_HOME/opencode/opencode.json" ]]; then
-    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.json" "$PROFILE" || failed=1
-    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.json" || failed=1
+    python3 -B "$REPO_DIR/opencode/check-config.py" "$CONFIG_HOME/opencode/opencode.json" "$PROFILE" \
+      || { record_event failed "OpenCode config check failed ($PROFILE baseline)"; failed=1; }
+    verify_opencode_dependencies "$CONFIG_HOME/opencode/opencode.json" \
+      || { record_event failed "OpenCode MCP command dependency missing"; failed=1; }
   fi
   return "$failed"
 }
@@ -186,9 +196,11 @@ verify_profile() {
     if ! tool_executable "$name" >/dev/null; then
       if [[ "$kind" == required ]]; then
         warn "Missing required tool: $name ($description)"
+        record_event failed "required tool missing: $name ($description)"
         failed=1
       else
         info "Optional tool not present: $name ($description)"
+        record_event skipped "optional tool absent: $name"
       fi
       continue
     fi
@@ -200,10 +212,15 @@ verify_profile() {
     fi
     if ! version_at_least "$installed" "$minimum"; then
       warn "$name $installed is older than the declared minimum $minimum ($description)"
+      record_event failed "$name $installed < required $minimum"
       failed=1
     fi
   done < <(profile_components "$PROFILE" "$PLATFORM")
   verify_configs || failed=1
-  [[ "$failed" -ne 0 ]] || info "Verification passed: $PROFILE"
+  if [[ "$failed" -ne 0 ]]; then
+    warn "Verification FAILED: $PROFILE"
+  else
+    info "Verification passed: $PROFILE"
+  fi
   return "$failed"
 }

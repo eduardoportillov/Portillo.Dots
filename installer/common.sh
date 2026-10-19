@@ -6,6 +6,51 @@ info() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*" >&2; }
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
+# Outcome tracking. The summary reports what happened — installed, unchanged,
+# preserved, restricted, skipped or failed — so a run never has to be inferred
+# from scrolling logs.
+EVENTS=()
+
+record_event() {
+  local status="$1"
+  shift
+  EVENTS+=("$status|$*")
+}
+
+print_summary() {
+  local entry status message
+  local installed=0 unchanged=0 preserved=0 restricted=0 skipped=0 failed=0
+  for entry in "${EVENTS[@]}"; do
+    status="${entry%%|*}"
+    message="${entry#*|}"
+    case "$status" in
+      installed)  installed=$((installed + 1)) ;;
+      unchanged)  unchanged=$((unchanged + 1)) ;;
+      preserved)  preserved=$((preserved + 1)) ;;
+      restricted) restricted=$((restricted + 1)) ;;
+      skipped)    skipped=$((skipped + 1)) ;;
+      failed)     failed=$((failed + 1)) ;;
+    esac
+  done
+
+  echo ""
+  info "Outcome for $PROFILE ($PLATFORM/$ARCH, $PACKAGE_MANAGER):"
+  info "  created $installed | unchanged $unchanged | preserved $preserved | restricted $restricted | skipped $skipped | failed $failed"
+  # Anything that is not a routine "unchanged" is worth naming explicitly.
+  for entry in "${EVENTS[@]}"; do
+    status="${entry%%|*}"
+    message="${entry#*|}"
+    case "$status" in
+      installed)  printf '    [+] %s\n' "$message" ;;
+      preserved)  printf '    [!] %s\n' "$message" ;;
+      restricted) printf '    [k] %s\n' "$message" ;;
+      skipped)    printf '    [-] %s\n' "$message" ;;
+      failed)     printf '    [x] %s\n' "$message" ;;
+    esac
+  done
+  [[ "$failed" -eq 0 ]] || printf '    [x] %d failure(s) above; see the log for detail\n' "$failed"
+}
+
 # Extract a canonical X.Y.Z from arbitrary version text ("tmux 3.6b" -> 3.6.0).
 extract_version() {
   local text="$1"
@@ -107,8 +152,9 @@ secure_file() {
   [[ "$current" =~ ^[0-7]{3,4}$ ]] || return 0
   # Already private to the owner: nothing to tighten.
   (( (8#$current & 0077) == 0 )) && return 0
-  chmod "$mode" "$path" || { warn "Could not restrict $path (still mode $current)"; return 1; }
+  chmod "$mode" "$path" || { warn "Could not restrict $path (still mode $current)"; record_event failed "restrict $path"; return 1; }
   info "Restricted $path: $current -> $mode"
+  record_event restricted "$path ($current -> $mode)"
 }
 
 secure_dir() {
@@ -117,8 +163,9 @@ secure_dir() {
   current="$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null || echo '')"
   [[ "$current" =~ ^[0-7]{3,4}$ ]] || return 0
   (( (8#$current & 0077) == 0 )) && return 0
-  chmod 0700 "$path" || { warn "Could not restrict directory $path"; return 1; }
+  chmod 0700 "$path" || { warn "Could not restrict directory $path"; record_event failed "restrict dir $path"; return 1; }
   info "Restricted $path: $current -> 0700"
+  record_event restricted "$path ($current -> 0700)"
 }
 
 # Known credential locations: repo sources, generated config and the log.
@@ -171,10 +218,15 @@ symlink_file() {
   [[ -e "$source" ]] || die "Missing config: $source"
   mkdir -p "$(dirname "$destination")"
   if [[ -L "$destination" && "$(readlink "$destination")" == "$source" ]]; then
+    record_event unchanged "link $destination"
     return 0
+  fi
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    record_event preserved "$destination (previous version moved to the backup)"
   fi
   backup "$destination"
   ln -s "$source" "$destination"
+  record_event installed "link $destination"
 }
 
 run_installer() {
