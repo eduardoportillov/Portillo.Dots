@@ -89,12 +89,15 @@ class TemplateShapeTests(unittest.TestCase):
 
 
 class PluginCompatTests(unittest.TestCase):
-    def test_compat_table_flags_v1_only_plugins(self):
+    def test_compat_table_is_a_v1_only_denylist_not_an_inventory(self):
         table = renderer.load_jsonc((ROOT / 'opencode/plugin-compat.json').read_text())
         packages = table['packages']
-        self.assertIs(packages['@franlol/opencode-md-table-formatter']['v2'], False)
-        self.assertIs(packages['opencode-pty']['v2'], False)
-        self.assertIs(packages['@mohak34/opencode-notifier']['v2'], True)
+        self.assertTrue(packages, 'the denylist must not be empty')
+        for name, entry in packages.items():
+            self.assertIs(entry['v2'], False,
+                          f'{name}: only known V1-only packages belong in the denylist')
+        self.assertIn('@franlol/opencode-md-table-formatter', packages)
+        self.assertIn('opencode-pty', packages)
 
     def test_package_names_are_normalised_from_both_entry_shapes(self):
         config = {'plugins': ['scope/name@1.2.3', {'package': 'plain@^2'}, {'package': '@scope/pkg@3'}]}
@@ -118,13 +121,12 @@ class PluginCompatTests(unittest.TestCase):
             self.assertEqual(tolerant.returncode, 0, tolerant.stderr)
             self.assertIn('V1-only', tolerant.stderr)
 
-    def test_template_contains_no_known_v1_only_plugin(self):
+    def test_template_declares_no_plugins_at_all(self):
         config = renderer.load_jsonc((ROOT / 'opencode/opencode.template.jsonc').read_text())
-        table = renderer.load_jsonc((ROOT / 'opencode/plugin-compat.json').read_text())['packages']
-        for name in checker.plugin_packages(config):
-            entry = table.get(name)
-            if entry is not None:
-                self.assertIs(entry['v2'], True, f'template ships a V1-only plugin: {name}')
+        self.assertNotIn('plugins', config,
+                         'the template ships no plugins: notification is native in V2')
+        self.assertNotIn('plugin', config)
+        self.assertEqual(checker.plugin_packages(config), [])
 
 
 class ClientSeparationTests(unittest.TestCase):

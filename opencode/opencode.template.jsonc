@@ -69,9 +69,5 @@
     { "action": "shell", "resource": "git push --force *", "effect": "ask" },
     { "action": "shell", "resource": "git rebase *", "effect": "ask" },
     { "action": "shell", "resource": "git reset --hard *", "effect": "ask" }
-  ],
-
-  "plugins": [
-    "@mohak34/opencode-notifier@^1.1.0"
   ]
 }
