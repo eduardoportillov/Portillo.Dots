@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 
+# Print the exact tool manifest of the active profile as two aligned lists.
+show_components() {
+  local kind name description
+  local required=() optional=()
+  while read -r kind name description; do
+    [[ -n "$kind" ]] || continue
+    if [[ "$kind" == required ]]; then required+=("$name"); else optional+=("$name"); fi
+  done < <(profile_components "$PROFILE" "$PLATFORM")
+  info "Required tools (${#required[@]}): ${required[*]}"
+  if [[ ${#optional[@]} -gt 0 ]]; then
+    info "Optional tools (${#optional[@]}, absence is not fatal): ${optional[*]}"
+  fi
+}
+
 show_actions() {
   info "Profile: $PROFILE | Platform: $PLATFORM/$ARCH | Packages: $PACKAGE_MANAGER"
+  show_components
   if [[ "${CHECK_SUDO:-false}" == true ]]; then
     info 'Read-only privileged identity check: one sudo invocation, no packages/config/service changes'
     return 0
@@ -146,14 +161,20 @@ verify_configs() {
 }
 
 verify_profile() {
-  local failed=0 binary
-  local binaries=(git curl ssh rsync tmux nvim rg fd fzf bat jq htop python3 opencode)
-  [[ "$PROFILE" != workstation ]] || binaries+=(zsh node pnpm go rustup uv claude zed)
-  for binary in "${binaries[@]}"; do
-    if ! command -v "$binary" >/dev/null 2>&1; then
-      warn "Missing: $binary"; failed=1
+  local failed=0 kind name description
+  # The manifest drives verification, so a tool added to show_actions can never
+  # silently escape the checks (and vice versa).
+  while read -r kind name description; do
+    [[ -n "$kind" ]] || continue
+    if command -v "$name" >/dev/null 2>&1; then
+      continue
+    elif [[ "$kind" == required ]]; then
+      warn "Missing required tool: $name ($description)"
+      failed=1
+    else
+      info "Optional tool not present: $name ($description)"
     fi
-  done
+  done < <(profile_components "$PROFILE" "$PLATFORM")
   if command -v opencode >/dev/null 2>&1; then
     opencode --version | grep -Eq '(^|v)2\.' || { warn 'OpenCode V2 is required'; failed=1; }
   fi

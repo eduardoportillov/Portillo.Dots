@@ -9,6 +9,7 @@ while [[ -L "$SOURCE" ]]; do
 done
 REPO_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 source "$REPO_DIR/installer/common.sh"
+source "$REPO_DIR/installer/components.sh"
 source "$REPO_DIR/installer/profiles.sh"
 source "$REPO_DIR/installer/workstation.sh"
 source "$REPO_DIR/installer/opencode.sh"
