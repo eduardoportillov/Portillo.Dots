@@ -12,6 +12,24 @@
 `setup.sh` rechaza explícitamente todo lo que no sea Linux/macOS en x86_64 o
 ARM64. Nada más se declara soportado.
 
+### Matriz de CI
+
+`.github/workflows/ci.yml` ejecuta la suite en exactamente las plataformas
+declaradas arriba:
+
+| Job | ubuntu-latest | macos-latest | Qué cubre |
+|---|---|---|---|
+| `tests` | ✅ | ✅ | 231 pruebas unitarias, de integración y de configuración |
+| `shellcheck` | ✅ | — | lint de todos los `.sh` versionados |
+| `secret-scan` | ✅ | — | contenido versionado + blobs del historial |
+
+`ubuntu-latest` es x86_64 y `macos-latest` es ARM64, así que entre ambos se
+ejercitan las dos arquitecturas declaradas. **Windows no está en la matriz**: el
+instalador lo rechaza explícitamente y no hay planes de soportarlo.
+
+El checkout usa `fetch-depth: 0` para que el escaneo de secretos pueda inspeccionar
+el historial; con un clone superficial esa comprobación no vería nada.
+
 ## Gestores de paquetes nativos
 
 `installer/privileged-core.sh` cubre tres familias con los nombres correctos de
