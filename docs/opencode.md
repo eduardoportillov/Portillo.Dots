@@ -59,24 +59,41 @@ La regla del validador es: una clave con forma de credencial (`key`, `secret`,
 `token`, `auth`, `password`, `credential`) o un valor largo y denso que no parezca
 URL debe usar `{env:...}`. Literales inocuos como `Z_AI_MODE=ZAI` están permitidos.
 
-## Plugins: compatibilidad V2 verificada
+## Plugins: la plantilla no declara ninguno
+
+**La plantilla no lleva plugins.** Notificaciones, previews y gestión de sesiones
+son nativas de OpenCode V2, así que no hace falta ningún paquete externo para eso.
+
+Los tres que había fueron retirados:
+
+| Paquete | Motivo de la retirada |
+|---|---|
+| `@mohak34/opencode-notifier` | su funcionalidad ya es **nativa en V2** |
+| `@franlol/opencode-md-table-formatter` | **V1-only**, no se ejecuta en V2 |
+| `opencode-pty` | **V1-only**, no se ejecuta en V2 |
+
+### `plugin-compat.json` es un denylist, no un inventario
+
+Ese archivo **no** documenta lo instalado. Es un guard que registra los paquetes
+conocidos como **incompatibles con V2**, para que no vuelvan a entrar por
+accidente:
+
+```json
+{
+  "packages": {
+    "@franlol/opencode-md-table-formatter": { "v2": false, ... },
+    "opencode-pty": { "v2": false, ... }
+  }
+}
+```
+
+`check-config.py` lo consulta:
+
+- en modo **plantilla**, un paquete de la denylist es **error** → no se instala;
+- sobre una config independiente, es **nota** → se preserva y se explica.
 
 Los plugins V1 **no se ejecutan en V2** (la API cambió; renombrar la entrada no
-basta). Comprobado contra el registro npm el 2026-10-16, registrado en
-`opencode/plugin-compat.json`:
-
-| Paquete | ¿V2? | Motivo |
-|---|---|---|
-| `@mohak34/opencode-notifier` | **Sí** | declara `@opencode/plugin >=2.0.18 <3` (API V2) |
-| `@franlol/opencode-md-table-formatter` | **No** | exige `@opencode-ai/plugin >=0.13.7` (API V1) |
-| `opencode-pty` | **No** | depende de `@opencode-ai/sdk` y `@opencode-ai/plugin` 1.x |
-
-Por eso la plantilla solo lleva `@mohak34/opencode-notifier@^1.1.0`. Los otros dos
-fueron retirados: estaban declarados pero **no hacían nada en V2**.
-
-`check-config.py` usa esa tabla: en modo plantilla un plugin V1-only es error; en
-una config independiente se reporta como nota. Volver a añadirlos exige que sus
-autores publiquen un puerto V2.
+basta). Reintroducirlos exige que sus autores publiquen un puerto V2.
 
 ## Dependencias MCP
 
