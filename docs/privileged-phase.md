@@ -120,11 +120,18 @@ La comprobación de identidad y cualquier reparación real deben registrarse por
 separado. Las instalaciones reales Linux/macOS y las interrupciones reales de
 gestores de paquetes siguen perteneciendo a la validación de integración.
 
-### Estado de esta revisión (2026-10-14)
+### Estado de esta revisión (2026-10-16)
 
 - Suite completa: 78 pruebas pasando, incluidas las pruebas aisladas de esta fase.
 - Sintaxis Bash/Python y ShellCheck v0.11.0: sin errores en los archivos revisados.
-- No se ejecutó sudo real ni se modificó el servicio instalado durante las pruebas.
-- El usuario eligió ejecutar personalmente la reparación limitada desde su terminal.
-  La validación real de autenticación y el estado final del archivo siguen
-  pendientes de su resultado; no se consideran completados por los mocks.
+- El usuario ejecutó personalmente la reparación limitada desde su terminal y
+  mostró una sola solicitud de contraseña. Se creó el respaldo privado en
+  `/usr/local/bin/.portillo-backup.snP2ku20`.
+- Se verificó que `/usr/local/bin/apply-linux-hardware-settings.sh` es un archivo
+  regular, propiedad de root, con permisos `0755`. La unidad instalada no cambió
+  y coincide byte a byte con la plantilla versionada. El servicio no se reinició
+  y no se aplicó ajuste de hardware durante esta reparación.
+- El directorio de respaldo está protegido con permisos root; no se ejecutó sudo
+  adicional ni se leyó su contenido para auditarlo. Su existencia se confirmó
+  desde la salida de instalación y mediante un cambio de identidad de usuario,
+  que no inspeccionó archivos privilegiados.
