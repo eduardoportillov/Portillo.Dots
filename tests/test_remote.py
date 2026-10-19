@@ -24,7 +24,7 @@ class RemoteTests(unittest.TestCase):
     def create_repo(self, directory):
         repo = Path(directory)
         subprocess.run(['git', 'init', '-q', str(repo)], check=True)
-        for name in manifest.EXACT | {'nvim/lua/config/options.lua'}:
+        for name in manifest.BASE | manifest.LAZYVIM | {'nvim/lua/config/options.lua'}:
             path = repo / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('runtime\n')
@@ -42,9 +42,21 @@ class RemoteTests(unittest.TestCase):
                 path.write_text('fake-secret\n')
             subprocess.run(['git', '-C', str(repo), 'add', '.'], check=True)
             files = manifest.manifest(repo)
-            self.assertTrue(manifest.EXACT.issubset(files))
+            self.assertTrue((manifest.BASE | manifest.LAZYVIM).issubset(files))
             self.assertFalse(set(secrets) & set(files))
             self.assertNotIn('linux/optimize.sh', files)
+
+    def test_server_manifest_ships_the_shared_baseline_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = self.create_repo(directory)
+            files = set(manifest.manifest(repo, 'server'))
+            self.assertTrue(manifest.BASE.issubset(files))
+            self.assertFalse(manifest.LAZYVIM & files,
+                             'the server runtime must not carry the LazyVim tree')
+            self.assertFalse({'nvim/lua/config/options.lua'} & files)
+            self.assertEqual(manifest.manifest(repo, 'workstation'), manifest.manifest(repo))
+            with self.assertRaises(ValueError):
+                manifest.manifest(repo, 'bogus')
 
     def test_refuses_symlinked_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -140,18 +152,48 @@ class RemoteTests(unittest.TestCase):
 
 class RuntimeToolsetTests(unittest.TestCase):
     def test_runtime_toolset_comes_from_the_catalog(self):
-        script = 'source "$1/installer/components.sh"; remote_runtime_components'
+        script = ('source "$1/installer/components.sh"; '
+                  'remote_runtime_components workstation; printf "\\n--server--\\n"; '
+                  'remote_runtime_components server')
         result = subprocess.run(['bash', '-euc', script, '_', str(ROOT)],
                                 capture_output=True, text=True, check=True)
-        required = [line.split()[1] for line in result.stdout.splitlines()
+        workstation, server = result.stdout.split('\n--server--\n')
+        required = [line.split()[1] for line in workstation.splitlines()
                     if line.startswith('required ')]
         self.assertEqual(required, ['nvim', 'rg', 'fd', 'fzf', 'lazygit', 'node', 'npm', 'stylua'])
+        server_names = [line.split()[1] for line in server.splitlines() if line.strip()]
+        self.assertEqual(server_names, ['nvim', 'rg', 'fd', 'fzf', 'tmux'])
         for path in (ROOT / 'remote.sh', ROOT / 'remote/install-binaries.sh'):
             text = path.read_text()
             self.assertNotIn('for bin in nvim rg', text)
             self.assertNotIn('for binary in nvim rg', text)
             self.assertIn('PORTILLO_RUNTIME_BINS', text,
                           f'{path.name} must take the toolset from the catalog')
+
+    def test_like_flag_validates_the_runtime_profile(self):
+        for value, expected in [('bogus', 2), ('', 2)]:
+            with self.subTest(value=value):
+                script = 'source "$1/remote.sh"; parse_args deploy fakehost --like "$2"'
+                result = subprocess.run(['bash', '-euc', script, '_', str(ROOT), value],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected)
+
+    def test_server_nvim_config_points_at_the_shared_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = '''
+                export PORTILLO_INSTALLER_LIBRARY=1
+                source "$1/remote/install-binaries.sh"
+                setup_server_nvim_config
+                setup_server_nvim_config
+            '''
+            result = subprocess.run(['bash', '-euc', script, '_', str(ROOT)],
+                                    env={**os.environ, 'HOME': directory},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            link = Path(directory) / '.config/portillo-remote/nvim/init.lua'
+            self.assertTrue(link.is_symlink())
+            self.assertTrue(str(link.readlink()).endswith('/shared/nvim/base.lua'),
+                            'the server runtime must load the shared Neovim baseline')
 
 
 if __name__ == '__main__':

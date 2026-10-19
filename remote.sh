@@ -21,7 +21,7 @@ runtime_bins() {
   local kind name
   while read -r kind name; do
     [[ -n "$kind" && "$kind" == required ]] && printf '%s ' "$name"
-  done < <(remote_runtime_components)
+  done < <(remote_runtime_components "$RUNTIME_PROFILE")
   return 0
 }
 
@@ -45,6 +45,7 @@ VERBOSE=0
 FORCE=0
 REFRESH_BINS=0
 SKIP_BINS=0
+RUNTIME_PROFILE=workstation
 CLEANUP=1
 NO_CD=0
 NO_TMUX=1
@@ -84,6 +85,8 @@ Options:
   --no-tmux           Connect directly into Bash (default)
   --skip-bins         Skip binary installation
   --refresh-bins      Refresh verified binary downloads for the remote platform
+  --like PROFILE      Runtime profile: workstation (default) or server (shared
+                      baseline only, like a host installed with --profile server)
   --cd PATH           Override path this session + auto-save
   --no-cd             Ignore saved paths this session
   --port PORT         SSH port (overrides SSH config)
@@ -121,6 +124,8 @@ Opciones:
   --no-tmux     Conecta directo a Bash (por defecto)
   --skip-bins   Omite la instalación de binarios
   --refresh-bins  Actualiza las descargas verificadas para la plataforma remota
+  --like server|workstation  Perfil del runtime (workstation por defecto;
+                   server = solo la base compartida, como --profile server)
   --cd PATH     Usa esa ruta esta sesión y la guarda
   --no-cd       Ignora las rutas guardadas esta sesión
   --port PORT   Puerto SSH (anula la config de SSH)
@@ -173,6 +178,11 @@ parse_args() {
       --tmux)       NO_TMUX=0; shift ;;
       --skip-bins)  SKIP_BINS=1; shift ;;
       --refresh-bins) REFRESH_BINS=1; shift ;;
+      --like)
+        [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { error "Missing value for --like"; exit 2; }
+        RUNTIME_PROFILE="$2"; shift 2
+        case "$RUNTIME_PROFILE" in server|workstation) ;; *) error "Unknown runtime profile: $RUNTIME_PROFILE"; exit 2 ;; esac
+        ;;
       --no-cd)      NO_CD=1; shift ;;
       --cd|--port|--identity)
         [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || { error "Missing value for $1"; exit 2; }
@@ -485,7 +495,7 @@ deploy_configs() {
   info "Syncing dotfiles to $HOST..."
   local manifest
   manifest="$(mktemp)"
-  if ! python3 "$REMOTE_DIR/deploy-manifest.py" "$REPO_DIR" > "$manifest"; then
+  if ! python3 "$REMOTE_DIR/deploy-manifest.py" "$REPO_DIR" "$RUNTIME_PROFILE" > "$manifest"; then
     rm -f "$manifest"
     return 1
   fi
@@ -830,7 +840,7 @@ deploy_binaries() {
   fi
 
   info "Installing binaries on remote host..."
-  cat "$REMOTE_DIR/lib.sh" "$REMOTE_DIR/install-binaries.sh" | ssh_cmd "PORTILLO_RUNTIME_BINS='$(runtime_bins)' bash -s"
+  cat "$REMOTE_DIR/lib.sh" "$REMOTE_DIR/install-binaries.sh" | ssh_cmd "PORTILLO_RUNTIME_BINS='$(runtime_bins)' PORTILLO_RUNTIME_PROFILE='$RUNTIME_PROFILE' bash -s"
   local rc=$?
 
   if [[ $rc -ne 0 ]]; then
@@ -1185,7 +1195,7 @@ cmd_status() {
     < "$REMOTE_DIR/shell-environment.sh" || rc=1
   echo ""
 
-  ssh_cmd "PORTILLO_RUNTIME_BINS='$(runtime_bins)' bash -s" <<'STATUS_EOF' || rc=1
+  ssh_cmd "PORTILLO_RUNTIME_BINS='$(runtime_bins)' PORTILLO_RUNTIME_PROFILE='$RUNTIME_PROFILE' bash -s" <<'STATUS_EOF' || rc=1
 RC=0
 REMOTE_BASE="$HOME/.portillo-remote"
 STATE_DIR="$HOME/.portillo-dots-remote-state"

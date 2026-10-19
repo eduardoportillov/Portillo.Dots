@@ -313,6 +313,25 @@ setup_nvim_config_symlink() {
   ok "nvim config symlink created"
 }
 
+setup_server_nvim_config() {
+  # --like server: the app dir exposes the shared baseline as init.lua, so the
+  # runtime editor behaves exactly like a host installed with --profile server.
+  local nvim_app_dir="$HOME/.config/portillo-remote/nvim"
+  local target="$REMOTE_BASE/shared/nvim/base.lua"
+  if [[ -L "$nvim_app_dir" ]]; then
+    local saved
+    saved="$(mktemp -d "$(dirname "$nvim_app_dir")/.nvim-backup.XXXXXXXX")"
+    mv "$nvim_app_dir" "$saved/nvim"
+  fi
+  if [[ -d "$nvim_app_dir" && -L "$nvim_app_dir/init.lua" ]] \
+    && [[ "$(readlink "$nvim_app_dir/init.lua")" == "$target" ]]; then
+    return 0
+  fi
+  mkdir -p "$nvim_app_dir"
+  ln -sfn "$target" "$nvim_app_dir/init.lua"
+  ok "server nvim config linked to the shared baseline"
+}
+
 setup_tpm() {
   # Remote tmux uses server/tmux.conf without global plugins or autoboot.
   return 0
@@ -326,19 +345,32 @@ main() {
 
   ensure_dir "$REMOTE_BIN"
 
-  install_neovim
-  install_tmux
-  install_ripgrep
-  install_fd
-  install_fzf
-  install_lazygit
-  install_node
-  install_zig_cc
-  install_stylua
-
+  # The toolset comes from the provisioning catalog through remote.sh; each
+  # tool maps to its bespoke installer (URLs, checksums and extraction are
+  # tool-specific).
   local binary runtime_bins=()
   read -r -a runtime_bins <<< "${PORTILLO_RUNTIME_BINS:-}"
   [[ ${#runtime_bins[@]} -gt 0 ]] || { error 'Runtime toolset not provided by remote.sh'; return 1; }
+  for binary in "${runtime_bins[@]}"; do
+    case "$binary" in
+      nvim)    install_neovim ;;
+      tmux)    install_tmux ;;
+      rg)      install_ripgrep ;;
+      fd)      install_fd ;;
+      fzf)     install_fzf ;;
+      lazygit) install_lazygit ;;
+      node)    install_node ;;
+      npm)     : ;;  # installed together with node
+      stylua)  install_stylua ;;
+      *) error "No installer for runtime tool: $binary"; return 1 ;;
+    esac
+  done
+
+  # Build support for treesitter plugin compilation: dev runtime only.
+  if [[ "${PORTILLO_RUNTIME_PROFILE:-workstation}" != server ]]; then
+    install_zig_cc
+  fi
+
   for binary in "${runtime_bins[@]}"; do
     [[ -x "$REMOTE_BIN/$binary" ]] || { error "Required remote binary missing: $binary"; return 1; }
     "$REMOTE_BIN/$binary" --version >/dev/null || { error "Remote binary cannot run: $binary"; return 1; }
@@ -346,8 +378,12 @@ main() {
 
   echo ""
   info "Post-install setup..."
-  setup_lazy_nvim
-  setup_nvim_config_symlink
+  if [[ "${PORTILLO_RUNTIME_PROFILE:-workstation}" == server ]]; then
+    setup_server_nvim_config
+  else
+    setup_lazy_nvim
+    setup_nvim_config_symlink
+  fi
   setup_tpm
 
   echo ""

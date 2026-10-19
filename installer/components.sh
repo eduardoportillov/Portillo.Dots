@@ -239,12 +239,27 @@ tool_upgrade() {
 }
 
 # Remote runtime toolset (remote.sh): portable binaries the transient runtime
-# provides, as "kind name". This is the single source for the install
-# verification and remote.sh status lists; per-tool downloads (URLs, checksums,
-# extraction) stay bespoke in remote.sh. Passed to the remote scripts through
-# PORTILLO_RUNTIME_BINS because they run on the host without the repo.
+# provides, as "kind name" per runtime profile. This is the single source for
+# the install verification and remote.sh status lists; per-tool downloads (URLs,
+# checksums, extraction) stay bespoke in remote.sh. Passed to the remote
+# scripts through PORTILLO_RUNTIME_BINS because they run without the repo.
+#
+#   workstation  dev runtime: LazyVim toolchain (default, matches the profile)
+#   server       lightweight runtime: the shared baseline only, like a host
+#                installed with --profile server
 remote_runtime_components() {
-  cat <<'EOF'
+  case "$1" in
+    server)
+      cat <<'EOF'
+required nvim
+required rg
+required fd
+required fzf
+required tmux
+EOF
+      ;;
+    workstation|'')
+      cat <<'EOF'
 required nvim
 required rg
 required fd
@@ -255,4 +270,7 @@ required npm
 required stylua
 optional tmux
 EOF
+      ;;
+    *) return 2 ;;
+  esac
 }
