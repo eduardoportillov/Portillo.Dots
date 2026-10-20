@@ -125,6 +125,9 @@ raise SystemExit(0)
                 source "$1/setup.sh"
                 PROFILE=workstation; PLATFORM=mac; ARCH=aarch64; UPGRADE=false
                 LOG="$HOME/log"; CONFIG_HOME="$HOME/.config"
+                # macos-latest has a real Homebrew at /opt/homebrew. Keep this
+                # package batching unit test hermetic and exercise only its stub.
+                homebrew_prefix() { printf '%s\\n' "$HOME/fake-homebrew"; }
                 install_brew_tools
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': f'{stubs}:/usr/bin:/bin',
