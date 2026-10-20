@@ -22,11 +22,16 @@ en el uso diario:
 | `shared/nvim/base.lua` | Opciones, leader, keymaps base, OSC 52 copy-only sobre SSH | `server/nvim/init.lua`, `nvim/lua/config/options.lua` (LazyVim encima), runtime `--like server` |
 
 Lo que cambia entre contextos es **solo el overlay**: la pila de plugins de tmux
-y LazyVim en workstation, y nada en server. El prompt y el status de tmux
-comparten la paleta Kanagawa Dragon (`#8ba4b0`, `#c5c9c5`); workstation conserva
-Powerlevel10k, que se monta encima del prompt compartido. `setup.sh` despliega
-las bases en `~/.config/portillo-dots/` (`shell-common.sh`, `tmux-base.conf`,
-`nvim-base.lua`) y `remote.sh` lleva el mismo árbol dentro del runtime.
+y LazyVim en workstation, y nada en server. **El prompt es literalmente el mismo
+en todos los host**: `zsh/.zshrc` + `zsh/p10k.zsh` (Powerlevel10k) se instalan y
+enlazan en cada perfil, con la paleta Kanagawa Dragon compartida con el status de
+tmux (`#8ba4b0`, `#c5c9c5`); el PS1 compartido queda como fallback para sesiones
+bash. Como el login shell solo cambia con `--change-shell` (opt-in para ambos
+perfiles), un host puede seguir entrando en bash con la misma identidad visual.
+
+`setup.sh` despliega las bases en `~/.config/portillo-dots/`
+(`shell-common.sh`, `tmux-base.conf`, `nvim-base.lua`) y `remote.sh` lleva el
+mismo árbol dentro del runtime.
 
 Los contextos **no** pueden redefinir la superficie compartida: un test lo
 vigila (`SharedBaselineTests`).
@@ -63,20 +68,21 @@ proveer Node a las dependencias. Los tests del catálogo exigen que cada
 herramienta declare ruta de aprovisionamiento y método de actualización, así
 que una herramienta añadida a medias rompe la suite antes que una instalación.
 
-### Server — 15 herramientas requeridas
+### Server — 16 herramientas requeridas
 
 ```text
-git curl ssh rsync tmux nvim rg fd fzf bat jq htop python3 opencode pi
+git curl ssh rsync tmux nvim rg fd fzf bat jq htop python3 zsh opencode pi
 ```
 
 Sin escritorio, sin toolchains de desarrollo y sin instaladores de apps gráficas.
+`zsh` es la identidad de shell compartida (mismo prompt en todos los host).
 
-### Workstation — 23 requeridas + 4 opcionales
+### Workstation — 24 requeridas + 4 opcionales
 
-Requeridas (las 15 anteriores, más):
+Requeridas (las 16 anteriores, más):
 
 ```text
-zsh node pnpm go rustup uv claude zed
+node pnpm go rustup uv claude zed alacritty
 ```
 
 Opcionales:
@@ -99,8 +105,10 @@ La verificación automática cubre estos límites (tests en `tests/test_profiles
 - **No borra la configuración de Workstation.** Aplicar Server sobre un HOME que
   ya tenga `~/.config/zed`, `~/.config/alacritty`, `~/.oh-my-zsh`, `~/.cargo` o el
   árbol de Neovim de LazyVim deja esos elementos intactos.
-- **No cambia el shell de login.** `--change-shell` es opt-in y está prohibido para
-  Server, tanto en `setup.sh` como en la capa privilegiada.
+- **No cambia el shell de login por su cuenta.** `--change-shell` sigue siendo
+  **opt-in explícito** para ambos perfiles (incluido Server, donde la paridad de
+  prompt con el resto de host lo justifica); nada se ejecuta sin esa flag.
+  Los ajustes de hardware siguen **prohibidos** para Server.
 
 Cuando Server gestiona un archivo que ya existía (por ejemplo `~/.tmux.conf` o
 `~/.config/nvim/init.lua`), lo sustituye tras guardar el original en el directorio
@@ -127,9 +135,12 @@ Ninguno se aplica por defecto:
 bash setup.sh --profile workstation --hardware        # CPU, memoria, batería 60%
 bash setup.sh --profile workstation --apply-linux     # solo esos ajustes
 bash setup.sh --profile workstation --change-shell    # shell de login → Zsh
+bash setup.sh --profile server --change-shell         # idéntico en el server
 ```
 
-Server rechaza las tres opciones en cualquiera de sus capas.
+Server rechaza `--hardware` y `--apply-linux` en cualquiera de sus capas.
+`--change-shell` vale para ambos perfiles porque la premisa es que todos los
+host se sientan igual, pero **solo** con la flag explícita.
 
 ## Verificación
 

@@ -39,17 +39,6 @@ install_workstation() {
   elif [[ "$UPGRADE" == true ]]; then
     uv tool upgrade markitdown >>"$LOG" 2>&1
   fi
-  if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-    RUNZSH=no CHSH=no KEEP_ZSHRC=yes run_installer oh-my-zsh \
-      https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh --unattended
-  elif [[ "$UPGRADE" == true ]]; then
-    sync_git_dependency https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
-  fi
-  local plugin
-  for plugin in zsh-autosuggestions zsh-syntax-highlighting; do
-    sync_git_dependency "https://github.com/zsh-users/$plugin.git" "$HOME/.oh-my-zsh/custom/plugins/$plugin"
-  done
-  sync_git_dependency https://github.com/romkatv/powerlevel10k.git "$HOME/.oh-my-zsh/custom/themes/powerlevel10k"
   sync_git_dependency https://github.com/tmux-plugins/tpm.git "$HOME/.tmux/plugins/tpm"
   install_fonts
   if ! command -v claude >/dev/null 2>&1; then
@@ -103,8 +92,6 @@ prepare_config_directory() {
 }
 
 configure_workstation() {
-  symlink_file "$REPO_DIR/zsh/.zshrc" "$HOME/.zshrc"
-  symlink_file "$REPO_DIR/zsh/p10k.zsh" "$HOME/.p10k.zsh"
   symlink_file "$REPO_DIR/tmux/tmux.conf" "$HOME/.tmux.conf"
   symlink_file "$REPO_DIR/.markdownlint.jsonc" "$HOME/.markdownlint.jsonc"
   prepare_config_directory "$CONFIG_HOME/nvim"

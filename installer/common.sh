@@ -316,6 +316,26 @@ ensure_homebrew() {
   fi
 }
 
+# The shell identity every host shares: Oh My Zsh, the Powerlevel10k prompt and
+# its plugins, cloned as the invoking user like every other dependency. The
+# same zsh/.zshrc and zsh/p10k.zsh load on every host, so the prompt and shell
+# behaviour are literally identical wherever you log in.
+install_shell_identity() {
+  command -v zsh >/dev/null 2>&1 \
+    || die 'zsh is required for the shared shell identity; it comes from the catalog'
+  if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+    RUNZSH=no CHSH=no KEEP_ZSHRC=yes run_installer oh-my-zsh \
+      https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh --unattended
+  elif [[ "$UPGRADE" == true ]]; then
+    sync_git_dependency https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
+  fi
+  local plugin
+  for plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+    sync_git_dependency "https://github.com/zsh-users/$plugin.git" "$HOME/.oh-my-zsh/custom/plugins/$plugin"
+  done
+  sync_git_dependency https://github.com/romkatv/powerlevel10k.git "$HOME/.oh-my-zsh/custom/themes/powerlevel10k"
+}
+
 # Node.js through fnm in the user prefix: no sudo and no global system writes.
 # The fnm-managed runtime is placed first on PATH for the running installer.
 ensure_node_runtime() {

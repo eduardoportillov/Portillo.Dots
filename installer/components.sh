@@ -42,13 +42,13 @@ required bat - bat file viewer
 required jq - JSON processor
 required htop - Process monitor
 required python3 - Python runtime
+required zsh - Zsh shell (shared prompt identity)
 required opencode 2.0 OpenCode V2 agent client
 required pi - Pi agent harness
 EOF
 
   if [[ "$profile" == workstation ]]; then
     cat <<'EOF'
-required zsh - Zsh shell
 required node 20 Node.js runtime (MCP servers use npx)
 required pnpm - pnpm package manager
 required go - Go toolchain

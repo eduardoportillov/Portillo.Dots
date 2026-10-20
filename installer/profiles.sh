@@ -135,11 +135,14 @@ install_profile() {
     install_workstation
   fi
   install_source_tools "$PROFILE"
+  install_shell_identity
   install_opencode
 }
 
 configure_profile() {
   symlink_file "$REPO_DIR/zsh/.dircolors" "$HOME/.dircolors"
+  symlink_file "$REPO_DIR/zsh/.zshrc" "$HOME/.zshrc"
+  symlink_file "$REPO_DIR/zsh/p10k.zsh" "$HOME/.p10k.zsh"
   symlink_file "$REPO_DIR/shared/shell/common.sh" "$CONFIG_HOME/portillo-dots/shell-common.sh"
   symlink_file "$REPO_DIR/shared/tmux/base.conf" "$CONFIG_HOME/portillo-dots/tmux-base.conf"
   symlink_file "$REPO_DIR/shared/nvim/base.lua" "$CONFIG_HOME/portillo-dots/nvim-base.lua"
@@ -165,7 +168,11 @@ configure_server_shell() {
     *) warn 'Unsupported shell integration: add ~/.local/bin and ~/.opencode/bin to PATH manually'; return 0 ;;
   esac
   if [[ -L "$rc" ]]; then
-    warn "Preserving symlinked shell config: $rc; source portillo-dots/server.sh manually"
+    # The managed zshrc already loads the shared baseline; any other symlinked
+    # shell config belongs to the user and is preserved untouched.
+    if [[ "$(readlink "$rc")" != "$REPO_DIR/zsh/.zshrc" ]]; then
+      warn "Preserving symlinked shell config: $rc; source portillo-dots/server.sh manually"
+    fi
     return 0
   fi
   python3 "$REPO_DIR/installer/shell-block.py" "$rc" "$BACKUP_DIR"
@@ -176,13 +183,15 @@ verify_configs() {
   local _opencode_config=""
   verify_secret_permissions || failed=1
   local checks=("$HOME/.dircolors:$REPO_DIR/zsh/.dircolors"
+                "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc"
+                "$HOME/.p10k.zsh:$REPO_DIR/zsh/p10k.zsh"
                 "$CONFIG_HOME/portillo-dots/shell-common.sh:$REPO_DIR/shared/shell/common.sh"
                 "$CONFIG_HOME/portillo-dots/tmux-base.conf:$REPO_DIR/shared/tmux/base.conf"
                 "$CONFIG_HOME/portillo-dots/nvim-base.lua:$REPO_DIR/shared/nvim/base.lua")
   if [[ "$PROFILE" == server ]]; then
     checks+=("$HOME/.tmux.conf:$REPO_DIR/server/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/server/nvim/init.lua")
   else
-    checks+=("$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf" "$HOME/.zshrc:$REPO_DIR/zsh/.zshrc" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/nvim/init.lua")
+    checks+=("$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/nvim/init.lua")
   fi
   for pair in "${checks[@]}"; do
     destination="${pair%%:*}" source="${pair#*:}"

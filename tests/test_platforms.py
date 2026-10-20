@@ -149,6 +149,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
+                install_shell_identity() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -184,6 +185,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
+                install_shell_identity() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -216,6 +218,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
+                install_shell_identity() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -300,7 +303,7 @@ class VersionGateTests(unittest.TestCase):
             versions = {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
                         'nvim': '0.11.0', 'rg': '14.0.0', 'fd': '9.0.0',
                         'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
-                        'python3': '3.12.0', 'opencode': '2.0.28', 'pi': '1.0.0'}
+                        'python3': '3.12.0', 'zsh': '5.9', 'opencode': '2.0.28', 'pi': '1.0.0'}
             self.make_stubs(stubs, versions)
             # tmux exists but prints no parsable version.
             (stubs / 'tmux').write_text('#!/bin/sh\nif [ "$1" = "-V" ]; then echo "custom build"; fi\n')

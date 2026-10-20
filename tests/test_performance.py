@@ -195,6 +195,7 @@ class SinglePassVerificationTests(unittest.TestCase):
                 '{"permissions":[{"action":"shell","resource":"*","effect":"ask"},'
                 '{"action":"edit","resource":"*","effect":"ask"}]}\n')
             for name, source in [('.dircolors', 'zsh/.dircolors'), ('.tmux.conf', 'server/tmux.conf'),
+                                 ('.zshrc', 'zsh/.zshrc'), ('.p10k.zsh', 'zsh/p10k.zsh'),
                                  ('.config/portillo-dots/shell-common.sh', 'shared/shell/common.sh'),
                                  ('.config/portillo-dots/tmux-base.conf', 'shared/tmux/base.conf'),
                                  ('.config/portillo-dots/nvim-base.lua', 'shared/nvim/base.lua')]:

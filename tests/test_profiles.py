@@ -27,11 +27,11 @@ class ProfileManifestTests(unittest.TestCase):
     def test_server_has_no_workstation_only_tools(self):
         server = {name for _, name, _ in components('server')}
         workstation = {name for _, name, _ in components('workstation')}
-        for name in ['zsh', 'node', 'pnpm', 'go', 'rustup', 'uv', 'claude', 'zed',
+        for name in ['node', 'pnpm', 'go', 'rustup', 'uv', 'claude', 'zed',
                      'lazygit', 'lazydocker', 'zoxide', 'atuin']:
             self.assertNotIn(name, server)
             self.assertIn(name, workstation)
-        for name in ['git', 'tmux', 'nvim', 'rg', 'fd', 'fzf', 'bat', 'opencode', 'pi', 'python3']:
+        for name in ['git', 'tmux', 'nvim', 'rg', 'fd', 'fzf', 'bat', 'opencode', 'pi', 'python3', 'zsh']:
             self.assertIn(name, server)
             self.assertIn(name, workstation)
 
@@ -128,7 +128,12 @@ class ProfileBoundaryTests(unittest.TestCase):
             for path in workstation_dirs:
                 self.assertTrue(path.is_dir(), f'{path} must survive a Server profile')
                 self.assertEqual((path / '.keep').read_text(), 'workstation content\n')
-            self.assertIn('# workstation zshrc', (home / '.zshrc').read_text())
+            self.assertIn('# workstation zshrc',
+                          next(p.read_text() for p in (home / '.state').rglob('.zshrc')
+                               if '# workstation zshrc' in p.read_text()),
+                          'the previous shell config must survive in the backup')
+            self.assertEqual((home / '.zshrc').resolve(), ROOT / 'zsh/.zshrc',
+                             'the shared shell identity is managed by every profile')
 
             # Server does replace the tmux config it owns, but never silently:
             # the original is preserved in the run's backup directory.
@@ -166,6 +171,7 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
                 run_installer() { printf 'download:%s\\n' "$1" >> "$MOCK_CALLS"; return 0; }
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
+                install_shell_identity() { return 0; }
                 install_profile
                 configure_profile
             '''

@@ -100,8 +100,8 @@ main() {
   fi
   case "$PROFILE" in workstation|server) ;; *) die "Invalid profile: $PROFILE" ;; esac
   case "$PACKAGE_MANAGER" in auto|native|brew) ;; *) die "Invalid package manager: $PACKAGE_MANAGER" ;; esac
-  [[ "$PROFILE" != server || ( "$HARDWARE" == false && "$CHANGE_SHELL" == false ) ]] \
-    || die 'Server never changes hardware settings or the login shell'
+  [[ "$PROFILE" != server || "$HARDWARE" == false ]] \
+    || die 'Server never changes hardware settings'
   [[ "$CONFIG_ONLY" == false || ( "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false ) ]] \
     || die '--config-only cannot install, upgrade or change system settings'
   [[ "$CHECK_ONLY" == false || ( "$CONFIG_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false ) ]] \

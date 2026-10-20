@@ -25,7 +25,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_rejects_invalid_or_conflicting_arguments(self):
         cases = [[], ['--wat'], ['--profile'], ['--profile', 'unknown'],
-                 ['--profile', 'server', '--hardware'], ['--profile', 'server', '--change-shell'],
+                 ['--profile', 'server', '--hardware'],
                  ['--profile', 'server', '--config-only', '--upgrade'],
                  ['--profile', 'server', '--check-sudo', '--config-only'],
                  ['--profile', 'server', '--check-sudo', '--check'],
@@ -57,11 +57,16 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             (home / '.bashrc').write_text('export MY_SETTING=preserved\n')
-            (home / '.zshrc').write_text('untouched zsh\n')
+            (home / '.zshrc').write_text('previous zsh\n')
             for _ in range(2):
                 result = self.configure_server(directory)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual((home / '.zshrc').read_text(), 'untouched zsh\n')
+            # The shared shell identity is managed like tmux.conf: the link is
+            # installed and the previous file survives in the backup.
+            self.assertEqual((home / '.zshrc').resolve(), ROOT / 'zsh/.zshrc')
+            self.assertTrue((home / '.p10k.zsh').is_symlink())
+            backups = list((home / '.state').rglob('.zshrc'))
+            self.assertTrue(any(p.read_text() == 'previous zsh\n' for p in backups))
             self.assertIn('MY_SETTING=preserved', (home / '.bashrc').read_text())
             self.assertEqual((home / '.bashrc').read_text().count('# >>> Portillo.Dots Remote Server >>>'), 1)
             self.assertFalse((home / '.config/alacritty').exists())
