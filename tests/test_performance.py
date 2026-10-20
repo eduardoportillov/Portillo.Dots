@@ -129,8 +129,13 @@ raise SystemExit(0)
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': f'{stubs}:/usr/bin:/bin',
                    'XDG_STATE_HOME': str(home / '.state')}
-            result = subprocess.run([BASH, '-euc', script, '_', str(ROOT)],
-                                    env=env, capture_output=True, text=True, timeout=30)
+            try:
+                result = subprocess.run([BASH, '-euc', script, '_', str(ROOT)],
+                                        env=env, capture_output=True, text=True, timeout=30)
+            except subprocess.TimeoutExpired as error:
+                stdout = error.stdout.decode(errors='replace') if isinstance(error.stdout, bytes) else (error.stdout or '')
+                stderr = error.stderr.decode(errors='replace') if isinstance(error.stderr, bytes) else (error.stderr or '')
+                self.fail(f'brew batching test timed out; child output:\n{stdout}\n{stderr}')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             lines = [l for l in calls.read_text().splitlines() if l.strip()]
             list_calls = [l for l in lines if 'brew list' in l]

@@ -144,7 +144,7 @@ class ExecutableAliasTests(unittest.TestCase):
             (mocks / 'fdfind').chmod(0o755)
             script = '''
                 source "$1/setup.sh"
-                PROFILE=server; PLATFORM=linux; PACKAGE_MANAGER=native; CONFIG_ONLY=true
+                PROFILE=server; PLATFORM=linux; PACKAGE_MANAGER=auto; CONFIG_ONLY=true
                 detect_platform; initialize_state
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
@@ -181,7 +181,7 @@ class ExecutableAliasTests(unittest.TestCase):
             existing.chmod(0o755)
             script = '''
                 source "$1/setup.sh"
-                PROFILE=server; PLATFORM=linux; PACKAGE_MANAGER=native; CONFIG_ONLY=true
+                PROFILE=server; PLATFORM=linux; PACKAGE_MANAGER=auto; CONFIG_ONLY=true
                 detect_platform; initialize_state
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
@@ -215,7 +215,7 @@ class ExecutableAliasTests(unittest.TestCase):
             placeholder.chmod(0o644)
             script = '''
                 source "$1/setup.sh"
-                PROFILE=server; PLATFORM=linux; PACKAGE_MANAGER=native; CONFIG_ONLY=true
+                PROFILE=server; PLATFORM=linux; PACKAGE_MANAGER=auto; CONFIG_ONLY=true
                 detect_platform; initialize_state
                 trap cleanup_setup EXIT
                 install_opencode() { return 0; }
