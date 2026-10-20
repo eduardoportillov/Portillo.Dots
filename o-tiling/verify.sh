@@ -153,9 +153,10 @@ cmd_integrity() {
   [[ -d "$EXT_DIR" ]] || { echo "Error: la extensión no está instalada." >&2; exit 1; }
 
   echo "Comprobando que la extensión instalada es idéntica al release upstream..."
-  local tmp
-  tmp="$(mktemp --suffix=.zip)"
-  trap 'rm -f "$tmp"' EXIT
+  local tmpdir tmp
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/o-tiling-verify.XXXXXX")"
+  tmp="$tmpdir/release.zip"
+  trap 'rm -rf "$tmpdir"' EXIT
   curl -fsSL "https://github.com/oliwebd/o-tiling/releases/download/${OTILING_VERSION}/${OTILING_UUID}-${OTILING_VERSION}.zip" \
     -o "$tmp"
 

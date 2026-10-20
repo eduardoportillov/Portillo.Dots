@@ -154,13 +154,15 @@ homebrew_prefix() {
 # the catalog because both the unprivileged flow and the privileged payload
 # (which concatenates this file) need it.
 append_unique() {
-  local -n target="$1"
+  local target_name="$1" joined
   shift
   local item
+  case "$target_name" in packages|optional) ;; *) return 2 ;; esac
   for item in "$@"; do
     if [[ -n "$item" ]]; then
-      case " ${target[*]-} " in *" $item "*) continue ;; esac
-      target+=("$item")
+      eval 'joined="${'"$target_name"'[*]}"'
+      case " $joined " in *" $item "*) continue ;; esac
+      eval "$target_name+=(\"\$item\")"
     fi
   done
 }

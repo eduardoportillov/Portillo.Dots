@@ -55,7 +55,8 @@ while IFS= read -r raw || [[ -n "$raw" ]]; do
     .*) entry="*${key}=${value}" ;;
     \**) entry="${key}=${value}" ;;
     *)
-      code="$(ls_code "${key^^}")" || {
+      upper_key="$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')"
+      code="$(ls_code "$upper_key")" || {
         printf 'ERROR: unsupported dircolors keyword: %s\n' "$key" >&2
         exit 1
       }

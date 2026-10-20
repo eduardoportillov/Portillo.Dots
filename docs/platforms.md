@@ -19,7 +19,7 @@ declaradas arriba:
 
 | Job | ubuntu-latest | macos-latest | Qué cubre |
 |---|---|---|---|
-| `tests` | ✅ | ✅ | 266 pruebas unitarias, de integración y de configuración |
+| `tests` | ✅ | ✅ | 275 pruebas unitarias, de integración y de configuración |
 | `shellcheck` | ✅ | — | lint de todos los `.sh` versionados |
 | `secret-scan` | ✅ | — | contenido versionado + blobs del historial |
 
@@ -138,6 +138,15 @@ python3 -B -m unittest discover -s tests -p 'test_platforms.py' -v
 
 `--check` comprueba presencia, versiones mínimas y enlaces de configuración, sin
 instalar ni escribir nada.
+
+## Portabilidad del shell
+
+Los scripts Bash también se mantienen compatibles con Bash 3.2, la versión que
+Apple incluye en macOS: no usan namerefs (`local -n`) ni expansión de mayúsculas
+de Bash 4 (`${var^^}`). Los ZIP temporales usan `mktemp -d` con plantillas
+portables, no `mktemp --suffix` de GNU. `--dry-run` puede mostrar acciones
+Linux-only en macOS, marcándolas como no disponibles, sin intentar ejecutarlas;
+los modos de instalación y verificación conservan los gates de plataforma.
 
 ## Límites conocidos
 

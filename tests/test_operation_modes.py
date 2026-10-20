@@ -33,6 +33,12 @@ class OperationModeTests(unittest.TestCase):
         env = os.environ.copy()
         env.update(HOME=directory, XDG_CONFIG_HOME=directory + '/.config',
                    XDG_STATE_HOME=directory + '/.state', SHELL='/bin/bash')
+        platform_bin = Path(directory) / '.test-bin'
+        platform_bin.mkdir(exist_ok=True)
+        uname = platform_bin / 'uname'
+        uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\n')
+        uname.chmod(0o755)
+        env['PATH'] = f'{platform_bin}:{env["PATH"]}'
         return env
 
     def run_setup(self, directory, args, env=None):
@@ -51,6 +57,31 @@ class OperationModeTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertEqual(self.installer_footprint(home), [],
                                      f'{args} must not create installer files')
+
+    def test_dry_run_previews_linux_only_actions_on_macos_without_writes(self):
+        with tempdir() as directory:
+            home = Path(directory)
+            mac_bin = home / 'mac-bin'
+            mac_bin.mkdir()
+            uname = mac_bin / 'uname'
+            uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; esac\n')
+            uname.chmod(0o755)
+            env = self.isolated(directory)
+            env['PATH'] = f'{mac_bin}:{env["PATH"]}'
+            result = self.run_setup(directory,
+                                    ['--profile', 'workstation', '--dry-run', '--hardware'], env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('Platform: mac/aarch64', result.stdout)
+            self.assertIn('Preview only: hardware settings are unavailable on this platform',
+                          result.stdout)
+            self.assertEqual(self.installer_footprint(home), [])
+            result = self.run_setup(directory,
+                                    ['--profile', 'workstation', '--dry-run',
+                                     '--harden-existing-service'], env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('Preview only: service hardening is unavailable on this platform',
+                          result.stdout)
+            self.assertEqual(self.installer_footprint(home), [])
 
     def test_check_is_read_only(self):
         for profile in ('server', 'workstation'):

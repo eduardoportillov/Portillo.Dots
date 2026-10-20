@@ -49,7 +49,7 @@ prepare_system_parent() {
 root_copy() (
   # Subshell traps clean only the staging file, not the original or its backup.
   local source="$1" destination="$2" mode="$3" temporary='' parent saved status name owner existing_mode
-  trap 'status=$?; if [[ -n "$temporary" ]]; then rm -f -- "$temporary"; fi; exit "$status"' EXIT
+  trap 'status=$?; if [[ -n "${temporary:-}" ]]; then rm -f -- "$temporary"; fi; exit "$status"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   [[ "$source" == /* && -f "$source" && ! -L "$source" ]] \

@@ -13,6 +13,12 @@ class InstallerTests(unittest.TestCase):
         env = os.environ.copy()
         env.update(HOME=directory, XDG_CONFIG_HOME=directory + '/.config',
                    XDG_STATE_HOME=directory + '/.state', SHELL='/bin/bash')
+        platform_bin = Path(directory) / '.test-bin'
+        platform_bin.mkdir(exist_ok=True)
+        uname = platform_bin / 'uname'
+        uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\n')
+        uname.chmod(0o755)
+        env['PATH'] = f'{platform_bin}:{env["PATH"]}'
         return env
 
     def test_dry_run_has_no_writes(self):
@@ -21,7 +27,9 @@ class InstallerTests(unittest.TestCase):
                 result = subprocess.run(['bash', str(ROOT / 'setup.sh'), '--profile', profile, '--dry-run'],
                                         env=self.isolated(directory), capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(list(Path(directory).iterdir()), [])
+                self.assertFalse(any((Path(directory) / name).exists() for name in [
+                    '.config', '.state', '.local', '.dircolors', '.tmux.conf', '.zshrc',
+                ]), 'dry-run must not create installer-managed files')
 
     def test_rejects_invalid_or_conflicting_arguments(self):
         cases = [[], ['--wat'], ['--profile'], ['--profile', 'unknown'],
@@ -39,7 +47,9 @@ class InstallerTests(unittest.TestCase):
                 result = subprocess.run(['bash', str(ROOT / 'setup.sh'), *args], input='',
                                         env=self.isolated(directory), capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(list(Path(directory).iterdir()), [])
+                self.assertFalse(any((Path(directory) / name).exists() for name in [
+                    '.config', '.state', '.local', '.dircolors', '.tmux.conf', '.zshrc',
+                ]), 'invalid arguments must not create installer-managed files')
 
     def configure_server(self, directory):
         script = '''

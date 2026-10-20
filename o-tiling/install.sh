@@ -167,8 +167,9 @@ fi
 # 2. DESCARGAR E INSTALAR (release ZIP de GitHub, sin modificar)
 # =====================================================================
 ZIP_URL="https://github.com/oliwebd/o-tiling/releases/download/${OTILING_VERSION}/${OTILING_UUID}-${OTILING_VERSION}.zip"
-TMPZIP="$(mktemp --suffix=.zip)"
-trap 'rm -f "$TMPZIP"' EXIT
+TMPDIR_OTILING="$(mktemp -d "${TMPDIR:-/tmp}/o-tiling.XXXXXX")"
+TMPZIP="$TMPDIR_OTILING/release.zip"
+trap 'rm -rf "$TMPDIR_OTILING"' EXIT
 echo "Descargando $ZIP_URL ..."
 curl -fsSL "$ZIP_URL" -o "$TMPZIP"
 

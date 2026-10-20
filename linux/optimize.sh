@@ -62,7 +62,8 @@ has_battery() {
 is_asus() {
   local vendor
   vendor="$(cat /sys/class/dmi/id/board_vendor 2>/dev/null || true)"
-  [[ "${vendor^^}" == *"ASUS"* ]]
+  vendor="$(printf '%s' "$vendor" | tr '[:lower:]' '[:upper:]')"
+  [[ "$vendor" == *"ASUS"* ]]
 }
 
 has_charge_control() {

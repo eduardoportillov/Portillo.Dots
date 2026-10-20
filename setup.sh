@@ -113,6 +113,16 @@ main() {
   [[ "$HARDEN_EXISTING_SERVICE" == false || ( "$PROFILE" == workstation && "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && "$OPENCODE_TEMPLATE" == false ) ]] \
     || die '--harden-existing-service requires workstation and cannot be combined with other operations'
   detect_platform
+  if [[ "$DRY_RUN" == true ]]; then
+    show_actions
+    if [[ "$HARDWARE" == true && "$PLATFORM" != linux ]]; then
+      info 'Preview only: hardware settings are unavailable on this platform'
+    fi
+    if [[ "$HARDEN_EXISTING_SERVICE" == true && "$PLATFORM" != linux ]]; then
+      info 'Preview only: service hardening is unavailable on this platform'
+    fi
+    return 0
+  fi
   [[ "$HARDWARE" == false || "$PLATFORM" == linux ]] || die 'Hardware settings require Linux'
   [[ "$HARDEN_EXISTING_SERVICE" == false || "$PLATFORM" == linux ]] || die 'Existing service hardening requires Linux'
   if [[ "$CHECK_ONLY" == true ]]; then
@@ -122,7 +132,6 @@ main() {
     return "$outcome"
   fi
   show_actions
-  [[ "$DRY_RUN" == false ]] || return 0
   [[ "$EUID" -ne 0 ]] || die 'Run setup as your normal user, not root'
   if [[ "$INTERACTIVE" == true ]]; then
     read -r -p 'Proceed? [y/N]: ' answer

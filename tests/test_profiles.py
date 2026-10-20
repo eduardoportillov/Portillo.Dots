@@ -90,6 +90,12 @@ class ProfileBoundaryTests(unittest.TestCase):
         env = os.environ.copy()
         env.update(HOME=directory, XDG_CONFIG_HOME=directory + '/.config',
                    XDG_STATE_HOME=directory + '/.state', SHELL='/bin/bash')
+        platform_bin = Path(directory) / '.test-bin'
+        platform_bin.mkdir(exist_ok=True)
+        uname = platform_bin / 'uname'
+        uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\n')
+        uname.chmod(0o755)
+        env['PATH'] = f'{platform_bin}:{env["PATH"]}'
         return env
 
     def configure_server(self, directory):
