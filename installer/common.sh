@@ -454,7 +454,7 @@ install_source_tools() {
 # shell change. macOS installs packages through user-level Homebrew, so a normal
 # macOS install must not prompt for a password at all.
 needs_privileged_phase() {
-  [[ "$HARDWARE" == true || "$CHANGE_SHELL" == true ]] && return 0
+  [[ "$HARDWARE" == true || "$CHANGE_SHELL" == true || -n "${TIMEZONE:-}" ]] && return 0
   [[ "$PLATFORM" == linux && "$CONFIG_ONLY" == false ]]
 }
 

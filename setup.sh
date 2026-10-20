@@ -24,6 +24,7 @@ UPGRADE=false
 HARDWARE=false
 HARDWARE_ONLY=false
 CHANGE_SHELL=false
+TIMEZONE=""
 INTERACTIVE=false
 PACKAGE_MANAGER=auto
 OPENCODE_TEMPLATE=false
@@ -47,6 +48,7 @@ Options:
   --hardware            Opt in to Linux hardware settings (workstation only)
   --apply-linux, -L     Apply only those hardware settings (workstation only)
   --change-shell        Opt in to changing the login shell to Zsh
+  --timezone IANA       Opt in to setting the system timezone (Linux only)
   --opencode-template   Use the custom template + opencode/.env (manual V2 plugin review)
   --interactive, -i     Confirm the installation summary before proceeding
   --yes, -y             Accept the summary (never bypasses sudo authentication)
@@ -81,6 +83,11 @@ parse_args() {
       --hardware) HARDWARE=true; shift ;;
       --apply-linux|-L) HARDWARE=true; HARDWARE_ONLY=true; shift ;;
       --change-shell) CHANGE_SHELL=true; shift ;;
+      --timezone)
+        require_value "$@"; TIMEZONE="$2"; shift 2
+        [[ "$TIMEZONE" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ ]] \
+          || die "Invalid timezone name: $TIMEZONE"
+        ;;
       --opencode-template) OPENCODE_TEMPLATE=true; shift ;;
       --interactive|-i) INTERACTIVE=true; shift ;;
       --yes|-y) INTERACTIVE=false; shift ;;
@@ -102,19 +109,26 @@ main() {
   case "$PACKAGE_MANAGER" in auto|native|brew) ;; *) die "Invalid package manager: $PACKAGE_MANAGER" ;; esac
   [[ "$PROFILE" != server || "$HARDWARE" == false ]] \
     || die 'Server never changes hardware settings'
-  [[ "$CONFIG_ONLY" == false || ( "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false ) ]] \
+  [[ "$CONFIG_ONLY" == false || ( "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" ) ]] \
     || die '--config-only cannot install, upgrade or change system settings'
-  [[ "$CHECK_ONLY" == false || ( "$CONFIG_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false ) ]] \
+  [[ "$CHECK_ONLY" == false || ( "$CONFIG_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" ) ]] \
     || die '--check cannot be combined with modifying options'
-  [[ "$HARDWARE_ONLY" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$CHANGE_SHELL" == false ) ]] \
+  [[ "$HARDWARE_ONLY" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" ) ]] \
     || die '--apply-linux cannot be combined with other operation modes'
-  [[ "$CHECK_SUDO" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && "$OPENCODE_TEMPLATE" == false && "$HARDEN_EXISTING_SERVICE" == false ) ]] \
+  [[ "$CHECK_SUDO" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$OPENCODE_TEMPLATE" == false && "$HARDEN_EXISTING_SERVICE" == false ) ]] \
     || die '--check-sudo cannot be combined with modifying or other checking options'
-  [[ "$HARDEN_EXISTING_SERVICE" == false || ( "$PROFILE" == workstation && "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && "$OPENCODE_TEMPLATE" == false ) ]] \
+  [[ "$HARDEN_EXISTING_SERVICE" == false || ( "$PROFILE" == workstation && "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$OPENCODE_TEMPLATE" == false ) ]] \
     || die '--harden-existing-service requires workstation and cannot be combined with other operations'
   detect_platform
   if [[ "$DRY_RUN" == true ]]; then
     show_actions
+    if [[ -n "$TIMEZONE" ]]; then
+      if [[ "$PLATFORM" == linux ]]; then
+        info "Preview only: set system timezone to $TIMEZONE"
+      else
+        info 'Preview only: timezone changes are unavailable on this platform'
+      fi
+    fi
     if [[ "$HARDWARE" == true && "$PLATFORM" != linux ]]; then
       info 'Preview only: hardware settings are unavailable on this platform'
     fi
@@ -125,6 +139,10 @@ main() {
   fi
   [[ "$HARDWARE" == false || "$PLATFORM" == linux ]] || die 'Hardware settings require Linux'
   [[ "$HARDEN_EXISTING_SERVICE" == false || "$PLATFORM" == linux ]] || die 'Existing service hardening requires Linux'
+  if [[ -n "$TIMEZONE" ]]; then
+    [[ "$PLATFORM" == linux ]] || die '--timezone is supported on Linux only'
+    [[ -f "/usr/share/zoneinfo/$TIMEZONE" ]] || die "Unknown IANA timezone: $TIMEZONE"
+  fi
   if [[ "$CHECK_ONLY" == true ]]; then
     local outcome=0
     verify_profile || outcome=1

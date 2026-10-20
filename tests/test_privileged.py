@@ -389,7 +389,7 @@ class SudoTransportTests(unittest.TestCase):
             self.assertEqual(list(home.iterdir()), [])
             calls = (base / 'calls').read_text().splitlines()
             self.assertEqual(len(calls), 1)
-            self.assertTrue(calls[0].endswith(' check'))
+            self.assertTrue(calls[0].endswith(' check '), calls[0])
 
     def test_read_only_probe_dry_run_does_not_invoke_sudo(self):
         with tempdir() as directory:
@@ -414,7 +414,7 @@ class SudoTransportTests(unittest.TestCase):
             calls = (base / 'calls').read_text().splitlines()
             self.assertEqual(len(calls), 1)
             self.assertIn('/bin/bash -p -s -- server native false false false false', calls[0])
-            self.assertTrue(calls[0].endswith(' check'))
+            self.assertTrue(calls[0].endswith(' check '), calls[0])
             payload = (base / 'payload').read_text()
             self.assertIn('root_copy()', payload)
             self.assertIn('tool_packages()', payload)
@@ -492,6 +492,36 @@ class HomebrewPrefixTests(unittest.TestCase):
                  if re.search(r'prepare_homebrew_prefix\s+[/~$.]', line)]
         self.assertEqual(calls, ['prepare_homebrew_prefix /home/linuxbrew "$SUDO_USER" || return 1'],
                          'the prefix root must be a fixed literal, never user-controlled')
+
+
+class TimezoneTests(unittest.TestCase):
+    def test_timezone_is_applied_only_after_validation(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            stub = base / 'timedatectl'
+            calls = base / 'calls'
+            stub.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALLS"\n')
+            stub.chmod(0o755)
+            env = {**os.environ, 'PATH': directory, 'CALLS': str(calls)}
+            result = subprocess.run(
+                [BASH, '-euc', 'source "$1"; set_system_timezone America/La_Paz', '_', str(CORE)],
+                env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls.read_text(), 'set-timezone America/La_Paz\n')
+
+    def test_invalid_timezone_is_rejected_before_timedatectl(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            stub = base / 'timedatectl'
+            calls = base / 'calls'
+            stub.write_text('#!/bin/sh\ntouch "$CALLS"\n')
+            stub.chmod(0o755)
+            env = {**os.environ, 'PATH': directory, 'CALLS': str(calls)}
+            result = subprocess.run(
+                [BASH, '-euc', 'source "$1"; set_system_timezone ../../etc/passwd', '_', str(CORE)],
+                env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse(calls.exists())
 
 
 if __name__ == '__main__':

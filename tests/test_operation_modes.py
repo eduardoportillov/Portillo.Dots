@@ -198,7 +198,8 @@ class ArgumentValidationTests(unittest.TestCase):
 
     def test_missing_flag_values_are_rejected(self):
         cases = [['--profile'], ['--profile', '--check'], ['--package-manager'],
-                 ['--package-manager', '--dry-run'], ['--profile', ''],
+                 ['--package-manager', '--dry-run'], ['--timezone'], ['--timezone', '--check'],
+                 ['--profile', ''],
                  ['--package-manager', '']]
         for args in cases:
             with self.subTest(args=args), tempdir() as d:
@@ -222,6 +223,30 @@ class ArgumentValidationTests(unittest.TestCase):
                 result = self.run_setup(args, env=self.temp_env(d))
                 self.assertNotEqual(result.returncode, 0, args)
 
+    def test_timezone_requires_a_valid_linux_install_mode(self):
+        with tempdir() as directory:
+            invalid = self.run_setup(['--profile', 'server', '--timezone', '../../etc/passwd'],
+                                     env=self.temp_env(directory))
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn('Invalid timezone name', invalid.stderr)
+            conflict = self.run_setup(['--profile', 'server', '--timezone', 'America/La_Paz',
+                                       '--config-only'], env=self.temp_env(directory))
+            self.assertNotEqual(conflict.returncode, 0)
+
+    def test_timezone_dry_run_is_explicit_and_read_only(self):
+        with tempdir() as directory, tempfile.TemporaryDirectory() as bindir:
+            uname = Path(bindir) / 'uname'
+            uname.write_text('#!/bin/sh\ncase "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac\n')
+            uname.chmod(0o755)
+            env = self.temp_env(directory)
+            env['PATH'] = f'{bindir}:{env["PATH"]}'
+            result = self.run_setup(['--profile', 'server', '--timezone', 'America/La_Paz',
+                                     '--dry-run'], env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('Preview only: set system timezone to America/La_Paz', result.stdout)
+            self.assertFalse((Path(directory) / '.state').exists())
+            self.assertFalse((Path(directory) / '.config').exists())
+
     def test_conflicting_modes_are_rejected(self):
         cases = [
             ['--profile', 'server', '--config-only', '--check'],
@@ -241,7 +266,7 @@ class ArgumentValidationTests(unittest.TestCase):
             result = self.run_setup(['--help'], env=self.temp_env(directory))
             self.assertEqual(result.returncode, 0, result.stderr)
             for flag in ['--dry-run', '--check', '--config-only', '--upgrade',
-                         '--hardware', '--change-shell', '--check-sudo']:
+                         '--hardware', '--change-shell', '--timezone', '--check-sudo']:
                 self.assertIn(flag, result.stdout)
 
     def test_help_exits_zero_without_creating_state(self):

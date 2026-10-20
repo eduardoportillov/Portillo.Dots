@@ -19,7 +19,7 @@ declaradas arriba:
 
 | Job | ubuntu-latest | macos-latest | Qué cubre |
 |---|---|---|---|
-| `tests` | ✅ | ✅ | 275 pruebas unitarias, de integración y de configuración |
+| `tests` | ✅ | ✅ | 280 pruebas unitarias, de integración y de configuración |
 | `shellcheck` | ✅ | — | lint de todos los `.sh` versionados |
 | `secret-scan` | ✅ | — | contenido versionado + blobs del historial |
 

@@ -124,3 +124,14 @@ class SharedConfigBaselineTests(unittest.TestCase):
         self.assertIn('nvim-base.lua', server, 'the server profile layers nothing on the base')
         workstation = (ROOT / 'nvim/lua/config/options.lua').read_text()
         self.assertIn('nvim-base.lua', workstation, 'LazyVim must layer on the same base')
+
+
+class PhysicalConsolePromptTests(unittest.TestCase):
+    def test_kernel_console_uses_ascii_fallback_and_skips_p10k_glyphs(self):
+        text = (ROOT / 'zsh/.zshrc').read_text()
+        self.assertIn('"${TERM:-}" != linux', text,
+                      'instant prompt must not print Nerd Font glyphs on tty')
+        self.assertIn('ZSH_THEME=""', text,
+                      'Powerlevel10k must not initialize in the kernel console')
+        self.assertIn("PROMPT='%F{cyan}%n@%m%f:%F{white}%~%f %D{%H:%M:%S} %# '", text)
+        self.assertIn('[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh', text)

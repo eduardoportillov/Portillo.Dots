@@ -10,10 +10,11 @@ privileged_main() {
   [[ "$EUID" -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]] || {
     printf 'Run this helper through setup.sh as a normal user.\n' >&2; return 1;
   }
-  [[ $# -eq 8 ]] || return 2
-  local profile="$1" manager="$2" hardware="$3" hardware_only="$4" change_shell="$5" upgrade="$6" repo="$7" operation="$8"
+  [[ $# -eq 9 ]] || return 2
+  local profile="$1" manager="$2" hardware="$3" hardware_only="$4" change_shell="$5" upgrade="$6" repo="$7" operation="$8" timezone="$9"
   case "$profile:$manager" in workstation:native|workstation:brew|server:native|server:brew) ;; *) return 2 ;; esac
   case "$operation" in install|check|harden) ;; *) return 2 ;; esac
+  [[ -z "$timezone" || "$timezone" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ ]] || return 2
   local flag
   for flag in "$hardware" "$hardware_only" "$change_shell" "$upgrade"; do
     case "$flag" in true|false) ;; *) return 2 ;; esac
@@ -22,22 +23,23 @@ privileged_main() {
   [[ "$hardware_only" == false || ( "$hardware" == true && "$upgrade" == false && "$change_shell" == false ) ]] || return 2
   [[ "$repo" == /* && -d "$repo" && "$(id -u "$SUDO_USER")" == "${SUDO_UID:-}" ]] || return 2
   declare -F root_copy retire_legacy_rule install_packages harden_existing_service \
-    prepare_homebrew_prefix profile_components tool_packages >/dev/null || {
+    prepare_homebrew_prefix set_system_timezone profile_components tool_packages >/dev/null || {
     printf 'Incomplete privileged payload; use setup.sh.\n' >&2; return 1;
   }
   local platform
   platform="$(uname -s)"
   case "$platform:$manager" in Linux:native|Linux:brew|Darwin:brew) ;; *) return 2 ;; esac
   [[ "$hardware" == false || "$platform" == Linux ]] || return 2
+  [[ -z "$timezone" || "$platform" == Linux ]] || return 2
   trap 'exit 130' INT
   trap 'exit 143' TERM
   if [[ "$operation" == check ]]; then
-    [[ "$hardware" == false && "$change_shell" == false && "$upgrade" == false ]] || return 2
+    [[ "$hardware" == false && "$change_shell" == false && "$upgrade" == false && -z "$timezone" ]] || return 2
     printf 'Privileged identity verified: uid=%s invoking_uid=%s. No system changes performed.\n' "$EUID" "$SUDO_UID"
     return 0
   fi
   if [[ "$operation" == harden ]]; then
-    [[ "$platform:$profile" == Linux:workstation && "$hardware" == false && "$change_shell" == false && "$upgrade" == false ]] || return 2
+    [[ "$platform:$profile" == Linux:workstation && "$hardware" == false && "$change_shell" == false && "$upgrade" == false && -z "$timezone" ]] || return 2
     harden_existing_service /usr/local/bin/apply-linux-hardware-settings.sh \
       /etc/systemd/system/apply-linux-hardware-settings.service \
       "$repo/linux/optimize.sh" "$repo/linux/apply-linux-hardware-settings.service"
@@ -79,6 +81,9 @@ privileged_main() {
     }
     grep -qxF "$shell" /etc/shells || printf '%s\n' "$shell" >> /etc/shells
     chsh -s "$shell" "$SUDO_USER"
+  fi
+  if [[ -n "$timezone" ]]; then
+    set_system_timezone "$timezone"
   fi
   if [[ "$platform" == Linux && "$profile" == workstation && "$hardware_only" == false ]]; then
     root_copy "$repo/zsh/.dircolors" /root/.dircolors 0644

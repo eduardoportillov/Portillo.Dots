@@ -1,5 +1,5 @@
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+if [[ "${TERM:-}" != linux && -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
@@ -40,7 +40,13 @@ fi
 
 # Oh My Zsh configuration
 export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
+if [[ "${TERM:-}" == linux ]]; then
+  # The kernel virtual console has a bitmap font and cannot render Nerd Font
+  # Powerline glyphs. Keep the same user/host/path shape without broken icons.
+  ZSH_THEME=""
+else
+  ZSH_THEME="powerlevel10k/powerlevel10k"
+fi
 
 # Plugins (macos only if on macOS)
 plugins=(
@@ -67,8 +73,13 @@ fi
 
 [[ ! -r "$ZSH/oh-my-zsh.sh" ]] || source "$ZSH/oh-my-zsh.sh"
 
-# Powerlevel10k
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+# Powerlevel10k. The physical Linux console uses the shared ASCII fallback;
+# SSH, tmux and terminal emulators retain the full identical workstation prompt.
+if [[ "${TERM:-}" == linux ]]; then
+  PROMPT='%F{cyan}%n@%m%f:%F{white}%~%f %D{%H:%M:%S} %# '
+else
+  [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+fi
 
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

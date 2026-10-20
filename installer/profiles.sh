@@ -44,6 +44,7 @@ show_actions() {
   fi
   [[ "$HARDWARE" == false ]] || info 'OPT-IN: CPU/memory settings, BAT1 charge limit (60%), root-owned system service'
   [[ "$CHANGE_SHELL" == false ]] || info 'OPT-IN: change login shell to Zsh'
+  [[ -z "${TIMEZONE:-}" ]] || info "OPT-IN: set system timezone to $TIMEZONE"
   [[ "$OPENCODE_TEMPLATE" == false ]] || warn 'Custom OpenCode template selected: review V2 compatibility of its plugins'
 }
 
@@ -63,7 +64,7 @@ privileged_phase() {
   # additional root-time sourcing.
   cat "$catalog" "$core" "$entry" | \
     sudo /bin/bash -p -s -- "$PROFILE" "$PACKAGE_MANAGER" "$HARDWARE" "$HARDWARE_ONLY" \
-    "$CHANGE_SHELL" "$UPGRADE" "$REPO_DIR" "${1:-install}" \
+    "$CHANGE_SHELL" "$UPGRADE" "$REPO_DIR" "${1:-install}" "$TIMEZONE" \
     2>&1 | tee -a "$LOG" || {
       local status=$?
       warn "Privileged phase failed (exit $status); nothing after it ran. See $LOG"

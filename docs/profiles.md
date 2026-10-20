@@ -136,11 +136,22 @@ bash setup.sh --profile workstation --hardware        # CPU, memoria, batería 6
 bash setup.sh --profile workstation --apply-linux     # solo esos ajustes
 bash setup.sh --profile workstation --change-shell    # shell de login → Zsh
 bash setup.sh --profile server --change-shell         # idéntico en el server
+bash setup.sh --profile server --timezone America/La_Paz # zona horaria del sistema
 ```
 
 Server rechaza `--hardware` y `--apply-linux` en cualquiera de sus capas.
 `--change-shell` vale para ambos perfiles porque la premisa es que todos los
 host se sientan igual, pero **solo** con la flag explícita.
+`--timezone IANA` también es explícita, solo Linux, valida el nombre contra
+`/usr/share/zoneinfo` y aplica el cambio en la única fase privilegiada.
+
+En la consola física Linux (`TERM=linux`), Zsh omite el *instant prompt* y
+Powerlevel10k porque la fuente bitmap del kernel no incluye los glifos Nerd
+Font. Usa el mismo orden user/host/ruta y la hora, con colores ANSI básicos y
+sin iconos corruptos. SSH, tmux y terminales gráficos conservan el prompt
+Powerlevel10k completo. Instalar una Nerd Font de usuario no cambia la fuente
+del kernel: TTF/OTF es para emuladores gráficos; la consola requiere fuentes
+bitmap y no puede representar todo el set de glifos de Powerlevel10k.
 
 ## Verificación
 

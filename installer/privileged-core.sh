@@ -153,6 +153,25 @@ prepare_homebrew_prefix() {
   return 0
 }
 
+# Apply a user-requested IANA timezone. The caller is root, but both the name
+# grammar and the resolved zoneinfo path are validated again at this boundary.
+set_system_timezone() {
+  local zone="$1"
+  [[ "$zone" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ ]] || {
+    printf 'Invalid IANA timezone name.\n' >&2
+    return 2
+  }
+  [[ -f "/usr/share/zoneinfo/$zone" ]] || {
+    printf 'Unknown IANA timezone: %s\n' "$zone" >&2
+    return 1
+  }
+  command -v timedatectl >/dev/null 2>&1 || {
+    printf 'timedatectl is required to set the system timezone.\n' >&2
+    return 1
+  }
+  timedatectl set-timezone "$zone"
+}
+
 # Distribution plumbing the managed configuration needs beyond the manifest
 # tools: archives for upstream installers and the TLS trust store. Tool
 # packages themselves come from the components.sh catalog (tool_packages),
