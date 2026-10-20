@@ -64,7 +64,11 @@ privileged_phase() {
   cat "$catalog" "$core" "$entry" | \
     sudo /bin/bash -p -s -- "$PROFILE" "$PACKAGE_MANAGER" "$HARDWARE" "$HARDWARE_ONLY" \
     "$CHANGE_SHELL" "$UPGRADE" "$REPO_DIR" "${1:-install}" \
-    2>&1 | tee -a "$LOG"
+    2>&1 | tee -a "$LOG" || {
+      local status=$?
+      warn "Privileged phase failed (exit $status); nothing after it ran. See $LOG"
+      return "$status"
+    }
 }
 
 install_brew_tools() {

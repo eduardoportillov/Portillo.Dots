@@ -222,7 +222,8 @@ class PrivilegedCoreTests(unittest.TestCase):
 
 
 class PrivilegedPackageTests(unittest.TestCase):
-    def run_packages(self, backend, profile='server', manager='native', upgrade=False, fail_arg=''):
+    def run_packages(self, backend, profile='server', manager='native', upgrade=False, fail_arg='',
+                     change_shell=False):
         with tempdir() as directory:
             base = Path(directory)
             mock = base / backend
@@ -238,9 +239,9 @@ if os.environ.get('FAIL_ARG') in sys.argv[1:]:
             (base / 'cat').symlink_to(shutil.which('cat'))
             log = base / 'calls'
             env = {**os.environ, 'PATH': directory, 'CALLS': str(log), 'FAIL_ARG': fail_arg}
-            script = ('source "$1"; source "$2"; install_packages "$3" "$4" "$5"')
+            script = ('source "$1"; source "$2"; install_packages "$3" "$4" "$5" "$6"')
             result = subprocess.run([BASH, '-euc', script, '_', str(CATALOG), str(CORE),
-                                     profile, manager, str(upgrade).lower()],
+                                     profile, manager, str(upgrade).lower(), str(change_shell).lower()],
                                     env=env, capture_output=True, text=True, timeout=10)
             calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
             return result, calls
@@ -280,6 +281,15 @@ if os.environ.get('FAIL_ARG') in sys.argv[1:]:
                     self.assertIn(name, packages)
                 for name in forbidden:
                     self.assertNotIn(name, packages)
+
+    def test_change_shell_guarantees_zsh_before_chsh(self):
+        # The login shell changes in this very phase: zsh must be resolvable
+        # even when the brew channel would install its own copy later.
+        for backend in ['apt-get', 'dnf', 'pacman']:
+            with self.subTest(backend=backend):
+                result, calls = self.run_packages(backend, manager='brew', change_shell=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('zsh', self.package_names(calls))
 
     def test_workstation_native_adds_optional_tools_and_go(self):
         go = {'apt-get': 'golang-go', 'dnf': 'golang', 'pacman': 'go'}

@@ -165,7 +165,7 @@ support_packages() {
 }
 
 install_packages() {
-  local profile="$1" manager="$2" upgrade="$3" pm package kind name
+  local profile="$1" manager="$2" upgrade="$3" change_shell="${4:-false}" pm package kind name
   local packages=() optional=() warnings=()
   if command -v apt-get >/dev/null 2>&1; then
     pm=apt
@@ -226,6 +226,12 @@ install_packages() {
       dnf)    append_unique packages gcc gcc-c++ make zsh ffmpeg-free alacritty xclip wl-clipboard copyq fontconfig ;;
       pacman) append_unique packages base-devel zsh ffmpeg alacritty xclip wl-clipboard copyq fontconfig ;;
     esac
+  fi
+  if [[ "$change_shell" == true ]]; then
+    # The login shell changes inside this same privileged phase: zsh must be
+    # resolvable before chsh runs, even when the toolchain channel (brew)
+    # installs its own copy later in the user phase.
+    append_unique packages "$(tool_packages zsh "$pm")"
   fi
 
   if [[ "$pm" == apt ]]; then

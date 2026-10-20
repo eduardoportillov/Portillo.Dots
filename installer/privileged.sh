@@ -51,7 +51,7 @@ privileged_main() {
       prepare_homebrew_prefix /home/linuxbrew "$SUDO_USER" || return 1
     fi
     case "$platform" in
-      Linux) install_packages "$profile" "$manager" "$upgrade" ;;
+      Linux) install_packages "$profile" "$manager" "$upgrade" "$change_shell" ;;
       Darwin)
         # Homebrew is pre-installed by its official installer and manages
         # packages as the invoking user. Nothing here needs root; macOS system
@@ -73,7 +73,10 @@ privileged_main() {
   fi
   if [[ "$change_shell" == true ]]; then
     local shell
-    shell="$(command -v zsh)"
+    shell="$(command -v zsh)" || {
+      printf 'zsh is not available; cannot change the login shell.\n' >&2
+      return 1
+    }
     grep -qxF "$shell" /etc/shells || printf '%s\n' "$shell" >> /etc/shells
     chsh -s "$shell" "$SUDO_USER"
   fi

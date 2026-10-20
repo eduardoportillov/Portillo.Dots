@@ -138,6 +138,8 @@ class InstallerTests(unittest.TestCase):
             result = subprocess.run(['bash', '-euc', script, '_', str(ROOT), str(log)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 57)
             self.assertNotIn('MUST NOT RUN', result.stdout)
+            self.assertIn('Privileged phase failed (exit 57)', result.stderr,
+                          'a failed privileged phase must never end silently')
 
     def test_server_preserves_symlinked_shell_config(self):
         with tempfile.TemporaryDirectory() as directory:
