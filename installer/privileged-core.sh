@@ -46,10 +46,15 @@ prepare_system_parent() {
   printf '%s\n' "$existing"
 }
 
+# EXIT traps in Bash 3.2 can outlive function-local variables. Keep only the
+# staging path at subshell scope so INT/TERM cleanup works on macOS too.
+ROOT_COPY_TEMP=''
+
 root_copy() (
   # Subshell traps clean only the staging file, not the original or its backup.
-  local source="$1" destination="$2" mode="$3" temporary='' parent saved status name owner existing_mode
-  trap 'status=$?; if [[ -n "${temporary:-}" ]]; then rm -f -- "$temporary"; fi; exit "$status"' EXIT
+  ROOT_COPY_TEMP=''
+  local source="$1" destination="$2" mode="$3" parent saved status name owner existing_mode
+  trap 'status=$?; if [[ -n "${ROOT_COPY_TEMP:-}" ]]; then rm -f -- "$ROOT_COPY_TEMP"; fi; exit "$status"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   [[ "$source" == /* && -f "$source" && ! -L "$source" ]] \
@@ -77,12 +82,12 @@ root_copy() (
     cp -pP "$destination" "$saved/$(basename "$destination")" || return 1
     printf 'System backup: %s\n' "$saved"
   fi
-  temporary="$(mktemp "$parent/.portillo.XXXXXXXX")" || return 1
+  ROOT_COPY_TEMP="$(mktemp "$parent/.portillo.XXXXXXXX")" || return 1
   # EUID is 0 in production; using the actual caller also allows unprivileged
   # filesystem tests. The public entrypoint never permits a non-root execution.
-  install -o "$EUID" -g "$(id -g)" -m "$mode" "$source" "$temporary" || return 1
-  mv -f "$temporary" "$destination" || return 1
-  temporary=''
+  install -o "$EUID" -g "$(id -g)" -m "$mode" "$source" "$ROOT_COPY_TEMP" || return 1
+  mv -f "$ROOT_COPY_TEMP" "$destination" || return 1
+  ROOT_COPY_TEMP=''
 )
 
 retire_legacy_rule() (

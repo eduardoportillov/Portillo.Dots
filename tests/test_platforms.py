@@ -150,6 +150,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_brew_tools() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -186,6 +187,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_brew_tools() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),
@@ -219,6 +221,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_brew_tools() { return 0; }
                 install_profile
             '''
             env = {**os.environ, 'HOME': str(home), 'PATH': controlled_path(directory, mocks, exclude=('fd', 'bat')),

@@ -160,7 +160,9 @@ append_unique() {
   case "$target_name" in packages|optional) ;; *) return 2 ;; esac
   for item in "$@"; do
     if [[ -n "$item" ]]; then
-      eval 'joined="${'"$target_name"'[*]}"'
+      # Bash 3.2 (macOS) treats expansion of an empty array as unset under
+      # nounset. The default-value form is supported there and by newer Bash.
+      eval 'joined="${'"$target_name"'[*]-}"'
       case " $joined " in *" $item "*) continue ;; esac
       eval "$target_name+=(\"\$item\")"
     fi
