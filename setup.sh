@@ -25,6 +25,7 @@ HARDWARE=false
 HARDWARE_ONLY=false
 CHANGE_SHELL=false
 TIMEZONE=""
+TMUX_VISUAL=false
 INTERACTIVE=false
 PACKAGE_MANAGER=auto
 OPENCODE_TEMPLATE=false
@@ -49,6 +50,7 @@ Options:
   --apply-linux, -L     Apply only those hardware settings (workstation only)
   --change-shell        Opt in to changing the login shell to Zsh
   --timezone IANA       Opt in to setting the system timezone (Linux only)
+  --tmux-visual         Opt in to Kanagawa tmux theme + git/CPU/RAM status (server only)
   --opencode-template   Use the custom template + opencode/.env (manual V2 plugin review)
   --interactive, -i     Confirm the installation summary before proceeding
   --yes, -y             Accept the summary (never bypasses sudo authentication)
@@ -88,6 +90,7 @@ parse_args() {
         [[ "$TIMEZONE" =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ ]] \
           || die "Invalid timezone name: $TIMEZONE"
         ;;
+      --tmux-visual) TMUX_VISUAL=true; shift ;;
       --opencode-template) OPENCODE_TEMPLATE=true; shift ;;
       --interactive|-i) INTERACTIVE=true; shift ;;
       --yes|-y) INTERACTIVE=false; shift ;;
@@ -109,15 +112,17 @@ main() {
   case "$PACKAGE_MANAGER" in auto|native|brew) ;; *) die "Invalid package manager: $PACKAGE_MANAGER" ;; esac
   [[ "$PROFILE" != server || "$HARDWARE" == false ]] \
     || die 'Server never changes hardware settings'
-  [[ "$CONFIG_ONLY" == false || ( "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" ) ]] \
+  [[ "$PROFILE" != workstation || "$TMUX_VISUAL" == false ]] \
+    || die '--tmux-visual is a Server-only option'
+  [[ "$CONFIG_ONLY" == false || ( "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$TMUX_VISUAL" == false ) ]] \
     || die '--config-only cannot install, upgrade or change system settings'
-  [[ "$CHECK_ONLY" == false || ( "$CONFIG_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" ) ]] \
+  [[ "$CHECK_ONLY" == false || ( "$CONFIG_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$TMUX_VISUAL" == false ) ]] \
     || die '--check cannot be combined with modifying options'
-  [[ "$HARDWARE_ONLY" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" ) ]] \
+  [[ "$HARDWARE_ONLY" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$TMUX_VISUAL" == false ) ]] \
     || die '--apply-linux cannot be combined with other operation modes'
-  [[ "$CHECK_SUDO" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$OPENCODE_TEMPLATE" == false && "$HARDEN_EXISTING_SERVICE" == false ) ]] \
+  [[ "$CHECK_SUDO" == false || ( "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$TMUX_VISUAL" == false && "$OPENCODE_TEMPLATE" == false && "$HARDEN_EXISTING_SERVICE" == false ) ]] \
     || die '--check-sudo cannot be combined with modifying or other checking options'
-  [[ "$HARDEN_EXISTING_SERVICE" == false || ( "$PROFILE" == workstation && "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$OPENCODE_TEMPLATE" == false ) ]] \
+  [[ "$HARDEN_EXISTING_SERVICE" == false || ( "$PROFILE" == workstation && "$CONFIG_ONLY" == false && "$CHECK_ONLY" == false && "$UPGRADE" == false && "$HARDWARE" == false && "$CHANGE_SHELL" == false && -z "$TIMEZONE" && "$TMUX_VISUAL" == false && "$OPENCODE_TEMPLATE" == false ) ]] \
     || die '--harden-existing-service requires workstation and cannot be combined with other operations'
   detect_platform
   if [[ "$DRY_RUN" == true ]]; then

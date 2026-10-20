@@ -8,6 +8,18 @@ TMUX_SOCKET="portillo-dots"
 export PATH="$REMOTE_BASE/bin:$HOME/.local/bin:$PATH"
 export NVIM_APPNAME="portillo-remote/nvim"
 
+# Use the installed host identity when it is complete. A remote runtime on a
+# provisioned host enters the same Zsh/Powerlevel10k config as ordinary SSH;
+# bare hosts keep the generated Bash fallback.
+remote_shell="$(command -v zsh 2>/dev/null || true)"
+if [[ -n "$remote_shell" && -r "$HOME/.zshrc" && -r "$HOME/.p10k.zsh" \
+  && -r "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]]; then
+  remote_shell_kind=zsh
+else
+  remote_shell="$(command -v bash)"
+  remote_shell_kind=bash
+fi
+
 if [[ -r "$STATE_DIR/ls-colors.sh" ]]; then
   source "$STATE_DIR/ls-colors.sh"
 fi
@@ -23,7 +35,11 @@ elif [[ -n "$selected_path" ]]; then
 fi
 
 if [[ "${PORTILLO_NO_TMUX:-0}" == "1" ]] || ! command -v tmux &>/dev/null; then
-  exec bash --rcfile "$STATE_DIR/bashrc" -i
+  if [[ "$remote_shell_kind" == zsh ]]; then
+    export PORTILLO_REMOTE_TMUX=1
+    exec "$remote_shell" -i
+  fi
+  exec "$remote_shell" --rcfile "$STATE_DIR/bashrc" -i
 fi
 
 tmux_bin="$(command -v tmux)"
@@ -39,8 +55,12 @@ if [[ -z "$shell_version" ]]; then
 fi
 
 session_created=0
-bash_bin="$(command -v bash)"
-printf -v managed_command 'exec %q --rcfile %q -i' "$bash_bin" "$STATE_DIR/bashrc"
+if [[ "$remote_shell_kind" == zsh ]]; then
+  export PORTILLO_REMOTE_TMUX=1
+  printf -v managed_command 'exec %q -i' "$remote_shell"
+else
+  printf -v managed_command 'exec %q --rcfile %q -i' "$remote_shell" "$STATE_DIR/bashrc"
+fi
 tmux_conf_version="$(cksum "$tmux_conf" | awk '{ print $1 "-" $2 }')"
 config_loaded=1
 
@@ -56,7 +76,7 @@ if ptmux list-sessions &>/dev/null; then
       ptmux set-environment -g PORTILLO_TMUX_CONFIG_VERSION "$tmux_conf_version"
     fi
   fi
-  ptmux set-option -g default-shell "$bash_bin"
+  ptmux set-option -g default-shell "$remote_shell"
   ptmux set-option -g default-command "$managed_command"
   session_id="$(ptmux list-sessions -f '#{==:#{session_name},portillo}' -F '#{session_id}' \
     | command head -n 1)"
@@ -76,7 +96,7 @@ else
   session_created=1
 fi
 
-ptmux set-option -t "$session_id" default-shell "$bash_bin"
+ptmux set-option -t "$session_id" default-shell "$remote_shell"
 ptmux set-option -t "$session_id" default-command "$managed_command"
 ptmux set-environment -g LS_COLORS "$LS_COLORS"
 if [[ -n "${COLORTERM:-}" ]]; then
@@ -84,6 +104,9 @@ if [[ -n "${COLORTERM:-}" ]]; then
 fi
 ptmux set-environment -g PORTILLO_DIRCOLORS_VERSION "$PORTILLO_DIRCOLORS_VERSION"
 ptmux set-environment -g PORTILLO_SHELL_ENV_VERSION "$shell_version"
+if [[ "$remote_shell_kind" == zsh ]]; then
+  ptmux set-environment -g PORTILLO_REMOTE_TMUX 1
+fi
 if [[ "$config_loaded" -eq 1 ]]; then
   ptmux set-environment -g PORTILLO_TMUX_CONFIG_VERSION "$tmux_conf_version"
 fi

@@ -144,6 +144,9 @@ Server rechaza `--hardware` y `--apply-linux` en cualquiera de sus capas.
 host se sientan igual, pero **solo** con la flag explícita.
 `--timezone IANA` también es explícita, solo Linux, valida el nombre contra
 `/usr/share/zoneinfo` y aplica el cambio en la única fase privilegiada.
+En Server, `--tmux-visual` habilita explícitamente el tema Kanagawa y los
+segmentos git/CPU/RAM. Solo instala TPM y el plugin visual; no habilita
+resurrección de sesiones, servicios ni autoboot.
 
 En la consola física Linux (`TERM=linux`), Zsh omite el *instant prompt* y
 Powerlevel10k porque la fuente bitmap del kernel no incluye los glifos Nerd

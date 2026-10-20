@@ -135,3 +135,19 @@ class PhysicalConsolePromptTests(unittest.TestCase):
                       'Powerlevel10k must not initialize in the kernel console')
         self.assertIn("PROMPT='%F{cyan}%n@%m%f:%F{white}%~%f %D{%H:%M:%S} %# '", text)
         self.assertIn('[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh', text)
+
+
+class OptionalTmuxVisualOverlayTests(unittest.TestCase):
+    def test_server_overlay_is_visual_only_and_opt_in(self):
+        overlay = (ROOT / 'shared/tmux/visual.conf').read_text()
+        server = (ROOT / 'server/tmux.conf').read_text()
+        for setting in ("set -g @plugin 'Nybkox/tmux-kanagawa'",
+                        "set -g @kanagawa-plugins 'git cpu-usage ram-usage'"):
+            self.assertIn(setting, overlay)
+        active = '\n'.join(line for line in overlay.splitlines()
+                             if not line.lstrip().startswith('#')).lower()
+        for forbidden in ('continuum', 'resurrect', 'systemd', 'tmux.service', '@continuum-boot'):
+            self.assertNotIn(forbidden, active,
+                             f'the server visual overlay must not enable {forbidden}')
+        self.assertIn('tmux-visual-enabled', server)
+        self.assertIn('if-shell', server)

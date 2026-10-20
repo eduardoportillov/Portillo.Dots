@@ -45,6 +45,8 @@ show_actions() {
   [[ "$HARDWARE" == false ]] || info 'OPT-IN: CPU/memory settings, BAT1 charge limit (60%), root-owned system service'
   [[ "$CHANGE_SHELL" == false ]] || info 'OPT-IN: change login shell to Zsh'
   [[ -z "${TIMEZONE:-}" ]] || info "OPT-IN: set system timezone to $TIMEZONE"
+  [[ "${TMUX_VISUAL:-false}" == false ]] \
+    || info 'OPT-IN: Kanagawa tmux theme + git/CPU/RAM status (no autoboot or persistence services)'
   [[ "$OPENCODE_TEMPLATE" == false ]] || warn 'Custom OpenCode template selected: review V2 compatibility of its plugins'
 }
 
@@ -141,6 +143,9 @@ install_profile() {
   fi
   install_source_tools "$PROFILE"
   install_shell_identity
+  if [[ "${TMUX_VISUAL:-false}" == true ]]; then
+    install_tmux_visual
+  fi
   install_opencode
 }
 
@@ -151,6 +156,10 @@ configure_profile() {
   symlink_file "$REPO_DIR/shared/shell/common.sh" "$CONFIG_HOME/portillo-dots/shell-common.sh"
   symlink_file "$REPO_DIR/shared/tmux/base.conf" "$CONFIG_HOME/portillo-dots/tmux-base.conf"
   symlink_file "$REPO_DIR/shared/nvim/base.lua" "$CONFIG_HOME/portillo-dots/nvim-base.lua"
+  if [[ "${TMUX_VISUAL:-false}" == true ]]; then
+    symlink_file "$REPO_DIR/shared/tmux/visual.conf" "$CONFIG_HOME/portillo-dots/tmux-visual.conf"
+    symlink_file "$REPO_DIR/shared/tmux/visual-enabled" "$CONFIG_HOME/portillo-dots/tmux-visual-enabled"
+  fi
   if [[ "$PROFILE" == server ]]; then
     symlink_file "$REPO_DIR/server/tmux.conf" "$HOME/.tmux.conf"
     prepare_config_directory "$CONFIG_HOME/nvim"
@@ -193,6 +202,10 @@ verify_configs() {
                 "$CONFIG_HOME/portillo-dots/shell-common.sh:$REPO_DIR/shared/shell/common.sh"
                 "$CONFIG_HOME/portillo-dots/tmux-base.conf:$REPO_DIR/shared/tmux/base.conf"
                 "$CONFIG_HOME/portillo-dots/nvim-base.lua:$REPO_DIR/shared/nvim/base.lua")
+  if [[ "${TMUX_VISUAL:-false}" == true ]]; then
+    checks+=("$CONFIG_HOME/portillo-dots/tmux-visual.conf:$REPO_DIR/shared/tmux/visual.conf"
+             "$CONFIG_HOME/portillo-dots/tmux-visual-enabled:$REPO_DIR/shared/tmux/visual-enabled")
+  fi
   if [[ "$PROFILE" == server ]]; then
     checks+=("$HOME/.tmux.conf:$REPO_DIR/server/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/server/nvim/init.lua")
   else

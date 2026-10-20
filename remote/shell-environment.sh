@@ -499,6 +499,12 @@ generate_tmux_conf() {
   }
 
   cat "$src" > "$dst"
+  # Installed hosts may explicitly enable the same visual-only overlay used
+  # by setup.sh. Never source it merely because its file was deployed.
+  if [[ -r "$HOME/.config/portillo-dots/tmux-visual-enabled" \
+    && -r "$HOME/.config/portillo-dots/tmux-visual.conf" ]]; then
+    printf '\nsource-file ~/.config/portillo-dots/tmux-visual.conf\n' >> "$dst"
+  fi
 }
 
 backup_original_dircolors() {

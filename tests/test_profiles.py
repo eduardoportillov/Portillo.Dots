@@ -235,6 +235,37 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
                     self.assertIn(f'Optional tools ({len(optional)}, absence is not fatal): {" ".join(optional)}',
                                   result.stdout)
 
+    def test_tmux_visual_overlay_is_explicit_server_only_opt_in(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([BASH, str(ROOT / 'setup.sh'), '--profile', 'server',
+                                     '--tmux-visual', '--dry-run'],
+                                    env=self.isolated(directory), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('OPT-IN: Kanagawa tmux theme + git/CPU/RAM status', result.stdout)
+            rejected = subprocess.run([BASH, str(ROOT / 'setup.sh'), '--profile', 'workstation',
+                                       '--tmux-visual', '--dry-run'],
+                                      env=self.isolated(directory), capture_output=True, text=True)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn('--tmux-visual is a Server-only option', rejected.stderr)
+
+    def test_tmux_visual_overlay_provisions_only_its_two_user_plugins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            calls = Path(directory) / 'calls'
+            script = '''
+                source "$1/setup.sh"
+                HOME="$2"; LOG="$2/log"
+                sync_git_dependency() { printf '%s|%s\\n' "$1" "$2" >> "$CALLS"; }
+                install_tmux_visual
+            '''
+            result = subprocess.run([BASH, '-euc', script, '_', str(ROOT), directory],
+                                    env={**os.environ, 'CALLS': str(calls)},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            entries = calls.read_text().splitlines()
+            self.assertEqual(len(entries), 2)
+            self.assertIn('github.com/tmux-plugins/tpm.git', entries[0])
+            self.assertIn('github.com/Nybkox/tmux-kanagawa.git', entries[1])
+
     def test_verify_reports_missing_required_and_tolerates_missing_optional(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

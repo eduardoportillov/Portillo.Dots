@@ -195,6 +195,22 @@ class RuntimeToolsetTests(unittest.TestCase):
             self.assertTrue(str(link.readlink()).endswith('/shared/nvim/base.lua'),
                             'the server runtime must load the shared Neovim baseline')
 
+    def test_remote_connect_prefers_complete_installed_zsh_identity(self):
+        text = (ROOT / 'remote/connect.sh').read_text()
+        self.assertIn('command -v zsh', text)
+        for requirement in ('$HOME/.zshrc', '$HOME/.p10k.zsh',
+                            '$HOME/.oh-my-zsh/oh-my-zsh.sh'):
+            self.assertIn(requirement, text)
+        self.assertIn('remote_shell_kind=zsh', text)
+        self.assertIn('exec "$remote_shell" -i', text)
+        self.assertIn('exec "$remote_shell" --rcfile "$STATE_DIR/bashrc" -i', text)
+
+    def test_remote_zsh_tmux_helper_keeps_the_dedicated_socket(self):
+        text = (ROOT / 'zsh/.zshrc').read_text()
+        branch = text.split('if [[ "${PORTILLO_REMOTE_TMUX:-0}" == 1 ]]; then', 1)[1]
+        branch = branch.split('\n  fi', 1)[0]
+        self.assertIn('tmux -L portillo-dots', branch)
+
 
 if __name__ == '__main__':
     unittest.main()

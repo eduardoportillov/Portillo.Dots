@@ -336,6 +336,15 @@ install_shell_identity() {
   sync_git_dependency https://github.com/romkatv/powerlevel10k.git "$HOME/.oh-my-zsh/custom/themes/powerlevel10k"
 }
 
+# Optional Server/remote tmux visual overlay. Keep its two runtime plugins
+# self-contained, but do not enable resurrect/continuum or any background
+# service. The overlay is loaded only while its explicit marker is present.
+install_tmux_visual() {
+  sync_git_dependency https://github.com/tmux-plugins/tpm.git "$HOME/.tmux/plugins/tpm"
+  sync_git_dependency https://github.com/Nybkox/tmux-kanagawa.git \
+    "$HOME/.tmux/plugins/tmux-kanagawa"
+}
+
 # Node.js through fnm in the user prefix: no sudo and no global system writes.
 # The fnm-managed runtime is placed first on PATH for the running installer.
 ensure_node_runtime() {

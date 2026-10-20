@@ -266,7 +266,8 @@ class ArgumentValidationTests(unittest.TestCase):
             result = self.run_setup(['--help'], env=self.temp_env(directory))
             self.assertEqual(result.returncode, 0, result.stderr)
             for flag in ['--dry-run', '--check', '--config-only', '--upgrade',
-                         '--hardware', '--change-shell', '--timezone', '--check-sudo']:
+                         '--hardware', '--change-shell', '--timezone', '--tmux-visual',
+                         '--check-sudo']:
                 self.assertIn(flag, result.stdout)
 
     def test_help_exits_zero_without_creating_state(self):

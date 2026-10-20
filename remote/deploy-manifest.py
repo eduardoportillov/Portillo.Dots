@@ -14,7 +14,8 @@ import sys
 # Always deployed: the shared baseline every host must feel the same with.
 BASE = {
     'zsh/.dircolors', '.markdownlint.jsonc',
-    'shared/shell/common.sh', 'shared/tmux/base.conf', 'shared/nvim/base.lua',
+    'shared/shell/common.sh', 'shared/tmux/base.conf', 'shared/tmux/visual.conf',
+    'shared/tmux/visual-enabled', 'shared/nvim/base.lua',
 }
 
 # LazyVim editor tree, only for the workstation runtime profile.

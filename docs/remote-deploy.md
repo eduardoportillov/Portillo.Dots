@@ -80,6 +80,12 @@ recibir además un runtime `remote.sh`. No se rompe nada ni se pierde nada:
   config del runtime. Con `--like server` esa config **es la misma base
   compartida** que la instalada (sesión indistinguible); con `--like
   workstation` es LazyVim, el entorno de desarrollo remoto.
+- `remote.sh connect` elige zsh solo si el host ya tiene zsh, `.zshrc`,
+  `.p10k.zsh` y Oh My Zsh; en ese caso obtiene el mismo Powerlevel10k que una
+  sesión SSH normal. Si falta cualquiera, usa el Bash runtime generado.
+- Si el host tiene habilitado `setup.sh --profile server --tmux-visual`, el
+  tmux dedicado de `remote.sh` carga el mismo overlay visual Kanagawa. Sin ese
+  opt-in usa solo la base compartida.
 - `setup.sh --check` avisa si `~/.dircolors` lo está gestionando un runtime:
   la verificación describe el estado real, no un fallo.
 

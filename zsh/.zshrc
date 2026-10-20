@@ -123,6 +123,14 @@ fi
 
 # tmux wrapper function for cross-platform session management
 function tm() {
+  if [[ "${PORTILLO_REMOTE_TMUX:-0}" == 1 ]]; then
+    if [[ -n "${1:-}" ]]; then
+      tmux -L portillo-dots new-session -A -s "$1"
+    else
+      tmux -L portillo-dots new-session -A -s portillo
+    fi
+    return
+  fi
   [[ -n "$TMUX" ]] && change="switch-client" || change="new-session"
   if [[ -n "${1:-}" ]]; then
     tmux $change -t "$1" 2>/dev/null || tmux new-session -d -s "$1" && tmux $change -t "$1"

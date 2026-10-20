@@ -599,3 +599,45 @@ class LikeServerRuntimeTests(unittest.TestCase):
             bashrc = (runtime / '.remote-bashrc').read_text()
             self.assertIn('shared/shell/common.sh', bashrc,
                           'the remote shell must load the shared baseline')
+
+    def test_server_tmux_visual_overlay_is_used_only_when_installed_opt_in_exists(self):
+        with tempdir() as directory:
+            remote = FakeRemote(directory)
+            config = remote.home / '.config/portillo-dots'
+            config.mkdir(parents=True)
+            (config / 'tmux-visual-enabled').write_text('enabled\n')
+            (config / 'tmux-visual.conf').write_text('# optional visual overlay\n')
+            remote.run('''
+                HOST="fakehost"
+                RUNTIME_PROFILE=server
+                SKIP_BINS=1
+                init_ssh_socket
+                check_prerequisites
+                check_ssh_connection
+                prepare_remote_base
+                deploy_configs
+                deploy_shell_environment
+                finalize_remote_deploy
+                cleanup_ssh
+            ''')
+            generated = (remote.home / '.portillo-dots-remote-state/tmux-remote.conf').read_text()
+            self.assertIn('source-file ~/.config/portillo-dots/tmux-visual.conf', generated)
+
+    def test_server_tmux_visual_overlay_stays_off_without_marker(self):
+        with tempdir() as directory:
+            remote = FakeRemote(directory)
+            remote.run('''
+                HOST="fakehost"
+                RUNTIME_PROFILE=server
+                SKIP_BINS=1
+                init_ssh_socket
+                check_prerequisites
+                check_ssh_connection
+                prepare_remote_base
+                deploy_configs
+                deploy_shell_environment
+                finalize_remote_deploy
+                cleanup_ssh
+            ''')
+            generated = (remote.home / '.portillo-dots-remote-state/tmux-remote.conf').read_text()
+            self.assertNotIn('tmux-visual.conf', generated)
