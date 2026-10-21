@@ -248,11 +248,9 @@ exec {sys.executable!r} "$@"
 
 
 class ShellStartupTests(unittest.TestCase):
-    def test_graphical_helper_is_skipped_outside_tmux(self):
-        # The gate lives in zsh/.zshrc: the helper itself always queries the
-        # session manager, so what must not run outside tmux is the whole block.
+    def test_graphical_helper_runs_in_local_shells_and_skips_ssh(self):
         zshrc = (ROOT / 'zsh/.zshrc').read_text()
-        start = zshrc.index('if [[ -n "${TMUX:-}"')
+        start = zshrc.index('if [[ "${OSTYPE:-}" == linux*')
         end = zshrc.index('unset _portillo_graphical_helper', start)
         end = zshrc.index('fi', end) + 2
         block = zshrc[start:end]
@@ -276,27 +274,35 @@ class ShellStartupTests(unittest.TestCase):
             (fake_root / 'linux').mkdir()
             (fake_root / 'linux/graphical-environment.sh').write_text(helper.read_text())
 
-            def run(tmux):
+            def run(tmux=False, ssh=False):
                 env = {**os.environ, 'PATH': f'{stubs}:/usr/bin:/bin', 'HOME': directory}
                 for key in ['TMUX', 'SSH_CONNECTION', 'SSH_TTY']:
                     env.pop(key, None)
                 if tmux:
                     env['TMUX'] = '/tmp/tmux-1000/default,1,1'
+                if ssh:
+                    env['SSH_CONNECTION'] = 'remote forwarded'
                 script = fake_root / 'zsh' / ('inside.zsh' if tmux else 'outside.zsh')
                 script.write_text(f'{block}\necho ok\n')
                 return subprocess.run([zsh, '-f', str(script)], env=env,
                                       capture_output=True, text=True, timeout=20)
 
-            outside = run(tmux=False)
+            outside = run()
             self.assertEqual(outside.returncode, 0, outside.stderr)
             self.assertEqual(outside.stdout, 'ok\n')
-            self.assertEqual(marker.read_text(), '',
-                             'outside tmux no session lookup may run at shell startup')
+            self.assertIn('called', marker.read_text(),
+                          'local shell startup must refresh metadata even outside tmux')
 
+            marker.write_text('')
             inside = run(tmux=True)
             self.assertEqual(inside.returncode, 0, inside.stderr)
             self.assertIn('called', marker.read_text(),
-                          'inside tmux the session lookup is expected to run once')
+                          'tmux shells must refresh metadata too')
+
+            marker.write_text('')
+            ssh = run(ssh=True)
+            self.assertEqual(ssh.returncode, 0, ssh.stderr)
+            self.assertEqual(marker.read_text(), '', 'SSH must keep its forwarded display')
 
     def test_secrets_loader_runs_no_subprocess_when_absent(self):
         with tempdir() as directory:

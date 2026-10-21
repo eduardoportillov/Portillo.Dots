@@ -3,9 +3,9 @@ if [[ "${TERM:-}" != linux && -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-p
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# A restored tmux pane may predate GNOME's graphical login. Recover the current
-# connection metadata before clipboard clients start; leave SSH forwarding alone.
-if [[ -n "${TMUX:-}" && -z "${SSH_CONNECTION:-}${SSH_TTY:-}" ]]; then
+# Refresh graphical metadata in every local interactive shell, not just tmux.
+# The helper validates the actual clipboard/display connection and leaves SSH alone.
+if [[ "${OSTYPE:-}" == linux* && -z "${SSH_CONNECTION:-}${SSH_TTY:-}" ]]; then
   _portillo_graphical_helper="${${(%):-%N}:A:h:h}/linux/graphical-environment.sh"
   if [[ -f "$_portillo_graphical_helper" ]]; then
     eval "$(bash "$_portillo_graphical_helper")"

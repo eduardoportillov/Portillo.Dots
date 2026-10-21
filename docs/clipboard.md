@@ -27,31 +27,32 @@ No se leyeron contenidos privados del portapapeles ni se imprimieron cookies X11
 No se deshabilitó la autenticación y no fue necesario reiniciar el servicio de
 OpenCode, que ya tenía el entorno correcto.
 
-## Prevención incluida en los dotfiles
+## Prevención y recuperación multihost
 
 `linux/graphical-environment.sh` consulta el gestor de sesión de usuario y emite
 únicamente exportaciones escapadas de los metadatos gráficos pertinentes. Valida
 la existencia y propiedad del archivo de autorización y del socket Wayland.
 
-El bloque de inicio de `zsh/.zshrc` lo utiliza en paneles locales de tmux. No se
-ejecuta durante SSH y no reemplaza un display alternativo seleccionado
-explícitamente. `tmux/tmux.conf` conserva también las variables Wayland entre las
-que se actualizan al conectar un cliente.
+El bloque de inicio de `zsh/.zshrc` lo utiliza en **todas las shells locales Linux**,
+dentro o fuera de tmux. Comprueba el acceso real con `wl-paste --list-types` y
+`xdpyinfo`, conserva un display alternativo si funciona y repara el entorno desde
+`systemctl --user show-environment` cuando el heredado está obsoleto. Elimina de la
+shell solo las variables de los backends que no logra validar. SSH queda excluido:
+no importa el escritorio local sobre X11 forwarding.
 
-El helper no crea permisos, no obtiene cookies nuevas y no modifica procesos ya
-iniciados. Una sesión restaurada automáticamente que arranque OpenCode antes de
-cargar la configuración interactiva de Zsh puede seguir necesitando la
-recuperación manual siguiente. El arranque completo tras reiniciar el equipo
-todavía debe comprobarse en la validación de integración; las pruebas aisladas no
-lo sustituyen.
+No cambia permisos, no obtiene cookies nuevas y no puede reparar procesos Pi que
+ya estaban ejecutándose. Tras desplegar los dotfiles, abre una shell nueva y
+reinicia Pi cuando sea seguro. Las sesiones tmux restauradas también quedan
+cubiertas al crear una shell nueva; los panes/procesos ya existentes deben
+reiniciarse individualmente cuando termine su trabajo.
 
 ## Recuperar un cliente antiguo sin perder trabajo
 
-1. No cerrar tmux, matar procesos ni interrumpir tareas activas de otros proyectos.
-2. Abrir una ventana nueva de tmux con `Ctrl+A`, después `C` (bindings de este
-   repositorio), y situarse en el proyecto correspondiente.
-3. Ejecutar `opencode -c` para continuar la última sesión de ese proyecto y probar
-   una copia de texto y el pegado de una imagen.
+1. No cerrar tmux ni interrumpir tareas activas.
+2. Abrir una ventana nueva de tmux con `Ctrl+A`, después `C`, y situarse en el
+   proyecto correspondiente.
+3. En esa shell, comprobar que Wayland/X11 está accesible y volver a iniciar Pi u
+   OpenCode solo cuando sea seguro. El cliente antiguo conserva su entorno previo.
 4. Cerrar los clientes antiguos únicamente cuando sus tareas hayan terminado.
 
 Si es necesario reutilizar una shell antigua, salir primero del cliente cuando
@@ -61,8 +62,8 @@ sea seguro y, desde la raíz de Portillo.Dots, ejecutar:
 eval "$(bash linux/graphical-environment.sh)"
 ```
 
-Después regresar al directorio del proyecto y ejecutar `opencode -c`. Una shell
-nueva es preferible cuando se acaba de actualizar la configuración de tmux.
+Después regresar al directorio del proyecto e iniciar de nuevo el cliente. Una
+shell nueva es preferible cuando se acaba de actualizar la configuración.
 
 No usar `xhost +`, copiar cookies entre usuarios ni abrir permisos de
 `XAUTHORITY`. En SSH no importar el entorno gráfico local sobre el forwarding.
@@ -90,7 +91,7 @@ del portapapeles, archivos de autorización, credenciales ni logs completos.
 python3 -B -m unittest discover -s tests -p 'test_graphical_environment.py' -v
 ```
 
-Cubren recuperación desde un panel simulado con dotfiles enlazados, exportación
-sin secretos, X11 sin Wayland, gestor de sesión no disponible y conservación de
-SSH/displays alternativos. No equivalen a automatizar la selección con el ratón
-en OpenCode ni a probar un reinicio completo, macOS o un servidor remoto real.
+Cubren recuperación desde shells normales y tmux, validación de sockets/display,
+X11 sin Wayland, gestor de sesión no disponible, y conservación de SSH y displays
+alternativos funcionales. No equivalen a automatizar la selección con el ratón en
+Pi/OpenCode ni a probar cada host remoto o cada gestor de escritorio.

@@ -17,6 +17,10 @@ class GraphicalEnvironmentTests(unittest.TestCase):
         mock = base / 'systemctl'
         mock.write_text('#!/bin/sh\ncat "$MOCK_ENVIRONMENT"\n')
         mock.chmod(0o755)
+        for name in ['wl-paste', 'xdpyinfo']:
+            command = base / name
+            command.write_text('#!/bin/sh\nexit 0\n')
+            command.chmod(0o755)
         metadata = base / 'session.env'
         metadata.write_text(f'DISPLAY=:0\nXAUTHORITY={authority}\nWAYLAND_DISPLAY=wayland-test\n'
                             f'XDG_RUNTIME_DIR={base}\nXDG_SESSION_TYPE=wayland\n'
@@ -42,13 +46,20 @@ class GraphicalEnvironmentTests(unittest.TestCase):
                 self.assertNotIn('UNRELATED_SECRET', result.stdout)
                 check = subprocess.run(['bash', '-c', result.stdout + '\nprintf "%s\\n" "$XAUTHORITY" "$WAYLAND_DISPLAY"'],
                                        env=env, capture_output=True, text=True)
-                self.assertEqual(check.stdout.splitlines(), [str(authority), 'wayland-test'])
+            self.assertEqual(check.stdout.splitlines(), [str(authority), 'wayland-test'])
 
     def test_never_overrides_ssh_or_alternative_displays(self):
         with tempfile.TemporaryDirectory() as directory:
-            env, _ = self.fixture(Path(directory))
-            for changed in [{'SSH_CONNECTION': 'host forwarded'}, {'SSH_TTY': '/dev/pts/2'},
-                            {'DISPLAY': ':99'}, {'WAYLAND_DISPLAY': 'another-session'}]:
+            base = Path(directory)
+            env, authority = self.fixture(base)
+            env.update(DISPLAY=':99', XAUTHORITY=str(authority), WAYLAND_DISPLAY='alternate',
+                       XDG_RUNTIME_DIR=str(base))
+            with socket.socket(socket.AF_UNIX) as server:
+                server.bind(str(base / 'alternate'))
+                result = self.run_helper(env)
+                self.assertNotIn('export DISPLAY=:0', result.stdout)
+                self.assertNotIn('export WAYLAND_DISPLAY=wayland-test', result.stdout)
+            for changed in [{'SSH_CONNECTION': 'host forwarded'}, {'SSH_TTY': '/dev/pts/2'}]:
                 with self.subTest(changed=changed):
                     self.assertEqual(self.run_helper({**env, **changed}).stdout, '')
 
@@ -59,6 +70,25 @@ class GraphicalEnvironmentTests(unittest.TestCase):
             result = self.run_helper(env)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, '')
+
+    def test_replaces_stale_local_displays_but_never_ssh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            env, authority = self.fixture(base)
+            (base / 'session.env').write_text(
+                f'DISPLAY=:0\nXAUTHORITY={authority}\nWAYLAND_DISPLAY=wayland-test\n'
+                f'XDG_RUNTIME_DIR={base}\nXDG_SESSION_TYPE=wayland\n')
+            env.update(DISPLAY=':99', XAUTHORITY='/missing/old-auth', WAYLAND_DISPLAY='old-wayland',
+                       XDG_RUNTIME_DIR='/old/runtime')
+            with socket.socket(socket.AF_UNIX) as server:
+                server.bind(str(base / 'wayland-test'))
+                result = self.run_helper(env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('export DISPLAY=:0', result.stdout)
+            self.assertIn(f'export XAUTHORITY={str(authority).replace(" ", "\\ ")}', result.stdout)
+            self.assertIn('export WAYLAND_DISPLAY=wayland-test', result.stdout)
+            ssh_result = self.run_helper({**env, 'SSH_CONNECTION': 'host forwarded'})
+            self.assertEqual(ssh_result.stdout, '')
 
     @unittest.skipUnless(shutil.which('zsh'), 'Zsh is needed to test shell startup integration')
     def test_restored_zsh_recovers_metadata_through_dotfile_symlink(self):
