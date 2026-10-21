@@ -17,14 +17,8 @@ profile_components() {
   case "$profile" in workstation|server) ;; *) printf 'Invalid profile: %s\n' "$profile" >&2; return 2 ;; esac
   case "$platform" in linux|mac) ;; *) printf 'Invalid platform: %s\n' "$platform" >&2; return 2 ;; esac
 
-  # Neovim minimum is per profile: only LazyVim (workstation) needs 0.11. The
-  # managed server config needs 0.10 for vim.ui.clipboard.osc52 and degrades
-  # gracefully on older builds (the require is guarded with pcall).
-  local nvim_minimum=0.10 nvim_reason='OSC52 clipboard needs 0.10'
-  if [[ "$profile" == workstation ]]; then
-    nvim_minimum=0.11
-    nvim_reason='LazyVim needs 0.11'
-  fi
+  # Both profiles run the same LazyVim configuration.
+  local nvim_minimum=0.11.2 nvim_reason='Pinned LazyVim needs 0.11.2'
 
   cat <<'EOF'
 required git - Version control
@@ -265,8 +259,7 @@ tool_upgrade() {
 # scripts through PORTILLO_RUNTIME_BINS because they run without the repo.
 #
 #   workstation  dev runtime: LazyVim toolchain (default, matches the profile)
-#   server       lightweight runtime: the shared baseline only, like a host
-#                installed with --profile server
+#   server       same editor runtime, with tmux required for SSH sessions
 remote_runtime_components() {
   case "$1" in
     server)
@@ -275,6 +268,10 @@ required nvim
 required rg
 required fd
 required fzf
+required lazygit
+required node
+required npm
+required stylua
 required tmux
 EOF
       ;;

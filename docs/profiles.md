@@ -19,10 +19,12 @@ en el uso diario:
 |---|---|---|
 | `shared/shell/common.sh` | Aliases, `memtop`, `EDITOR/VISUAL`, colores Kanagawa, PATH del usuario, fnm bajo demanda, **PS1 Kanagawa** | `zsh/.zshrc`, `server/shell.sh`, `remote/generate-rc.sh` |
 | `shared/tmux/base.conf` | Prefix `C-a`, splits, índices, copy-mode con backends de clipboard, popup scratch, status Kanagawa | `tmux/tmux.conf` (+ plugins), `server/tmux.conf`, generación del tmux remoto |
-| `shared/nvim/base.lua` | Opciones, leader, keymaps base, OSC 52 copy-only sobre SSH | `server/nvim/init.lua`, `nvim/lua/config/options.lua` (LazyVim encima), runtime `--like server` |
+| `shared/nvim/base.lua` | Opciones, leader, keymaps base, OSC 52 copy-only sobre SSH | `nvim/lua/config/options.lua` en ambos perfiles y runtimes |
 
-Lo que cambia entre contextos es **solo el overlay**: la pila de plugins de tmux
-y LazyVim en workstation, y nada en server. **El prompt es literalmente el mismo
+Ambos perfiles despliegan **el árbol completo `nvim/`**, LazyVim, sus extras,
+el mismo `lazy-lock.json` y Kanagawa Dragon. El servidor también recibe los
+plugins interactivos de tmux y su tema por defecto; únicamente la persistencia
+(resurrect/continuum/autoboot) queda fuera. **El prompt es literalmente el mismo
 en todos los host**: `zsh/.zshrc` + `zsh/p10k.zsh` (Powerlevel10k) se instalan y
 enlazan en cada perfil, con la paleta Kanagawa Dragon compartida con el status de
 tmux (`#8ba4b0`, `#c5c9c5`); el PS1 compartido queda como fallback para sesiones
@@ -74,7 +76,9 @@ que una herramienta añadida a medias rompe la suite antes que una instalación.
 git curl ssh rsync tmux nvim rg fd fzf bat jq htop python3 zsh opencode pi
 ```
 
-Sin escritorio, sin toolchains de desarrollo y sin instaladores de apps gráficas.
+Sin escritorio ni instaladores de apps gráficas. Incluye soporte de compilación
+para Tree-sitter y el runtime Node necesario para Pi; no instala la pila completa
+de toolchains de Workstation.
 `zsh` es la identidad de shell compartida (mismo prompt en todos los host).
 
 ### Workstation — 24 requeridas + 4 opcionales
@@ -102,9 +106,9 @@ La verificación automática cubre estos límites (tests en `tests/test_profiles
   exige que `systemctl` aparezca únicamente dentro del guard `hardware == true`,
   que es una selección explícita con `--hardware`. No existe código de ufw,
   iptables, nftables ni sshd.
-- **No borra la configuración de Workstation.** Aplicar Server sobre un HOME que
-  ya tenga `~/.config/zed`, `~/.config/alacritty`, `~/.oh-my-zsh`, `~/.cargo` o el
-  árbol de Neovim de LazyVim deja esos elementos intactos.
+- **Preserva las herramientas ajenas al perfil.** No borra `~/.config/zed`,
+  `~/.config/alacritty`, `~/.oh-my-zsh` ni `~/.cargo`. Neovim y tmux sí son
+  configuraciones gestionadas en ambos perfiles: se reemplazan con respaldo.
 - **No cambia el shell de login por su cuenta.** `--change-shell` sigue siendo
   **opt-in explícito** para ambos perfiles (incluido Server, donde la paridad de
   prompt con el resto de host lo justifica); nada se ejecuta sin esa flag.
@@ -144,9 +148,9 @@ Server rechaza `--hardware` y `--apply-linux` en cualquiera de sus capas.
 host se sientan igual, pero **solo** con la flag explícita.
 `--timezone IANA` también es explícita, solo Linux, valida el nombre contra
 `/usr/share/zoneinfo` y aplica el cambio en la única fase privilegiada.
-En Server, `--tmux-visual` habilita explícitamente el tema Kanagawa y los
-segmentos git/CPU/RAM. Solo instala TPM y el plugin visual; no habilita
-resurrección de sesiones, servicios ni autoboot.
+En Server, Kanagawa, segmentos git/CPU/RAM y plugins interactivos son el valor
+por defecto. `--tmux-visual` se conserva como flag de compatibilidad; ya no hace
+falta. No habilita resurrección de sesiones, servicios ni autoboot.
 
 En la consola física Linux (`TERM=linux`), Zsh omite el *instant prompt* y
 Powerlevel10k porque la fuente bitmap del kernel no incluye los glifos Nerd
@@ -164,18 +168,22 @@ bash setup.sh --profile workstation --check
 python3 -B -m unittest discover -s tests -p 'test_profiles.py' -v
 ```
 
-`--check` es de solo lectura: comprueba herramientas y enlaces de configuración
-sin instalar ni escribir nada.
+`--check` comprueba herramientas, todos los enlaces de Neovim y plugins de tmux.
+Para Neovim valida el recibo de un arranque real exitoso: hashes de configuración,
+revisiones Git de los plugins activos y carga real del tema Dragon. Ejecuta
+Neovim con `-u NONE`, sin hooks de inicio, descargas ni reparación; los archivos
+temporales de diagnóstico se eliminan. Si falta el recibo, ejecuta setup normal.
+La instalación restaura los plugins desde el lockfile y genera ese recibo solo
+si pasan las comprobaciones. `--config-only` no descarga plugins ni certifica
+que estén instalados. La segunda instalación evita restaurar si todo coincide.
 
 ## Límites conocidos
 
 - macOS está cubierto por tests lógicos y por `--dry-run`, pero **no se ha
   instalado en un Mac real** durante esta refactorización; queda en la validación
   de integración.
-- Los mínimos de versión se declaran **por perfil** en `installer/components.sh`.
-  Neovim exige `>= 0.11` en Workstation (LazyVim) y `>= 0.10` en Server
-  (`vim.ui.clipboard.osc52`, con degradación elegante vía `pcall`); un Neovim
-  anterior a 0.10 solo pierde el portapapeles OSC 52 sobre SSH.
+- Los mínimos se declaran en `installer/components.sh`: Neovim exige
+  `>= 0.11.2` en ambos perfiles por la revisión fijada de LazyVim.
 - `--check` comprueba presencia de ejecutables, no que cada uno funcione en su
   contexto real (por ejemplo que un provider de OpenCode esté autenticado).
 - Los paquetes `optional` se intentan instalar solo en Workstation con gestor

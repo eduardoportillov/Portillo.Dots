@@ -85,8 +85,8 @@ Options:
   --no-tmux           Connect directly into Bash (default)
   --skip-bins         Skip binary installation
   --refresh-bins      Refresh verified binary downloads for the remote platform
-  --like PROFILE      Runtime profile: workstation (default) or server (shared
-                      baseline only, like a host installed with --profile server)
+  --like PROFILE      Runtime profile: workstation (default) or server
+                      (same LazyVim configuration; multiplexer required on server)
   --cd PATH           Override path this session + auto-save
   --no-cd             Ignore saved paths this session
   --port PORT         SSH port (overrides SSH config)
@@ -125,7 +125,7 @@ Opciones:
   --skip-bins   Omite la instalación de binarios
   --refresh-bins  Actualiza las descargas verificadas para la plataforma remota
   --like server|workstation  Perfil del runtime (workstation por defecto;
-                   server = solo la base compartida, como --profile server)
+                   ambos usan la misma configuración LazyVim)
   --cd PATH     Usa esa ruta esta sesión y la guarda
   --no-cd       Ignora las rutas guardadas esta sesión
   --port PORT   Puerto SSH (anula la config de SSH)

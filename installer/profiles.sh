@@ -38,7 +38,7 @@ show_actions() {
       info 'Development: Node/pnpm, Go, Rust, SDKMAN, uv, MarkItDown, shell plugins, OpenCode and Claude Code'
       info 'Desktop: Alacritty/fonts, Zed, GNOME or AeroSpace (when applicable)'
     else
-      info 'Server: OpenCode; no desktop, toolchains, daemon setup or login-shell change'
+      info 'Server: shared LazyVim, tmux plugins/theme, shell and OpenCode; no desktop, daemon setup or login-shell change'
     fi
     [[ "$UPGRADE" == false ]] || info 'Explicit upgrades enabled (Arch repository sync always requires a full system upgrade)'
   fi
@@ -46,7 +46,7 @@ show_actions() {
   [[ "$CHANGE_SHELL" == false ]] || info 'OPT-IN: change login shell to Zsh'
   [[ -z "${TIMEZONE:-}" ]] || info "OPT-IN: set system timezone to $TIMEZONE"
   [[ "${TMUX_VISUAL:-false}" == false ]] \
-    || info 'OPT-IN: Kanagawa tmux theme + git/CPU/RAM status (no autoboot or persistence services)'
+    || info 'Compatibility: --tmux-visual is no longer needed; Kanagawa tmux is the default'
   [[ "$OPENCODE_TEMPLATE" == false ]] || warn 'Custom OpenCode template selected: review V2 compatibility of its plugins'
 }
 
@@ -88,9 +88,8 @@ install_brew_tools() {
   # The manifest drives the formula list through the catalog; support packages
   # (archives, treesitter tooling, ffmpeg) are plumbing, not manifest tools.
   local packages=(unzip zip) kind name package
-  if [[ "$PROFILE" == workstation ]]; then
-    packages+=(tree-sitter ffmpeg)
-  fi
+  packages+=(tree-sitter)
+  if [[ "$PROFILE" == workstation ]]; then packages+=(ffmpeg); fi
   while read -r kind name _; do
     [[ -n "$kind" ]] || continue
     package="$(tool_packages "$name" brew)"
@@ -143,9 +142,7 @@ install_profile() {
   fi
   install_source_tools "$PROFILE"
   install_shell_identity
-  if [[ "${TMUX_VISUAL:-false}" == true ]]; then
-    install_tmux_visual
-  fi
+  install_tmux_visual
   install_opencode
 }
 
@@ -156,22 +153,24 @@ configure_profile() {
   symlink_file "$REPO_DIR/shared/shell/common.sh" "$CONFIG_HOME/portillo-dots/shell-common.sh"
   symlink_file "$REPO_DIR/shared/tmux/base.conf" "$CONFIG_HOME/portillo-dots/tmux-base.conf"
   symlink_file "$REPO_DIR/shared/nvim/base.lua" "$CONFIG_HOME/portillo-dots/nvim-base.lua"
-  if [[ "${TMUX_VISUAL:-false}" == true ]]; then
-    symlink_file "$REPO_DIR/shared/tmux/visual.conf" "$CONFIG_HOME/portillo-dots/tmux-visual.conf"
-    symlink_file "$REPO_DIR/shared/tmux/visual-enabled" "$CONFIG_HOME/portillo-dots/tmux-visual-enabled"
-  fi
+  symlink_file "$REPO_DIR/shared/tmux/visual.conf" "$CONFIG_HOME/portillo-dots/tmux-visual.conf"
+  symlink_file "$REPO_DIR/shared/tmux/visual-enabled" "$CONFIG_HOME/portillo-dots/tmux-visual-enabled"
+  configure_nvim
   if [[ "$PROFILE" == server ]]; then
     symlink_file "$REPO_DIR/server/tmux.conf" "$HOME/.tmux.conf"
-    prepare_config_directory "$CONFIG_HOME/nvim"
-    symlink_file "$REPO_DIR/server/nvim/init.lua" "$CONFIG_HOME/nvim/init.lua"
     symlink_file "$REPO_DIR/server/shell.sh" "$CONFIG_HOME/portillo-dots/server.sh"
     configure_server_shell
   else
     configure_workstation
   fi
   configure_opencode
-  # Tighten credential files last: generation must have happened first.
+  # Restrict generated credentials before plugin provisioning can fail or wait.
   secure_known_secrets || warn 'Some credential paths could not be restricted'
+  if [[ "$CONFIG_ONLY" == false ]]; then
+    provision_nvim
+  else
+    info 'Configs linked; plugin downloads are skipped in --config-only. Run normal setup to provision/verify plugins.'
+  fi
 }
 
 configure_server_shell() {
@@ -202,14 +201,16 @@ verify_configs() {
                 "$CONFIG_HOME/portillo-dots/shell-common.sh:$REPO_DIR/shared/shell/common.sh"
                 "$CONFIG_HOME/portillo-dots/tmux-base.conf:$REPO_DIR/shared/tmux/base.conf"
                 "$CONFIG_HOME/portillo-dots/nvim-base.lua:$REPO_DIR/shared/nvim/base.lua")
-  if [[ "${TMUX_VISUAL:-false}" == true ]]; then
-    checks+=("$CONFIG_HOME/portillo-dots/tmux-visual.conf:$REPO_DIR/shared/tmux/visual.conf"
-             "$CONFIG_HOME/portillo-dots/tmux-visual-enabled:$REPO_DIR/shared/tmux/visual-enabled")
-  fi
+  checks+=("$CONFIG_HOME/portillo-dots/tmux-visual.conf:$REPO_DIR/shared/tmux/visual.conf"
+           "$CONFIG_HOME/portillo-dots/tmux-visual-enabled:$REPO_DIR/shared/tmux/visual-enabled")
+  local file
+  for file in init.lua lua lazy-lock.json lazyvim.json stylua.toml .gitignore .neoconf.json db_ui; do
+    checks+=("$CONFIG_HOME/nvim/$file:$REPO_DIR/nvim/$file")
+  done
   if [[ "$PROFILE" == server ]]; then
-    checks+=("$HOME/.tmux.conf:$REPO_DIR/server/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/server/nvim/init.lua")
+    checks+=("$HOME/.tmux.conf:$REPO_DIR/server/tmux.conf")
   else
-    checks+=("$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf" "$CONFIG_HOME/nvim/init.lua:$REPO_DIR/nvim/init.lua")
+    checks+=("$HOME/.tmux.conf:$REPO_DIR/tmux/tmux.conf")
   fi
   for pair in "${checks[@]}"; do
     destination="${pair%%:*}" source="${pair#*:}"
@@ -270,6 +271,9 @@ verify_profile() {
     fi
   done < <(profile_components "$PROFILE" "$PLATFORM")
   verify_configs || failed=1
+  if [[ "$failed" -eq 0 ]]; then
+    verify_terminal_identity || failed=1
+  fi
   if [[ "$failed" -ne 0 ]]; then
     warn "Verification FAILED: $PROFILE"
   else

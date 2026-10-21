@@ -314,26 +314,12 @@ setup_nvim_config_symlink() {
 }
 
 setup_server_nvim_config() {
-  # --like server: the app dir exposes the shared baseline as init.lua, so the
-  # runtime editor behaves exactly like a host installed with --profile server.
-  local nvim_app_dir="$HOME/.config/portillo-remote/nvim"
-  local target="$REMOTE_BASE/shared/nvim/base.lua"
-  if [[ -L "$nvim_app_dir" ]]; then
-    local saved
-    saved="$(mktemp -d "$(dirname "$nvim_app_dir")/.nvim-backup.XXXXXXXX")"
-    mv "$nvim_app_dir" "$saved/nvim"
-  fi
-  if [[ -d "$nvim_app_dir" && -L "$nvim_app_dir/init.lua" ]] \
-    && [[ "$(readlink "$nvim_app_dir/init.lua")" == "$target" ]]; then
-    return 0
-  fi
-  mkdir -p "$nvim_app_dir"
-  ln -sfn "$target" "$nvim_app_dir/init.lua"
-  ok "server nvim config linked to the shared baseline"
+  # Compatibility entrypoint: server is no longer a different editor.
+  setup_nvim_config_symlink
 }
 
 setup_tpm() {
-  # Remote tmux uses server/tmux.conf without global plugins or autoboot.
+  # Bare runtimes keep tmux isolated; setup-managed hosts supply the shared overlay.
   return 0
 }
 
@@ -366,10 +352,8 @@ main() {
     esac
   done
 
-  # Build support for treesitter plugin compilation: dev runtime only.
-  if [[ "${PORTILLO_RUNTIME_PROFILE:-workstation}" != server ]]; then
-    install_zig_cc
-  fi
+  # Both profiles use the same Tree-sitter plugins.
+  install_zig_cc
 
   for binary in "${runtime_bins[@]}"; do
     [[ -x "$REMOTE_BIN/$binary" ]] || { error "Required remote binary missing: $binary"; return 1; }
@@ -378,12 +362,8 @@ main() {
 
   echo ""
   info "Post-install setup..."
-  if [[ "${PORTILLO_RUNTIME_PROFILE:-workstation}" == server ]]; then
-    setup_server_nvim_config
-  else
-    setup_lazy_nvim
-    setup_nvim_config_symlink
-  fi
+  setup_lazy_nvim
+  setup_nvim_config_symlink
   setup_tpm
 
   echo ""

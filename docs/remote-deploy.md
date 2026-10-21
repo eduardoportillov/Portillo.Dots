@@ -34,12 +34,12 @@ modela el servidor. No hay red ni servidor real.
 
 `remote/deploy-manifest.py` emite una lista NUL-delimitada de archivos
 **versionados y sin secretos**. `rsync --from0 --files-from` transmite solo esos.
-El argumento de perfil selecciona la carga:
+Ambos valores de perfil llevan la misma configuración de editor:
 
 | Perfil (`--like`) | Contenido |
 |---|---|
 | `workstation` (por defecto) | La base compartida + el árbol LazyVim (`nvim/init.lua`, `nvim/lua/**/*.lua`, `nvim/lazy-lock.json`, `nvim/lazyvim.json`, `nvim/stylua.toml`, `nvim/.neoconf.json`) |
-| `server` | Solo la base compartida: `shared/shell/common.sh`, `shared/tmux/base.conf`, `shared/nvim/base.lua` |
+| `server` | El mismo árbol LazyVim y base compartida que `workstation` |
 
 Ambos perfiles incluyen además `zsh/.dircolors` y `.markdownlint.jsonc`. La base
 compartida es la misma que `setup.sh` despliega en `~/.config/portillo-dots/`,
@@ -56,9 +56,9 @@ Los binarios se transfieren con `rsync --include` explícito por nombre de artef
 
 El conjunto de binarios portátiles lo declara `remote_runtime_components` en
 `installer/components.sh` (una sola fuente, compartida con `remote.sh status`):
-el runtime `workstation` lleva la toolchain de LazyVim (nvim, rg, fd, fzf,
-lazygit, node/npm, stylua, tmux); el runtime `server` solo nvim, rg, fd, fzf y
-tmux. Como los scripts de instalación corren en el host remoto sin el repo, la
+ambos runtimes llevan la toolchain de LazyVim (nvim, rg, fd, fzf,
+lazygit, node/npm, stylua, tmux); tmux es requerido en `server` y opcional en
+`workstation`. Como los scripts corren en el host remoto sin el repo, la
 lista viaja con la llamada en `PORTILLO_RUNTIME_BINS` y el perfil en
 `PORTILLO_RUNTIME_PROFILE`.
 
@@ -77,15 +77,14 @@ recibir además un runtime `remote.sh`. No se rompe nada ni se pierde nada:
   el mismo `zsh/.dircolors`).
 - **Mientras un runtime esté desplegado manda su experiencia**: su bloque
   antepone sus binarios al PATH y exporta `NVIM_APPNAME`, así que `nvim` usa la
-  config del runtime. Con `--like server` esa config **es la misma base
-  compartida** que la instalada (sesión indistinguible); con `--like
-  workstation` es LazyVim, el entorno de desarrollo remoto.
+  config del runtime. Con ambos valores de `--like`, esa config es el mismo
+  árbol LazyVim, con sus plugins, extras y tema.
 - `remote.sh connect` elige zsh solo si el host ya tiene zsh, `.zshrc`,
   `.p10k.zsh` y Oh My Zsh; en ese caso obtiene el mismo Powerlevel10k que una
   sesión SSH normal. Si falta cualquiera, usa el Bash runtime generado.
-- Si el host tiene habilitado `setup.sh --profile server --tmux-visual`, el
-  tmux dedicado de `remote.sh` carga el mismo overlay visual Kanagawa. Sin ese
-  opt-in usa solo la base compartida.
+- Si el host fue aprovisionado con setup actualizado, el tmux dedicado carga
+  el mismo overlay Kanagawa, instalado ahora por defecto. En hosts sin setup,
+  el runtime conserva el tmux base aislado, sin instalar plugins globales.
 - `setup.sh --check` avisa si `~/.dircolors` lo está gestionando un runtime:
   la verificación describe el estado real, no un fallo.
 
@@ -152,8 +151,7 @@ python3 -B -m unittest discover -s tests -p 'test_remote.py' -v
 - Los nombres de archivo permitidos se contrastan con `git ls-files`; un archivo
   renombrado en el repo requiere actualizar `deploy-manifest.py` o las pruebas
   fallarán, que es el comportamiento deseado.
-- `remote.sh --like server` replica la experiencia del perfil server de
-  `setup.sh` (base compartida, sin LazyVim ni toolchains), pero no instala los
+- `remote.sh --like server` lleva el mismo editor LazyVim, pero no instala los
   paquetes nativos del perfil ni sus herramientas de catálogo (`opencode`,
   `pi`): son dos mecanismos distintos — runtime transitorio sin sudo frente a
   instalación de sistema — y no deben confundirse.

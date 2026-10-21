@@ -54,17 +54,17 @@ El debugger también conserva los cambios de robustez: rutas escapadas con
 `fnameescape`, y valores del `.env` entrecomillados, vacíos o con puntuación se
 conservan **sin evaluar** sustituciones de shell.
 
-## Server no descarga nada automáticamente
+## Server conserva la misma experiencia de editor
 
-`server/nvim/init.lua` y `server/tmux.conf` no arrancan gestores de plugins ni
-toolchains. Un test prohíbe en Server:
+Ambos perfiles despliegan `nvim/` completo y restauran sus plugins desde el mismo
+lockfile. `server/nvim/init.lua` es únicamente una entrada legacy que delega a
+`config.lazy`; setup ya no lo enlaza. La configuración y Kanagawa Dragon se
+validan tras el aprovisionamiento. Las actualizaciones de plugins son explícitas.
 
-- `require("lazy")`, `lazy.nvim`, `git clone`, `install_plugins`, TPM
-- `npm install`, `npx`, `cargo`, `rustup`, `uv tool`, `curl`, `wget`, `markitdown`
-- `@plugin`, `continuum`, `resurrect` y unidades systemd en tmux
-
-Es la diferencia con `remote.sh`, que sí prepara LazyVim/TPM para el caso de
-"desarrollo remoto". Son flujos distintos.
+Tmux comparte tema y plugins interactivos, pero Server no habilita continuum,
+resurrect, unidades systemd ni autoboot. `--config-only` y `--check` no descargan
+plugins. Los LSP/formatters gestionados por Mason y las integraciones autenticadas
+conservan sus requisitos de runtime y credenciales por host.
 
 ## tmux: arranque y restauración
 

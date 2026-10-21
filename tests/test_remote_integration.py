@@ -569,7 +569,7 @@ if __name__ == '__main__':
 class LikeServerRuntimeTests(unittest.TestCase):
     """remote.sh --like server ships the shared baseline and nothing else."""
 
-    def test_like_server_carries_only_the_shared_baseline(self):
+    def test_like_server_carries_the_complete_shared_editor(self):
         with tempdir() as directory:
             remote = FakeRemote(directory)
             remote.run('''
@@ -589,8 +589,8 @@ class LikeServerRuntimeTests(unittest.TestCase):
             self.assertTrue((runtime / 'shared/shell/common.sh').is_file())
             self.assertTrue((runtime / 'shared/tmux/base.conf').is_file())
             self.assertTrue((runtime / 'shared/nvim/base.lua').is_file())
-            self.assertFalse((runtime / 'nvim').exists(),
-                             'the LazyVim tree must not ship with the server runtime')
+            self.assertTrue((runtime / 'nvim/init.lua').is_file(),
+                            'both profiles must ship the complete editor')
             self.assertFalse((runtime / 'zsh/.dircolors').exists() is False,
                              'the tracked color rules must ship')
             generated = (remote.home / '.portillo-dots-remote-state/tmux-remote.conf').read_text()

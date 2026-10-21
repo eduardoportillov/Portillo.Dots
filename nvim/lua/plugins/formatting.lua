@@ -33,7 +33,7 @@ return {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     dependencies = { "mason-org/mason.nvim" },
     opts = {
-      run_on_start = true,
+      run_on_start = vim.env.PORTILLO_NVIM_SETUP ~= "1",
       auto_update = false,
       start_delay = 0,
       ensure_installed = {

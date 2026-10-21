@@ -236,12 +236,18 @@ install_packages() {
           append_unique optional "$package"
         fi
       done < <(profile_components "$profile" linux)
-      case "$pm" in
-        pacman) append_unique optional tree-sitter ;;
-        *)      append_unique optional tree-sitter-cli ;;
-      esac
     fi
+    case "$pm" in
+      pacman) append_unique optional tree-sitter ;;
+      *)      append_unique optional tree-sitter-cli ;;
+    esac
   fi
+  # Both editor profiles compile Tree-sitter parsers.
+  case "$pm" in
+    apt) append_unique packages build-essential ;;
+    dnf) append_unique packages gcc gcc-c++ make ;;
+    pacman) append_unique packages base-devel ;;
+  esac
   if [[ "$profile" == workstation ]]; then
     # Build support for workstation features (compilers for treesitter, desktop
     # clipboard helpers, fonts); not manifest tools themselves.

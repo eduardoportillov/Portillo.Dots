@@ -121,7 +121,7 @@ class SharedConfigBaselineTests(unittest.TestCase):
 
     def test_both_nvim_consumers_load_the_shared_baseline(self):
         server = (ROOT / 'server/nvim/init.lua').read_text()
-        self.assertIn('nvim-base.lua', server, 'the server profile layers nothing on the base')
+        self.assertIn('require("config.lazy")', server, 'legacy server init must use the shared editor')
         workstation = (ROOT / 'nvim/lua/config/options.lua').read_text()
         self.assertIn('nvim-base.lua', workstation, 'LazyVim must layer on the same base')
 
@@ -138,7 +138,7 @@ class PhysicalConsolePromptTests(unittest.TestCase):
 
 
 class OptionalTmuxVisualOverlayTests(unittest.TestCase):
-    def test_server_overlay_is_visual_only_and_opt_in(self):
+    def test_server_overlay_is_shared_and_has_no_services(self):
         overlay = (ROOT / 'shared/tmux/visual.conf').read_text()
         server = (ROOT / 'server/tmux.conf').read_text()
         for setting in ("set -g @plugin 'Nybkox/tmux-kanagawa'",
@@ -149,5 +149,5 @@ class OptionalTmuxVisualOverlayTests(unittest.TestCase):
         for forbidden in ('continuum', 'resurrect', 'systemd', 'tmux.service', '@continuum-boot'):
             self.assertNotIn(forbidden, active,
                              f'the server visual overlay must not enable {forbidden}')
-        self.assertIn('tmux-visual-enabled', server)
-        self.assertIn('if-shell', server)
+        self.assertIn('source-file ~/.config/portillo-dots/tmux-visual.conf', server)
+        self.assertNotIn('if-shell', server)

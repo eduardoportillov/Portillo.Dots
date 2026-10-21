@@ -56,16 +56,14 @@ class ProfileManifestTests(unittest.TestCase):
                 names = [name for _, name, _ in entries]
                 self.assertEqual(len(names), len(set(names)))
 
-    def test_minimum_versions_are_profile_specific(self):
+    def test_shared_editor_requires_the_same_minimum(self):
         def minimum(profile):
             for _, name, rest in components(profile):
                 if name == 'nvim':
                     return rest.split(' ', 1)[0]
             self.fail('nvim missing from the manifest')
-        # LazyVim (workstation) needs 0.11; the server config only needs 0.10 for
-        # vim.ui.clipboard.osc52 and degrades gracefully below it (pcall guard).
-        self.assertEqual(minimum('workstation'), '0.11')
-        self.assertEqual(minimum('server'), '0.10')
+        self.assertEqual(minimum('workstation'), '0.11.2')
+        self.assertEqual(minimum('server'), '0.11.2')
 
     def test_manifest_drives_both_display_and_verification(self):
         profiles = (ROOT / 'installer/profiles.sh').read_text()
@@ -114,7 +112,7 @@ class ProfileBoundaryTests(unittest.TestCase):
             home = Path(directory)
             config = home / '.config'
             workstation_files = [config / 'zed/settings.json', config / 'alacritty/alacritty.toml']
-            workstation_dirs = [config / 'nvim/lua/config', home / '.oh-my-zsh', home / '.cargo']
+            workstation_dirs = [home / '.oh-my-zsh', home / '.cargo']
             for path in workstation_files:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(f'managed-by-workstation:{path.name}\n')
@@ -178,6 +176,8 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_tmux_visual() { return 0; }
+                provision_nvim() { return 0; }
                 install_profile
                 configure_profile
             '''
@@ -235,20 +235,20 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
                     self.assertIn(f'Optional tools ({len(optional)}, absence is not fatal): {" ".join(optional)}',
                                   result.stdout)
 
-    def test_tmux_visual_overlay_is_explicit_server_only_opt_in(self):
+    def test_legacy_tmux_visual_flag_is_accepted_on_server(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([BASH, str(ROOT / 'setup.sh'), '--profile', 'server',
                                      '--tmux-visual', '--dry-run'],
                                     env=self.isolated(directory), capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn('OPT-IN: Kanagawa tmux theme + git/CPU/RAM status', result.stdout)
+            self.assertIn('--tmux-visual is no longer needed', result.stdout)
             rejected = subprocess.run([BASH, str(ROOT / 'setup.sh'), '--profile', 'workstation',
                                        '--tmux-visual', '--dry-run'],
                                       env=self.isolated(directory), capture_output=True, text=True)
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn('--tmux-visual is a Server-only option', rejected.stderr)
 
-    def test_tmux_visual_overlay_provisions_only_its_two_user_plugins(self):
+    def test_tmux_visual_provisions_all_shared_interactive_plugins(self):
         with tempfile.TemporaryDirectory() as directory:
             calls = Path(directory) / 'calls'
             script = '''
@@ -262,9 +262,9 @@ if os.path.basename(sys.argv[0]) in ("apt-get", "dnf", "pacman", "systemctl", "u
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             entries = calls.read_text().splitlines()
-            self.assertEqual(len(entries), 2)
+            self.assertEqual(len(entries), 7)
             self.assertIn('github.com/tmux-plugins/tpm.git', entries[0])
-            self.assertIn('github.com/Nybkox/tmux-kanagawa.git', entries[1])
+            self.assertIn('github.com/Nybkox/tmux-kanagawa.git', entries[-1])
 
     def test_verify_reports_missing_required_and_tolerates_missing_optional(self):
         with tempfile.TemporaryDirectory() as directory:

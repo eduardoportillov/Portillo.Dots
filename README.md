@@ -13,6 +13,30 @@ chmod +x setup.sh
 
 The setup script is **idempotent**: run it multiple times without issues. Symlinks are always updated to the latest repo content.
 
+### Same terminal experience on every host
+
+`--profile workstation` and `--profile server` share the **complete LazyVim
+configuration**, `lazy-lock.json`, Kanagawa Dragon theme, editor shortcuts,
+Zsh/Powerlevel10k identity and interactive tmux plugins. Server means no desktop,
+not an unconfigured editor. Server does not enable tmux resurrection/autoboot or
+system services. Nerd Font glyphs over SSH are rendered by the **client terminal**.
+Recent files, projects, credentials and sessions remain host-local.
+
+To migrate an existing server, update this repository there, then run as your
+normal user (not root):
+
+```bash
+bash setup.sh --profile server
+bash setup.sh --profile server --check
+```
+
+Normal setup restores editor plugins from the tracked lockfile and verifies the
+loaded theme and plugin revisions; Neovim >= 0.11.2 is required in both profiles.
+Existing configurations are backed up before replacement. `--config-only` only
+links configurations: it deliberately does not download plugins. `--tmux-visual`
+is retained for compatibility but the shared tmux theme is now the default.
+Restart Neovim and open a new tmux session after migration.
+
 ## Architecture
 
 - **macOS & Linux**: Single setup script detects OS and applies appropriate configurations

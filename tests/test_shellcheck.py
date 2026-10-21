@@ -26,7 +26,7 @@ API = f'https://api.github.com/repos/koalaman/shellcheck/releases/tags/{PIN}'
 SHELL_FILES = [
     'setup.sh',
     'installer/common.sh', 'installer/components.sh', 'installer/profiles.sh',
-    'installer/workstation.sh', 'installer/opencode.sh',
+    'installer/workstation.sh', 'installer/editors.sh', 'installer/opencode.sh',
     'installer/privileged.sh', 'installer/privileged-core.sh',
     'remote.sh', 'remote/lib.sh', 'remote/install-binaries.sh',
     'remote/shell-environment.sh', 'remote/generate-rc.sh', 'remote/connect.sh',

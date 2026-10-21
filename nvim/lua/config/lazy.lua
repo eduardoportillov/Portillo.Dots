@@ -1,5 +1,12 @@
+-- Setup works on copies of LazyVim's mutable metadata, not tracked symlinks.
+if vim.env.PORTILLO_NVIM_JSON then
+  vim.g.lazyvim_json = vim.env.PORTILLO_NVIM_JSON
+end
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
+  if vim.env.PORTILLO_NVIM_CHECK == "1" then
+    error("lazy.nvim missing; run setup without --config-only")
+  end
   local lazyrepo = "https://github.com/folke/lazy.nvim.git"
   local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
   if vim.v.shell_error ~= 0 then
@@ -15,6 +22,7 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
+  lockfile = vim.env.PORTILLO_NVIM_LOCKFILE or (vim.fn.stdpath("config") .. "/lazy-lock.json"),
   spec = {
     -- add LazyVim and import its plugins
     { "LazyVim/LazyVim", import = "lazyvim.plugins" },
@@ -30,11 +38,11 @@ require("lazy").setup({
     version = false, -- always use the latest git commit
     -- version = "*", -- try installing the latest stable version for plugins that support semver
   },
-  install = { colorscheme = { "kanagawa", "habamax" } },
+  install = { missing = vim.env.PORTILLO_NVIM_CHECK ~= "1", colorscheme = { "kanagawa", "habamax" } },
   checker = {
-    enabled = true, -- check for plugin updates periodically
+    enabled = false, -- updates are explicit; every host follows the same lockfile
     notify = false, -- notify on update
-  }, -- automatically check for plugin updates
+  },
   rocks = {
     enabled = false,
   },

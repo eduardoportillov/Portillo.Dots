@@ -266,13 +266,11 @@ class ServerIsolationTests(unittest.TestCase):
         r'(require\(["\']lazy|lazy\.nvim|git\s+clone|install_plugins|tpm|\bmarkitdown\b'
         r'|cargo|rustup|npm\s+install|npx|curl\s|wget\s|uv\s+tool)')
 
-    def test_server_editor_bootstraps_nothing(self):
+    def test_legacy_server_editor_uses_the_same_lazy_config(self):
         text = (ROOT / 'server/nvim/init.lua').read_text()
-        self.assertIsNone(self.FORBIDDEN.search(text),
-                          'server Neovim must not clone plugins or toolchains')
-        self.assertNotIn('lazy-lock', text)
+        self.assertIn('require("config.lazy")', text)
 
-    def test_server_tmux_has_no_plugin_manager_or_autoboot(self):
+    def test_server_tmux_has_shared_plugins_but_no_autoboot(self):
         raw = (ROOT / 'server/tmux.conf').read_text()
         text = '\n'.join(l for l in raw.splitlines() if not l.strip().startswith('#'))
         self.assertNotIn('@plugin', text)
@@ -280,6 +278,7 @@ class ServerIsolationTests(unittest.TestCase):
         self.assertNotIn('continuum', text.lower())
         self.assertNotIn('resurrect', text.lower())
         self.assertNotIn('.config/systemd', text)
+        self.assertIn('source-file ~/.config/portillo-dots/tmux-visual.conf', text)
 
 
 class TmuxStartupTests(unittest.TestCase):

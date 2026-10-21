@@ -212,7 +212,11 @@ class SinglePassVerificationTests(unittest.TestCase):
                 link.symlink_to(ROOT / source)
             nvim = home / '.config/nvim'
             nvim.mkdir(parents=True, exist_ok=True)
-            (nvim / 'init.lua').symlink_to(ROOT / 'server/nvim/init.lua')
+            for name in ('init.lua', 'lua', 'lazy-lock.json', 'lazyvim.json', 'stylua.toml', '.gitignore', '.neoconf.json', 'db_ui'):
+                (nvim / name).symlink_to(ROOT / 'nvim' / name)
+            shared = home / '.config/portillo-dots'
+            (shared / 'tmux-visual.conf').symlink_to(ROOT / 'shared/tmux/visual.conf')
+            (shared / 'tmux-visual-enabled').symlink_to(ROOT / 'shared/tmux/visual-enabled')
             wrappers = Path(directory) / 'bin'
             wrappers.mkdir()
             log = Path(directory) / 'python-calls'

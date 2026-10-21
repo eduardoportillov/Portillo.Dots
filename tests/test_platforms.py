@@ -150,6 +150,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_tmux_visual() { return 0; }
                 install_brew_tools() { return 0; }
                 install_profile
             '''
@@ -187,6 +188,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_tmux_visual() { return 0; }
                 install_brew_tools() { return 0; }
                 install_profile
             '''
@@ -221,6 +223,7 @@ class ExecutableAliasTests(unittest.TestCase):
                 install_opencode() { return 0; }
                 install_source_tools() { return 0; }
                 install_shell_identity() { return 0; }
+                install_tmux_visual() { return 0; }
                 install_brew_tools() { return 0; }
                 install_profile
             '''
@@ -258,6 +261,7 @@ class VersionGateTests(unittest.TestCase):
             source "$1/installer/profiles.sh"
             PROFILE="$2"; PLATFORM=linux
             verify_configs() { return 0; }
+            verify_terminal_identity() { return 0; }
             verify_profile
         '''
         env = {**os.environ, 'PATH': f'{stubs}:{coreutils}'}
@@ -276,12 +280,11 @@ class VersionGateTests(unittest.TestCase):
                 'alacritty': '0.13.5'}
 
     def test_declared_minimums_are_enforced(self):
-        # Neovim minimum is per profile: LazyVim needs 0.11 on workstation, while
-        # the managed server config only needs 0.10 (OSC52, pcall-guarded).
+        # Both profiles run the same LazyVim stack.
         cases = [('workstation', '0.10.4',
-                  'nvim 0.10.4 is older than the declared minimum 0.11'),
-                 ('server', '0.9.5',
-                  'nvim 0.9.5 is older than the declared minimum 0.10')]
+                   'nvim 0.10.4 is older than the declared minimum 0.11.2'),
+                  ('server', '0.10.4',
+                   'nvim 0.10.4 is older than the declared minimum 0.11.2')]
         for profile, nvim, expected in cases:
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
                 result = self.run_verify(directory, self.versions(nvim), profile=profile)
@@ -291,7 +294,7 @@ class VersionGateTests(unittest.TestCase):
 
     def test_passing_minimums_verify_cleanly(self):
         # Each profile accepts exactly its declared boundary.
-        cases = [('workstation', '0.11.0'), ('server', '0.10.4')]
+        cases = [('workstation', '0.11.2'), ('server', '0.11.2')]
         for profile, nvim in cases:
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
                 result = self.run_verify(directory, self.versions(nvim, tmux='3.3.0'),
@@ -304,7 +307,7 @@ class VersionGateTests(unittest.TestCase):
             stubs = Path(directory) / 'bin'
             stubs.mkdir()
             versions = {'git': '2.39.0', 'curl': '8.0.0', 'ssh': '9.0.0', 'rsync': '3.2.0',
-                        'nvim': '0.11.0', 'rg': '14.0.0', 'fd': '9.0.0',
+                        'nvim': '0.11.2', 'rg': '14.0.0', 'fd': '9.0.0',
                         'fzf': '0.45.0', 'bat': '0.24.0', 'jq': '1.7.0', 'htop': '3.2.0',
                         'python3': '3.12.0', 'zsh': '5.9', 'opencode': '2.0.28', 'pi': '1.0.0'}
             self.make_stubs(stubs, versions)
@@ -319,7 +322,7 @@ class VersionGateTests(unittest.TestCase):
                     (coreutils / name).symlink_to(target)
             script = ('source "$1/installer/components.sh"; source "$1/installer/common.sh"; '
                       'source "$1/installer/profiles.sh"; PROFILE=server; PLATFORM=linux; '
-                      'verify_configs() { return 0; }; verify_profile')
+                       'verify_configs() { return 0; }; verify_terminal_identity() { return 0; }; verify_profile')
             env = {**os.environ, 'PATH': f'{stubs}:{coreutils}'}
             result = subprocess.run([BASH, '-euc', script, '_', str(ROOT)],
                                     env=env, capture_output=True, text=True, timeout=30)

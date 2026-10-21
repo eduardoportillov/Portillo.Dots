@@ -3,9 +3,7 @@
 
 Usage: deploy-manifest.py REPO [workstation|server]
 
-The workstation runtime carries the LazyVim tree; the server runtime carries
-only the shared baseline (shared/) plus the tracked color rules, mirroring the
-setup.sh server profile.
+Both runtime profiles carry the same LazyVim tree and shared identity.
 """
 from pathlib import Path
 import subprocess
@@ -18,7 +16,7 @@ BASE = {
     'shared/tmux/visual-enabled', 'shared/nvim/base.lua',
 }
 
-# LazyVim editor tree, only for the workstation runtime profile.
+# LazyVim editor tree, shared by both runtime profiles.
 LAZYVIM = {
     'nvim/init.lua', 'nvim/lazy-lock.json', 'nvim/lazyvim.json',
     'nvim/stylua.toml', 'nvim/.neoconf.json',
@@ -31,17 +29,14 @@ def manifest(repo, profile='workstation'):
         raise ValueError(f'Unknown runtime profile: {profile}')
     result = subprocess.run(['git', '-C', str(repo), 'ls-files', '-z'],
                             check=True, capture_output=True)
-    exact = set(BASE)
-    lazy_tree = profile == 'workstation'
-    if lazy_tree:
-        exact |= LAZYVIM
+    exact = BASE | LAZYVIM
     allowed = []
     for raw in result.stdout.split(b'\0'):
         if not raw:
             continue
         name = raw.decode()
         lazy_file = name.startswith('nvim/lua/') and name.endswith('.lua')
-        if name not in exact and not (lazy_tree and lazy_file):
+        if name not in exact and not lazy_file:
             continue
         if Path(name).name == 'connections.lua' or '/db_ui/' in name:
             continue

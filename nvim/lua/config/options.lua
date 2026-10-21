@@ -7,7 +7,7 @@
 -- top of it. The dynamic clipboard below then replaces the baseline's copy
 -- behaviour with its desktop-aware superset.
 for _, candidate in ipairs({
-  vim.fn.expand("~/.config/portillo-dots/nvim-base.lua"),
+  (vim.env.XDG_CONFIG_HOME or vim.fn.expand("~/.config")) .. "/portillo-dots/nvim-base.lua",
   vim.fn.expand("~/.portillo-remote/shared/nvim/base.lua"),
 }) do
   if vim.fn.filereadable(candidate) == 1 then

@@ -12,6 +12,7 @@ source "$REPO_DIR/installer/components.sh"
 source "$REPO_DIR/installer/common.sh"
 source "$REPO_DIR/installer/profiles.sh"
 source "$REPO_DIR/installer/workstation.sh"
+source "$REPO_DIR/installer/editors.sh"
 source "$REPO_DIR/installer/opencode.sh"
 
 PROFILE=""
@@ -36,7 +37,7 @@ Usage: bash setup.sh --profile workstation|server [OPTIONS]
 
 Profiles (not OpenCode versions):
   workstation  Dev Workstation: development tools, shell, editors and desktop
-  server       Remote Server: CLI essentials, lightweight Neovim/tmux, OpenCode
+  server       Remote Server: CLI essentials, same LazyVim/tmux identity, OpenCode
 
 Options:
   --config-only         Apply user configurations only (no packages or sudo)
@@ -50,7 +51,7 @@ Options:
   --apply-linux, -L     Apply only those hardware settings (workstation only)
   --change-shell        Opt in to changing the login shell to Zsh
   --timezone IANA       Opt in to setting the system timezone (Linux only)
-  --tmux-visual         Opt in to Kanagawa tmux theme + git/CPU/RAM status (server only)
+  --tmux-visual         Compatibility flag (server); shared tmux theme is now default
   --opencode-template   Use the custom template + opencode/.env (manual V2 plugin review)
   --interactive, -i     Confirm the installation summary before proceeding
   --yes, -y             Accept the summary (never bypasses sudo authentication)

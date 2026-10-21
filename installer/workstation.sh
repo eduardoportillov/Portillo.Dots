@@ -94,11 +94,7 @@ prepare_config_directory() {
 configure_workstation() {
   symlink_file "$REPO_DIR/tmux/tmux.conf" "$HOME/.tmux.conf"
   symlink_file "$REPO_DIR/.markdownlint.jsonc" "$HOME/.markdownlint.jsonc"
-  prepare_config_directory "$CONFIG_HOME/nvim"
   local file
-  for file in init.lua lua lazy-lock.json lazyvim.json stylua.toml .gitignore .neoconf.json db_ui; do
-    symlink_file "$REPO_DIR/nvim/$file" "$CONFIG_HOME/nvim/$file"
-  done
   prepare_config_directory "$CONFIG_HOME/alacritty"
   symlink_file "$REPO_DIR/alacritty/themes/kanagawa_dragon.toml" "$CONFIG_HOME/alacritty/themes/kanagawa_dragon.toml"
   if [[ "$PLATFORM" == mac ]]; then

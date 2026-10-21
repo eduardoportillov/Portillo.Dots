@@ -259,8 +259,10 @@ if os.environ.get('FAIL_ARG') in sys.argv[1:]:
                 packages = self.package_names(calls)
                 for name in ['git', python[backend], 'neovim', 'tmux']:
                     self.assertIn(name, packages)
-                for name in ['alacritty', 'copyq', 'golang-go', 'base-devel']:
+                for name in ['alacritty', 'copyq', 'golang-go']:
                     self.assertNotIn(name, packages)
+                compiler = {'apt-get': 'build-essential', 'dnf': 'gcc', 'pacman': 'base-devel'}
+                self.assertIn(compiler[backend], packages, 'shared Tree-sitter needs a compiler')
                 self.assertIn('zsh', packages, 'the shared shell identity needs zsh on every profile')
 
     def test_native_package_names_come_from_the_catalog(self):

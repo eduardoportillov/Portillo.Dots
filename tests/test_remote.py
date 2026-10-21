@@ -46,14 +46,15 @@ class RemoteTests(unittest.TestCase):
             self.assertFalse(set(secrets) & set(files))
             self.assertNotIn('linux/optimize.sh', files)
 
-    def test_server_manifest_ships_the_shared_baseline_only(self):
+    def test_server_manifest_ships_the_same_editor(self):
         with tempfile.TemporaryDirectory() as directory:
             repo = self.create_repo(directory)
             files = set(manifest.manifest(repo, 'server'))
             self.assertTrue(manifest.BASE.issubset(files))
-            self.assertFalse(manifest.LAZYVIM & files,
-                             'the server runtime must not carry the LazyVim tree')
-            self.assertFalse({'nvim/lua/config/options.lua'} & files)
+            self.assertTrue(manifest.LAZYVIM.issubset(files),
+                            'the server runtime must carry the same LazyVim tree')
+            self.assertIn('nvim/lua/config/options.lua', files)
+            self.assertEqual(files, set(manifest.manifest(repo, 'workstation')))
             self.assertEqual(manifest.manifest(repo, 'workstation'), manifest.manifest(repo))
             with self.assertRaises(ValueError):
                 manifest.manifest(repo, 'bogus')
@@ -162,7 +163,7 @@ class RuntimeToolsetTests(unittest.TestCase):
                     if line.startswith('required ')]
         self.assertEqual(required, ['nvim', 'rg', 'fd', 'fzf', 'lazygit', 'node', 'npm', 'stylua'])
         server_names = [line.split()[1] for line in server.splitlines() if line.strip()]
-        self.assertEqual(server_names, ['nvim', 'rg', 'fd', 'fzf', 'tmux'])
+        self.assertEqual(server_names, ['nvim', 'rg', 'fd', 'fzf', 'lazygit', 'node', 'npm', 'stylua', 'tmux'])
         for path in (ROOT / 'remote.sh', ROOT / 'remote/install-binaries.sh'):
             text = path.read_text()
             self.assertNotIn('for bin in nvim rg', text)
@@ -178,7 +179,7 @@ class RuntimeToolsetTests(unittest.TestCase):
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, expected)
 
-    def test_server_nvim_config_points_at_the_shared_baseline(self):
+    def test_server_nvim_config_points_at_the_same_editor(self):
         with tempfile.TemporaryDirectory() as directory:
             script = '''
                 export PORTILLO_INSTALLER_LIBRARY=1
@@ -190,10 +191,10 @@ class RuntimeToolsetTests(unittest.TestCase):
                                     env={**os.environ, 'HOME': directory},
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            link = Path(directory) / '.config/portillo-remote/nvim/init.lua'
+            link = Path(directory) / '.config/portillo-remote/nvim'
             self.assertTrue(link.is_symlink())
-            self.assertTrue(str(link.readlink()).endswith('/shared/nvim/base.lua'),
-                            'the server runtime must load the shared Neovim baseline')
+            self.assertTrue(str(link.readlink()).endswith('/.portillo-remote/nvim'),
+                            'the server runtime must load the complete shared editor')
 
     def test_remote_connect_prefers_complete_installed_zsh_identity(self):
         text = (ROOT / 'remote/connect.sh').read_text()

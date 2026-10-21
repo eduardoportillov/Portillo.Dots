@@ -1,6 +1,6 @@
 -- Portillo.Dots shared Neovim baseline: options, leader, core keymaps and the
--- SSH clipboard behaviour, identical on every host. The server profile layers
--- nothing on top; the workstation layers LazyVim on top. Deployed to
+-- SSH clipboard behaviour, identical on every host. Both profiles layer
+-- the same LazyVim configuration on top. Deployed to
 -- ~/.config/portillo-dots/nvim-base.lua by setup.sh and into the remote
 -- runtime's shared tree by remote.sh.
 vim.opt.number = true
