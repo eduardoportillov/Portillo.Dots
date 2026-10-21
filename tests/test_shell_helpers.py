@@ -82,8 +82,10 @@ class ShellHelperTests(unittest.TestCase):
         # the baseline must deliver S-Enter as CSI-u (ESC [ 13 ; 2 u) and a
         # plain Enter as CR, never collapsing both into CR (which submits).
         reader = '''import os, select, sys, termios, tty, time
-os.write(2, bytes([0x1b]) + b'[>4;2m')  # modifyOtherKeys mode 2, like Pi
 tty.setraw(0)
+# Publish readiness in the same output stream after requesting mode 2.
+# pane_title works on tmux 3.3/3.4, unlike the newer pane_key_mode format.
+os.write(2, b'\x1b[>4;2m\x1b]2;portillo-key-reader-ready\x07')
 data = b''
 end = time.time() + 8
 while time.time() < end and not data:
@@ -117,18 +119,20 @@ open(sys.argv[1], 'w').write(data.hex())
                     subprocess.run([*tmux, '-f', str(config), 'new-session', '-d', '-s', 'test',
                                     'python3', str(reader_path), str(received)],
                                    env=env, check=True, capture_output=True, text=True, timeout=10)
-                    # Wait for the pane app to request mode 2 (like Pi does).
+                    # The title marker proves tmux processed the preceding
+                    # mode request; the received bytes below verify its effect.
                     deadline = time.time() + 10
                     mode = ''
                     while time.time() < deadline:
                         result = subprocess.run([*tmux, 'display-message', '-p', '-t', 'test',
-                                                 '#{pane_key_mode}'],
+                                                 '#{pane_title}'],
                                                 env=env, capture_output=True, text=True, timeout=10)
                         mode = result.stdout.strip()
-                        if mode == 'Ext 2':
+                        if mode == 'portillo-key-reader-ready':
                             break
                         time.sleep(0.1)
-                    self.assertEqual(mode, 'Ext 2', 'the baseline must honor the app mode-2 request')
+                    self.assertEqual(mode, 'portillo-key-reader-ready',
+                                     'the pane reader must be ready before sending keys')
                     subprocess.run([*tmux, 'send-keys', '-t', 'test', key], env=env,
                                    check=True, capture_output=True, text=True, timeout=10)
                     deadline = time.time() + 10
