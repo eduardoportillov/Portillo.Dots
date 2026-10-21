@@ -81,7 +81,7 @@ duration = 0
 [keyboard]
 bindings = [
     { key = "Enter", mods = "Control", chars = "\u001b[13;5u" },
-    { key = "Enter", mods = "Shift",   chars = "\u001b\r" },
+    { key = "Enter", mods = "Shift",   chars = "\u001b[13;2u" },
     { key = "Enter", mods = "Alt",     chars = "\u001b\r" },
 
     { key = "V", mods = "Control|Shift", action = "Paste" },
@@ -110,5 +110,4 @@ bindings = [
     { key = "Back",   mods = "Alt", chars = "\u007f" },
     { key = "Delete", mods = "Alt", chars = "\u001b[3~" },
 
-    { key = "Return", mods = "Shift", chars = "\u001B\r" },
 ]

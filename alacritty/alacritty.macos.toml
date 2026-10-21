@@ -27,3 +27,10 @@ command = { program = "open", args = ["{hint}"] }
 hyperlinks = true
 post_processing = true
 binding = { key = "Space", mods = "Alt" }
+
+[keyboard]
+bindings = [
+    { key = "Enter", mods = "Control", chars = "\u001b[13;5u" },
+    { key = "Enter", mods = "Shift",   chars = "\u001b[13;2u" },
+    { key = "Enter", mods = "Alt",     chars = "\u001b\r" },
+]

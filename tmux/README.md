@@ -38,7 +38,12 @@ y encima añade los plugins, que se gestionan con **TPM** y se instalan en
 | Enviar el prefix a una app interna | `Ctrl-a` + `Ctrl-a` |
 
 Otros ajustes activos: modo de teclas `vi` en copy-mode, ratón habilitado, barra de estado arriba,
-índices empezando en 1, y clipboard end-to-end vía OSC 52 (`set-clipboard on` + `allow-passthrough on`).
+índices empezando en 1, y reenvío de OSC 52 vía (`set-clipboard on` + `allow-passthrough on`). Alacritty está en modo `onlycopy`: permite copiar vía OSC 52, no leer el portapapeles. Copia/pegado de imágenes depende del cliente y de que el pane tenga un entorno gráfico válido; procesos OpenCode restaurados con `DISPLAY`/`XAUTHORITY` obsoletos pueden mostrar errores de autorización X11. Ver [docs/clipboard.md](../docs/clipboard.md) para recuperar un cliente sin cerrar trabajo.
+
+**Teclas modificadas (Shift+Enter, etc.):** la baseline activa `extended-keys` + el feature `extkeys`
+y el formato `csi-u` (en tmux ≥ 3.5), para que TUIs como Pi reciban `Shift+Enter` como una tecla
+distinta de `Enter` — así insertan un salto de línea en vez de enviar el mensaje. Las apps lo piden
+con modifyOtherKeys (Pi envía `ESC[>4;2m`); `Shift+Enter` llega como `ESC[13;2u` y `Enter` como `CR`.
 
 ---
 

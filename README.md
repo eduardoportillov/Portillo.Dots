@@ -57,6 +57,7 @@ Restart Neovim and open a new tmux session after migration.
 - **tmux** — Terminal multiplexer with plugins via TPM
   - Kanagawa Dragon theme, vim mode, floating scratch window
   - Plugins: tmux-sensible, tmux-yank, tmux-resurrect, tmux-which-key, vim-tmux-navigator
+  - Modified keys (e.g. `Shift+Enter`) forwarded to apps inside panes as CSI-u, so TUIs like Pi insert a newline instead of submitting
 
 ### Shell & Prompt
 
