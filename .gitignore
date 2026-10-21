@@ -11,6 +11,9 @@
 *.log
 logs/
 
+# Python bytecode from unit tests
+__pycache__/
+
 # Backups (local to repo workspace)
 .backup/
 

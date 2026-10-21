@@ -428,6 +428,18 @@ Se instala con `./setup.sh`. Verificar:
 Nota: el límite topea cargas **futuras**; si la batería ya está al 100% no baja
 sola, se queda ahí hasta descargarse y recargar (que parará en 60%).
 
+### El sonido de las capturas (clic de cámara)
+GNOME Shell reproduce el evento `screen-capture` por tema de sonidos (verificado
+en el código de GNOME Shell 50 / mutter). Tus dots lo silencian por dos vías:
+el tema propio `portillo` (hereda `Yaru,freedesktop`; solo ese evento queda mudo)
+y, en provisionados Linux de workstation, un bypass a nivel sistema que
+`installer/privileged.sh` instala con `dpkg-divert` reemplazando
+`/usr/share/sounds/freedesktop/stereo/screen-capture.oga` por una copia
+silenciosa (el original del paquete queda en `*.distrib`, sobrevive a upgrades,
+y silencia incluso la sesión de GNOME ya en curso). El bypass se revierte en
+cualquier host con `sudo bash linux/silence-screen-capture.sh restore`, y su
+estado se consulta con `... status` o la línea `shutter divert` de `dots-diag`.
+
 ## Feedback & Issues
 
 Report issues or suggest improvements at: https://github.com/eduardoportillov/Portillo.Dots/issues

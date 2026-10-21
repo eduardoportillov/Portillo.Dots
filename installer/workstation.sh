@@ -118,6 +118,12 @@ configure_workstation() {
   if [[ "$PLATFORM" == linux ]]; then
     symlink_file "$REPO_DIR/linux/dots-fix-tiling.sh" "$HOME/.local/bin/dots-fix-tiling"
     symlink_file "$REPO_DIR/linux/dots-diag.sh" "$HOME/.local/bin/dots-diag"
+    # Tema de sonido portillo: silencia solo el evento screen-capture (clic de
+    # cámara de las capturas); hereda Yaru,freedesktop para el resto de sonidos.
+    symlink_file "$REPO_DIR/linux/sound-theme/portillo/index.theme" \
+      "$HOME/.local/share/sounds/portillo/index.theme"
+    symlink_file "$REPO_DIR/linux/sound-theme/portillo/stereo/screen-capture.oga" \
+      "$HOME/.local/share/sounds/portillo/stereo/screen-capture.oga"
   fi
   if [[ "$PLATFORM" == linux && -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] && command -v gsettings >/dev/null 2>&1; then
     bash "$REPO_DIR/gnome/configure.sh" >>"$LOG" 2>&1

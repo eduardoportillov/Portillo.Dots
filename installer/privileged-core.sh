@@ -177,6 +177,33 @@ set_system_timezone() {
   timedatectl set-timezone "$zone"
 }
 
+# Silence the GNOME screenshot event on dpkg-based hosts: divert the system
+# file of the freedesktop theme and install the repository's silent copy in
+# its place. Every player opens the file at play time, so a running GNOME
+# session becomes silent immediately, and package upgrades keep their copy
+# under *.distrib thanks to the diversion. Non-dpkg hosts keep the
+# user-level `portillo` sound theme only.
+install_silent_screen_capture() {
+  local repo="$1" target="${2:-/usr/share/sounds/freedesktop/stereo/screen-capture.oga}"
+  local silent="$repo/linux/sound-theme/portillo/stereo/screen-capture.oga"
+  command -v dpkg-divert >/dev/null 2>&1 || {
+    printf 'No dpkg-divert; keeping the user-level sound theme only (no system bypass).\n'
+    return 0
+  }
+  if [[ ! -f "$target" && ! -f "$target.distrib" ]]; then
+    printf 'No %s on this system; nothing to silence.\n' "$target"
+    return 0
+  fi
+  [[ -f "$silent" ]] || { printf 'Missing repository silence asset: %s\n' "$silent" >&2; return 1; }
+  if [[ -n "$(dpkg-divert --list "$target")" ]]; then
+    printf 'Screenshot sound diversion already present; refreshing the silent copy.\n'
+  else
+    dpkg-divert --local --rename --add "$target"
+  fi
+  install -o root -g root -m 0644 "$silent" "$target"
+  printf 'Silent screenshot sound installed at %s (package original: %s.distrib).\n' "$target" "$target"
+}
+
 # Distribution plumbing the managed configuration needs beyond the manifest
 # tools: archives for upstream installers and the TLS trust store. Tool
 # packages themselves come from the components.sh catalog (tool_packages),

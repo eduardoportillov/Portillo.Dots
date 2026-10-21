@@ -23,7 +23,8 @@ privileged_main() {
   [[ "$hardware_only" == false || ( "$hardware" == true && "$upgrade" == false && "$change_shell" == false ) ]] || return 2
   [[ "$repo" == /* && -d "$repo" && "$(id -u "$SUDO_USER")" == "${SUDO_UID:-}" ]] || return 2
   declare -F root_copy retire_legacy_rule install_packages harden_existing_service \
-    prepare_homebrew_prefix set_system_timezone profile_components tool_packages >/dev/null || {
+    prepare_homebrew_prefix set_system_timezone profile_components tool_packages \
+    install_silent_screen_capture >/dev/null || {
     printf 'Incomplete privileged payload; use setup.sh.\n' >&2; return 1;
   }
   local platform
@@ -87,6 +88,9 @@ privileged_main() {
   fi
   if [[ "$platform" == Linux && "$profile" == workstation && "$hardware_only" == false ]]; then
     root_copy "$repo/zsh/.dircolors" /root/.dircolors 0644
+    # Guest hosts inherit the silent screenshot sound; the helper is a soft
+    # no-op on non-dpkg distributions.
+    install_silent_screen_capture "$repo"
   fi
 }
 

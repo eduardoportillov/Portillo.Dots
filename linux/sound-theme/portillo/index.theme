@@ -1,0 +1,8 @@
+[Sound Theme]
+Name=portillo
+Comment=Portillo dots: silencia solo el evento screen-capture (capturas); hereda Yaru y freedesktop
+Inherits=Yaru,freedesktop
+Directories=stereo
+
+[stereo]
+OutputProfile=stereo

@@ -12,6 +12,11 @@ fi
 gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'us+altgr-intl')]"
 gsettings set org.gnome.shell.keybindings show-screenshot-ui "['<Super><Shift>s']"
 
+# Tema de sonido de dots: hereda Yaru,freedesktop y sobreescribe con un audio
+# silencioso solo el evento screen-capture (el clic de cámara de las capturas
+# de GNOME Shell). Los demás sonidos de eventos del sistema se conservan.
+gsettings set org.gnome.desktop.sound theme-name 'portillo'
+
 # Workspaces fijos y compartidos por todos los monitores.
 gsettings set org.gnome.mutter dynamic-workspaces false
 gsettings set org.gnome.desktop.wm.preferences num-workspaces 5

@@ -43,6 +43,9 @@ OT_SCHEMAS="$HOME/.local/share/gnome-shell/extensions/$OT_UUID/schemas"
   echo -n "Ctrl+Alt+T binding : "; gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding 2>&1
   echo -n "Ctrl+Alt+T command : "; gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command 2>&1
   echo -n "screenshot UI      : "; gsettings get org.gnome.shell.keybindings show-screenshot-ui 2>&1
+  echo -n "sound theme        : "; gsettings get org.gnome.desktop.sound theme-name 2>&1
+  echo -n "shutter divert     : "; dpkg-divert --list /usr/share/sounds/freedesktop/stereo/screen-capture.oga 2>/dev/null | grep -q . \
+    && echo "aplicado" || echo "no aplicado (solo tema portillo)"
   echo
 
   echo "===== [5] o-tiling: estado y uptime de gnome-shell ====="

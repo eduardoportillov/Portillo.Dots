@@ -526,5 +526,102 @@ class TimezoneTests(unittest.TestCase):
             self.assertFalse(calls.exists())
 
 
+class SilentScreenCaptureTests(unittest.TestCase):
+    """The privileged phase silences the GNOME screenshot event on dpkg hosts."""
+
+    def shell(self, script, *args, env=None):
+        return subprocess.run(
+            [BASH, '-euc', 'source "$1"; ' + script, '_', str(CORE), *map(str, args)],
+            env=env, capture_output=True, text=True, timeout=10)
+
+    def stub_path(self, directory, diverted=False):
+        stub = directory / 'bin'
+        stub.mkdir(exist_ok=True)
+        divert = stub / 'dpkg-divert'
+        divert.write_text(
+            '#!/bin/sh\n'
+            'printf \'%s\\n\' "$*" >> "$DPKG_CALLS"\n'
+            'if [ "$1" = "--list" ] && [ -n "$DIVERTED" ]; then\n'
+            '  printf \'diversion of fixture\\n\'\n'
+            'fi\n')
+        installed = stub / 'install'
+        installed.write_text(
+            '#!/bin/sh\n'
+            'printf \'%s\\n\' "$*" >> "$INSTALL_CALLS"\n'
+            'cp "$7" "$8"\n')
+        divert.chmod(0o755)
+        installed.chmod(0o755)
+        env = {**os.environ, 'PATH': str(stub) + os.pathsep + os.environ['PATH'],
+               'DPKG_CALLS': str(directory / 'dpkg-calls'),
+               'INSTALL_CALLS': str(directory / 'install-calls')}
+        if diverted:
+            env['DIVERTED'] = '1'
+        return env
+
+    def test_happy_path_registers_diversion_and_installs_silence(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            target = base / 'system/stereo/screen-capture.oga'
+            target.parent.mkdir(parents=True)
+            target.write_text('loud')
+            result = self.shell('install_silent_screen_capture "$2" "$3"', ROOT, target,
+                                env=self.stub_path(base))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            silent = (ROOT / 'linux/sound-theme/portillo/stereo/screen-capture.oga').read_bytes()
+            self.assertEqual(target.read_bytes(), silent)
+            dpkg_calls = (base / 'dpkg-calls').read_text()
+            self.assertIn('--list ', dpkg_calls)
+            self.assertIn(f'--local --rename --add {target}', dpkg_calls)
+            install_calls = (base / 'install-calls').read_text()
+            self.assertIn('-o root -g root -m 0644 ', install_calls)
+            self.assertIn('sound-theme/portillo/stereo/screen-capture.oga', install_calls)
+
+    def test_existing_diversion_is_refreshed_without_a_new_divert(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            target = base / 'system/stereo/screen-capture.oga'
+            target.parent.mkdir(parents=True)
+            target.write_text('previous silence')
+            result = self.shell('install_silent_screen_capture "$2" "$3"', ROOT, target,
+                                env=self.stub_path(base, diverted=True))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn('--rename', (base / 'dpkg-calls').read_text())
+            silent = (ROOT / 'linux/sound-theme/portillo/stereo/screen-capture.oga').read_bytes()
+            self.assertEqual(target.read_bytes(), silent)
+
+    def test_hosts_without_dpkg_skip_the_bypass(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            stub = base / 'empty-bin'
+            stub.mkdir()
+            env = {**os.environ, 'PATH': str(stub)}
+            result = self.shell('install_silent_screen_capture "$2" "$3"', ROOT,
+                                base / 'target.oga', env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('No dpkg-divert', result.stdout)
+            self.assertFalse((base / 'install-calls').exists())
+
+    def test_missing_system_file_is_a_soft_skip(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            env = self.stub_path(base)
+            result = self.shell('install_silent_screen_capture "$2" "$3"', ROOT,
+                                base / 'nowhere/screen-capture.oga', env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('nothing to silence', result.stdout)
+            self.assertFalse((base / 'install-calls').exists())
+
+    def test_missing_repository_asset_is_a_hard_error(self):
+        with tempdir() as directory:
+            base = Path(directory)
+            target = base / 'system/stereo/screen-capture.oga'
+            target.parent.mkdir(parents=True)
+            target.write_text('loud')
+            result = self.shell('install_silent_screen_capture "$2" "$3"',
+                                base / 'broken-repo', target, env=self.stub_path(base))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Missing repository silence asset', result.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()

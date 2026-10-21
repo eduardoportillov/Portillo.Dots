@@ -60,6 +60,13 @@ fi
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn(' custom-keybindings [', calls)
 
+    def test_sound_theme_only_mutes_screenshot_shutter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, calls = self.run_configuration(directory, '@as []')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('theme-name portillo', calls)
+            self.assertNotIn('event-sounds', calls)
+
     def test_native_tiling_is_disabled_only_when_otiling_is_enabled(self):
         with tempfile.TemporaryDirectory() as directory:
             result, calls = self.run_configuration(directory, '@as []', 'o-tiling@oliwebd.github.com')
