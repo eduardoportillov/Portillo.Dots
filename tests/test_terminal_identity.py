@@ -99,8 +99,21 @@ class TerminalIdentityTests(unittest.TestCase):
             self.assertFalse((home / 'data').exists(), 'config-only must not bootstrap plugins')
 
     def test_migration_backs_up_old_directory_symlink_without_writing_through_it(self):
+        for aliased in (False, True):
+            with self.subTest(aliased_home=aliased):
+                self.check_directory_symlink_migration(aliased)
+
+    def check_directory_symlink_migration(self, aliased):
         with tempdir() as directory:
-            home = Path(directory)
+            root = Path(directory)
+            home = root / 'home'
+            home.mkdir()
+            if aliased:
+                # Reproduce macOS temporary paths through /var -> /private/var
+                # on every platform, without requiring that particular alias.
+                alias = root / 'alias'
+                alias.symlink_to(home, target_is_directory=True)
+                home = alias
             previous = home / 'previous'
             previous.mkdir()
             (previous / 'init.lua').write_text('-- personal config\n')
@@ -113,7 +126,7 @@ class TerminalIdentityTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual((previous / 'init.lua').read_text(), '-- personal config\n')
             backups = list((home / 'state').rglob('nvim'))
-            self.assertTrue(any(path.is_symlink() and path.resolve() == previous for path in backups))
+            self.assertTrue(any(path.is_symlink() and path.resolve() == previous.resolve() for path in backups))
             self.assertEqual((home / 'config/nvim/init.lua').resolve(), ROOT / 'nvim/init.lua')
 
     def fake_editor(self, home):
