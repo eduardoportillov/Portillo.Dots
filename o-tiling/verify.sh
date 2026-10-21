@@ -67,8 +67,10 @@ require_gnome() {
 }
 
 extension_state() {
+  # gnome-extensions localiza su salida ("State" / "Estado"), así que aceptamos
+  # ambas formas en lugar de depender del locale del host.
   gnome-extensions info "$OTILING_UUID" 2>/dev/null \
-    | awk -F': ' '/^ *State/{print $2}' | tr -d ' ' || echo "unknown"
+    | awk -F': ' '/^ *(State|Estado|状态|状態)/{print $2; exit}' | tr -d ' ' || echo "unknown"
 }
 
 print_checklist() {
