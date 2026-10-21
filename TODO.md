@@ -168,18 +168,36 @@ ya está en el sistema, deshabilitada) no dispara el bug en uso normal — pero 
 paradigma distinto (snap manual arrastrando/atajos, sin auto-tile ni foco direccional
 `Ctrl+Alt+HJKL`), no un reemplazo transparente.
 
-**Próximos pasos (2026-10-16)**: hay **9 releases posteriores** a `v2.9.21`, con
-cambios en `stacking sync` (`v2.10.1`), `restack` (`v2.10.7`), `window stacking and
-layout reconstruction` (`v2.10.8`) y un guard en `raise()` (`v2.12.01`) — justo las
-zonas implicadas. El pin se sube a **`v2.12.01`** y se valida con
-`bash o-tiling/verify.sh` (prepare → logout/login → bloques A–E → report).
+**Próximos pasos (2026-10-16 → resultado 2026-10-20)**: se probaron **9 releases
+posteriores** a `v2.9.21`, con cambios en `stacking sync` (`v2.10.1`), `restack`
+(`v2.10.7`), `window stacking and layout reconstruction` (`v2.10.8`) y un guard
+en `raise()` (`v2.12.01`) — justo las zonas implicadas.
 
-- Si la aceptación pasa: la extensión queda habilitada y este TODO se cierra.
-- Si falla: `verify.sh` la deshabilita automáticamente, el pin queda en `v2.12.01`
-  y **se espera al fix de upstream**. Sin parches ni workarounds.
+### ❌ Resultado: `v2.12.01` NO arregla el bug (probado 2026-10-20)
 
-El issue [#50](https://github.com/oliwebd/o-tiling/issues/50) sigue **abierto** y
-sin confirmar; las notas de release no lo mencionan explícitamente.
+| Dato | Valor |
+|---|---|
+| Versión probada | `v2.12.01` (release upstream, **cero parches locales**) |
+| Estado de la extensión | `ACTIVE`, `Activado: Sí`, sin `Error` → **sí cargó** |
+| Assertion `stack_position` | **183 apariciones** en `journalctl --user` |
+| `JS ERROR` de la extensión | ninguno |
+| Auto-tiling (bloque A) | **FALLA** — dos terminales con `Ctrl+Alt+T` no se acomodan |
+
+Ambos modos de fallo conocidos siguen presentes: la assertion se dispara **y**
+las ventanas no tilean (esta vez sin errores JS). El guard nuevo sobre `raise()`
+no cubre el segundo call site identificado en la ronda anterior.
+
+**Acción tomada:** `verify.sh report` deshabilitó la extensión automáticamente.
+Veredicto guardado en `~/.local/state/portillo-dots/otiling-verify/verdict.txt`.
+El pin queda en `v2.12.01` para que la próxima prueba ya use lo último.
+
+**Se espera al fix de upstream** — sin parches manuales ni workarounds.
+
+**Pista para el próximo reporte a upstream:** el fix `8483c91` solo protege
+`raise()` en `grab_focus()`. Sigue sin protegerse el `raise()` de la función
+`activate()` en `window/window.js`, usada por los 4 atajos `focus-*`
+(`Ctrl+Alt+HJKL`) y por ~22 call sites. Eso explicaría que los atajos fallen
+incluso cuando no se crea ninguna ventana.
 
 ---
 
