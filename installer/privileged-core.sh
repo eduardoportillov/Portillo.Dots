@@ -237,10 +237,8 @@ install_packages() {
         fi
       done < <(profile_components "$profile" linux)
     fi
-    case "$pm" in
-      pacman) append_unique optional tree-sitter ;;
-      *)      append_unique optional tree-sitter-cli ;;
-    esac
+    # The distro Tree-sitter CLI can be too old (e.g. Ubuntu 0.20). The user
+    # phase installs a verified modern CLI if needed, without pulling emscripten.
   fi
   # Both editor profiles compile Tree-sitter parsers.
   case "$pm" in

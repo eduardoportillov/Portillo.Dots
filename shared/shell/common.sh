@@ -19,7 +19,7 @@ unset _portillo_brew
 
 # User tool prefix plus the OpenCode runtime when present. The loop is
 # idempotent: a PATH that already carries the entry is left alone.
-for portillo_bin in "$HOME/.local/bin" "$HOME/.opencode/bin"; do
+for portillo_bin in "$HOME/.local/bin" "$HOME/.opencode/bin" "${XDG_DATA_HOME:-$HOME/.local/share}/portillo-dots/bin"; do
   case ":$PATH:" in *":$portillo_bin:"*) ;; *) PATH="$portillo_bin:$PATH" ;; esac
 done
 export PATH

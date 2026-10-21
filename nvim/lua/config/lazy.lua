@@ -21,6 +21,13 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+if vim.env.PORTILLO_NVIM_SETUP == "1" then
+  -- Automatic missing-plugin installs run before :Lazy restore. Lazy's update
+  -- mutates both its file AND in-memory lock, dropping pins not installed yet.
+  -- Keep the supplied lock immutable throughout every cold-start install round.
+  require("lazy.manage.lock").update = function() end
+end
+
 require("lazy").setup({
   lockfile = vim.env.PORTILLO_NVIM_LOCKFILE or (vim.fn.stdpath("config") .. "/lazy-lock.json"),
   spec = {

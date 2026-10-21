@@ -1,5 +1,8 @@
 """Shared terminal identity, migrations and bounded/offline editor checks."""
 import json
+import gzip
+import hashlib
+import importlib.util
 import re
 import os
 from pathlib import Path
@@ -11,9 +14,50 @@ from _support import tempdir
 
 ROOT = Path(__file__).resolve().parents[1]
 BASH = shutil.which('bash')
+spec = importlib.util.spec_from_file_location('tree_sitter_installer', ROOT / 'installer/tree-sitter.py')
+tree_sitter = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tree_sitter)
 
 
 class TerminalIdentityTests(unittest.TestCase):
+    def test_tree_sitter_release_is_verified_before_decompression(self):
+        data = gzip.compress(b'example executable')
+        digest = hashlib.sha256(data).hexdigest()
+        self.assertEqual(tree_sitter.verified_binary(data, digest), b'example executable')
+        with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
+            tree_sitter.verified_binary(b'corrupt archive', digest)
+
+    def test_tree_sitter_covers_all_supported_platform_architectures(self):
+        self.assertEqual(set(tree_sitter.ASSETS), {
+            ('linux', 'x86_64'), ('linux', 'aarch64'), ('mac', 'x86_64'), ('mac', 'aarch64')})
+        for _, digest in tree_sitter.ASSETS.values():
+            self.assertRegex(digest, r'^[a-f0-9]{64}$')
+
+    def test_old_tree_sitter_uses_managed_fallback_without_replacing_user_binary(self):
+        with tempdir() as directory:
+            home = Path(directory)
+            binary = home / 'bin/tree-sitter'
+            binary.parent.mkdir()
+            original = '#!/bin/sh\necho "tree-sitter 0.20.8"\n'
+            binary.write_text(original)
+            binary.chmod(0o755)
+            env = self.environment(home)
+            env['PATH'] = str(binary.parent) + ':' + env['PATH']
+            script = '''
+                PLATFORM=linux; ARCH=x86_64; LOG="$HOME/setup.log"
+                python3() {
+                    mkdir -p "$(dirname "$4")"
+                    printf '#!/bin/sh\\necho "tree-sitter 0.25.10"\\n' > "$4"
+                    chmod 755 "$4"
+                }
+                ensure_tree_sitter
+                verify_tree_sitter
+            '''
+            result = self.run_shell(script, env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(binary.read_text(), original)
+            self.assertTrue((home / 'data/portillo-dots/bin/tree-sitter').is_file())
+
     def test_server_and_workstation_have_the_same_interactive_tmux_plugins(self):
         def plugins(path):
             return set(re.findall(r"set -g @plugin '([^']+)'", path.read_text()))
@@ -143,6 +187,36 @@ sys.exit(int(os.environ.get('EDITOR_EXIT', '0')))
 
 @unittest.skipUnless(shutil.which('nvim') and shutil.which('git'), 'Neovim and Git required')
 class OfflineEditorHealthTests(unittest.TestCase):
+    def test_setup_keeps_lock_pins_during_multiple_missing_plugin_install_rounds(self):
+        with tempdir() as directory:
+            home = Path(directory)
+            harness = home / 'bootstrap.lua'
+            harness.write_text('''
+vim.env.PORTILLO_NVIM_SETUP = "1"
+vim.env.PORTILLO_NVIM_CHECK = "0"
+vim.env.PORTILLO_NVIM_JSON = nil
+vim.uv.fs_stat = function() return {} end
+local lock = { lock = { pending_dependency = { commit = "pinned" } } }
+lock.update = function() lock.lock = {} end
+package.preload["lazy.manage.lock"] = function() return lock end
+package.preload["lazy"] = function()
+  return { setup = function(opts)
+    for _ = 1, 3 do
+      lock.update()
+      assert(lock.lock.pending_dependency.commit == "pinned", "cold install lost a pending pin")
+    end
+  end }
+end
+dofile(vim.env.PORTILLO_TEST_LAZY)
+''')
+            env = {**os.environ, 'HOME': str(home), 'PORTILLO_TEST_LAZY': str(ROOT / 'nvim/lua/config/lazy.lua'),
+                   'PORTILLO_TEST_HARNESS': str(harness)}
+            result = subprocess.run(['nvim', '--headless', '-u', 'NONE', '-i', 'NONE', '-n',
+                                     '+lua dofile(vim.env.PORTILLO_TEST_HARNESS)', '+qa!'],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn('Error', result.stderr)
+
     def fixture(self, home):
         plugins = home / 'data/nvim/lazy'
         receipt = {'plugins': {}}

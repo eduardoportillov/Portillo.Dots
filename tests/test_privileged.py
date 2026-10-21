@@ -295,15 +295,15 @@ if os.environ.get('FAIL_ARG') in sys.argv[1:]:
 
     def test_workstation_native_adds_optional_tools_and_go(self):
         go = {'apt-get': 'golang-go', 'dnf': 'golang', 'pacman': 'go'}
-        treesitter = {'apt-get': 'tree-sitter-cli', 'dnf': 'tree-sitter-cli',
-                      'pacman': 'tree-sitter'}
         for backend in ['apt-get', 'dnf', 'pacman']:
             with self.subTest(backend=backend):
                 result, calls = self.run_packages(backend, profile='workstation')
                 self.assertEqual(result.returncode, 0, result.stderr)
                 packages = self.package_names(calls)
-                for name in ['lazygit', go[backend], treesitter[backend]]:
+                for name in ['lazygit', go[backend]]:
                     self.assertIn(name, packages)
+                self.assertNotIn('tree-sitter-cli', packages,
+                                 'outdated distro CLI must not pull emscripten; provision it in user space')
 
     def test_packages_fail_closed_without_the_provisioning_catalog(self):
         result, calls = self.run_packages_without_catalog()

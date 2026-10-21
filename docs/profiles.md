@@ -176,6 +176,11 @@ temporales de diagnóstico se eliminan. Si falta el recibo, ejecuta setup normal
 La instalación restaura los plugins desde el lockfile y genera ese recibo solo
 si pasan las comprobaciones. `--config-only` no descarga plugins ni certifica
 que estén instalados. La segunda instalación evita restaurar si todo coincide.
+Durante la instalación inicial, el lock se mantiene inmutable también en memoria:
+los ciclos automáticos de Lazy para plugins faltantes no pueden eliminar pins
+de dependencias aún no clonadas. La verificación exige además un Tree-sitter CLI
+moderno con soporte de `build`; setup usa un binario upstream verificado cuando
+el paquete de la distribución no cumple.
 
 ## Límites conocidos
 

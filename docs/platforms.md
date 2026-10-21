@@ -62,6 +62,7 @@ sintaxis o API. No se inventan requisitos.
 |---|---|---|
 | `tmux` | 3.3 | `allow-passthrough` se añadió en 3.3 y lo usa `tmux/tmux.conf` |
 | `nvim` | 0.11.2 (ambos perfiles) | La revisión de LazyVim fijada en `lazy-lock.json` exige 0.11.2 |
+| `tree-sitter` CLI | 0.25.0 + comando `build` (ambos perfiles) | Los parsers del editor usan `tree-sitter build`; el CLI 0.20 de Ubuntu no sirve |
 | `opencode` | 2.0 | Los dotfiles usan la API y la config nativa de V2 |
 | `node` | 20 | Los servidores MCP del template se lanzan con `npx` |
 | `alacritty` | 0.13 | La clave `terminal.osc52` existe desde 0.13 |
@@ -73,6 +74,13 @@ informa y no se trata como error.
 La comparación (`version_at_least`) es Bash puro: funciona también en macOS, donde
 `sort -V` no está garantizado. Los sufijos de proveedor se normalizan
 (`tmux 3.6b` → `3.6.0`).
+
+Si el CLI Tree-sitter del PATH es antiguo o falta, setup instala la versión
+upstream **0.25.10**, con SHA-256 fijado por plataforma/arquitectura, en
+`${XDG_DATA_HOME:-~/.local/share}/portillo-dots/bin`. Esa ruta se incorpora a la
+shell compartida y al proceso Neovim del instalador. No reemplaza binarios del
+usuario ni del sistema; tampoco instala el paquete viejo de la distro con sus
+dependencias emscripten. `--check` comprueba el CLI sin descargarlo.
 
 ## Rutas por plataforma
 

@@ -27,6 +27,8 @@ from pathlib import Path
 mode, config, health = sys.argv[1:]
 env = dict(os.environ, XDG_CONFIG_HOME=config, NVIM_APPNAME='nvim',
            PORTILLO_NVIM_SETUP='1', PORTILLO_NVIM_HEALTH=health)
+managed = Path(env.get('XDG_DATA_HOME', str(Path.home() / '.local/share'))) / 'portillo-dots/bin'
+env['PATH'] = str(managed) + os.pathsep + env['PATH']
 env['PORTILLO_NVIM_CHECK'] = '1' if mode == 'check' else '0'
 state = Path(env.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'portillo-dots/nvim-identity.json'
 def fingerprint():
@@ -85,21 +87,50 @@ except (OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
 PY
 }
 
+verify_tree_sitter() {
+  local installed
+  installed="$(tool_version tree-sitter 2>/dev/null || true)"
+  [[ -n "$installed" ]] && version_at_least "$installed" 0.25.0 \
+    && tree-sitter build --help >/dev/null 2>&1
+}
+
+ensure_tree_sitter() {
+  local managed="${XDG_DATA_HOME:-$HOME/.local/share}/portillo-dots/bin"
+  export PATH="$managed:$PATH"
+  if verify_tree_sitter; then return 0; fi
+  info 'Installing checksum-pinned Tree-sitter CLI (distro CLI is missing or too old)'
+  python3 "$REPO_DIR/installer/tree-sitter.py" "$PLATFORM" "$ARCH" "$managed/tree-sitter" >>"$LOG" 2>&1 \
+    || die "Tree-sitter CLI provisioning failed; see $LOG"
+  verify_tree_sitter || die 'Tree-sitter CLI >=0.25 with build support is required'
+}
+
 provision_nvim() {
   local installed
   installed="$(tool_version nvim)" || die 'Cannot detect Neovim version'
   version_at_least "$installed" 0.11.2 || die 'Shared LazyVim requires Neovim >=0.11.2; update Neovim and rerun setup'
+  ensure_tree_sitter
   if run_managed_nvim check >>"$LOG" 2>&1; then
     info 'Shared Neovim plugins/theme already match the configuration and lockfile'
     return 0
   fi
   info 'Restoring shared Neovim plugins from lazy-lock.json (both profiles)'
   run_managed_nvim install >>"$LOG" 2>&1 \
-    || die "Neovim plugin provisioning failed; see $LOG"
+    || {
+      # Surface the actionable cause instead of only reporting a missing receipt.
+      tail -n 12 "$LOG" >&2
+      die "Neovim plugin provisioning failed; see $LOG"
+    }
 }
 
 verify_terminal_identity() {
   local failed=0 plugin
+  local managed="${XDG_DATA_HOME:-$HOME/.local/share}/portillo-dots/bin"
+  export PATH="$managed:$PATH"
+  if ! verify_tree_sitter; then
+    warn 'Tree-sitter CLI >=0.25 with build support is missing; rerun normal setup'
+    record_event failed 'missing or incompatible Tree-sitter CLI'
+    failed=1
+  fi
   for plugin in tpm tmux-sensible tmux-yank vim-tmux-navigator tmux-which-key extrakto tmux-kanagawa; do
     if [[ ! -d "$HOME/.tmux/plugins/$plugin/.git" ]]; then
       warn "Missing shared tmux plugin: $plugin"
