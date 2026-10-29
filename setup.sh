@@ -14,6 +14,7 @@ source "$REPO_DIR/installer/profiles.sh"
 source "$REPO_DIR/installer/workstation.sh"
 source "$REPO_DIR/installer/editors.sh"
 source "$REPO_DIR/installer/opencode.sh"
+source "$REPO_DIR/installer/pi.sh"
 
 PROFILE=""
 CONFIG_ONLY=false

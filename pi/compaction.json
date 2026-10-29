@@ -1,0 +1,7 @@
+{
+  "modelOverrides": {
+    "openai-codex/gpt-6.1-sol": {
+      "reserveTokens": 300000
+    }
+  }
+}

@@ -42,6 +42,7 @@ show_actions() {
     fi
     [[ "$UPGRADE" == false ]] || info 'Explicit upgrades enabled (Arch repository sync always requires a full system upgrade)'
   fi
+  info 'Merge global Pi compaction policy into the agent settings'
   [[ "$HARDWARE" == false ]] || info 'OPT-IN: CPU/memory settings, BAT1 charge limit (60%), root-owned system service'
   [[ "$CHANGE_SHELL" == false ]] || info 'OPT-IN: change login shell to Zsh'
   [[ -z "${TIMEZONE:-}" ]] || info "OPT-IN: set system timezone to $TIMEZONE"
@@ -164,6 +165,7 @@ configure_profile() {
     configure_workstation
   fi
   configure_opencode
+  configure_pi
   # Restrict generated credentials before plugin provisioning can fail or wait.
   secure_known_secrets || warn 'Some credential paths could not be restricted'
   if [[ "$CONFIG_ONLY" == false ]]; then

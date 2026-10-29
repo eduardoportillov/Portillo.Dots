@@ -40,6 +40,28 @@ vigila (`SharedBaselineTests`).
 
 ## Fuente única de componentes
 
+### Contexto global de Pi
+
+Ambos perfiles fusionan `pi/compaction.json` en `~/.pi/agent/settings.json`
+(o `$PI_CODING_AGENT_DIR/settings.json`) al ejecutar setup, también con
+`--config-only`. Se conservan los demás ajustes y las reservas de otros modelos;
+los campos definidos por la política se vuelven a aplicar en cada ejecución.
+No se reemplazan archivos enlazados, inválidos ni ajenos. Los ajustes de proyecto
+pueden prevalecer sobre los globales. Pi debe recargar la configuración con
+`/reload` o reiniciarse después del cambio.
+
+La compactación se activa cuando el contexto supera la ventana del modelo menos
+`reserveTokens`. El override para `openai-codex/gpt-6.1-sol` reserva 300000
+tokens: con la ventana de 500K anunciada por Pi, el umbral es aproximadamente
+200K (40 %). No es un porcentaje dinámico: si cambia la ventana anunciada,
+hay que recalcular la reserva. Otros modelos usan sus propios overrides o los
+valores predeterminados de Pi. El instalador elimina los valores globales que
+versiones anteriores de esta política habían instalado y conserva otros ajustes.
+El umbral no garantiza precisión. Pi
+conserva 20000 tokens recientes y permite compactar manualmente con
+`/compact instrucciones`; `/new` inicia otra sesión. La política no delega el
+resumen a otro modelo ni incluye credenciales.
+
 `installer/components.sh` declara las herramientas de cada perfil con el formato
 `<kind> <command> <description>`, donde `kind` es `required` u `optional`:
 

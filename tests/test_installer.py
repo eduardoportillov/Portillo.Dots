@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class InstallerTests(unittest.TestCase):
     def isolated(self, directory):
         env = os.environ.copy()
+        env.pop('PI_CODING_AGENT_DIR', None)
         env.update(HOME=directory, XDG_CONFIG_HOME=directory + '/.config',
                    XDG_STATE_HOME=directory + '/.state', SHELL='/bin/bash')
         platform_bin = Path(directory) / '.test-bin'
@@ -95,6 +97,66 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(config.is_symlink())
             self.assertEqual(config.read_text(), original)
+
+    def test_pi_compaction_merge_preserves_settings_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / '.pi/agent/settings.json'
+            config.parent.mkdir(parents=True)
+            config.write_text(json.dumps({'defaultModel': 'custom', 'packages': ['npm:example'],
+                                          'compaction': {'enabled': True, 'reserveTokens': 100000,
+                                                         'keepRecentTokens': 20000, 'modelOverrides': {
+                                              'other/model': {'reserveTokens': 42},
+                                              'openai-codex/gpt-6.1-sol': {'reserveTokens': 100000,
+                                                                           'keepRecentTokens': 123}}}}))
+            config.chmod(0o640)
+            for _ in range(2):
+                result = self.configure_server(directory)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                if _ == 0:
+                    first = config.read_bytes()
+                else:
+                    self.assertEqual(config.read_bytes(), first)
+            data = json.loads(first)
+            self.assertEqual(data['defaultModel'], 'custom')
+            self.assertEqual(data['packages'], ['npm:example'])
+            self.assertEqual(data['compaction']['modelOverrides']['other/model']['reserveTokens'], 42)
+            self.assertEqual(data['compaction']['modelOverrides']['openai-codex/gpt-6.1-sol'],
+                             {'reserveTokens': 300000, 'keepRecentTokens': 123})
+            self.assertNotIn('reserveTokens', data['compaction'])
+            self.assertNotIn('enabled', data['compaction'])
+            self.assertNotIn('keepRecentTokens', data['compaction'])
+            self.assertEqual(config.stat().st_mode & 0o777, 0o640)
+
+    def test_pi_rejects_invalid_or_symlinked_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / '.pi/agent/settings.json'
+            config.parent.mkdir(parents=True)
+            for content in ('invalid JSON', '{"compaction": false}'):
+                config.write_text(content)
+                result = self.configure_server(directory)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(config.read_text(), content)
+            config.unlink()
+            target = Path(directory) / 'other.json'
+            target.write_text('{}')
+            config.symlink_to(target)
+            result = self.configure_server(directory)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue(config.is_symlink())
+            self.assertEqual(target.read_text(), '{}')
+
+    def test_pi_respects_custom_agent_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = self.isolated(directory)
+            env['PI_CODING_AGENT_DIR'] = str(Path(directory) / 'custom-agent')
+            script = 'source "$1/setup.sh"; initialize_state; configure_pi; cleanup_setup'
+            result = subprocess.run(['bash', '-euc', script, '_', str(ROOT)], env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = Path(env['PI_CODING_AGENT_DIR']) / 'settings.json'
+            self.assertEqual(json.loads(config.read_text())['compaction']['modelOverrides']
+                             ['openai-codex/gpt-6.1-sol']['reserveTokens'], 300000)
+            self.assertFalse((Path(directory) / '.pi').exists())
 
     def test_preserved_permissive_server_config_fails_verification(self):
         with tempfile.TemporaryDirectory() as directory:
