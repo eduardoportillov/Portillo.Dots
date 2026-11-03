@@ -31,7 +31,7 @@ SHELL_FILES = [
     'remote.sh', 'remote/lib.sh', 'remote/install-binaries.sh',
     'remote/shell-environment.sh', 'remote/generate-rc.sh', 'remote/connect.sh',
     'opencode/regenerate-config.sh', 'opencode/load-secrets.sh',
-    'server/shell.sh', 'shared/shell/common.sh', 'linux/graphical-environment.sh',
+    'server/shell.sh', 'shared/shell/common.sh', 'linux/graphical-environment.sh', 'linux/clipboard-shim.sh',
     'linux/optimize.sh', 'linux/dots-diag.sh', 'linux/dots-fix-tiling.sh',
     'linux/restore-gnome-keybindings.sh', 'linux/silence-screen-capture.sh',
     'o-tiling/install.sh', 'o-tiling/configure.sh', 'o-tiling/verify.sh',

@@ -118,6 +118,15 @@ configure_workstation() {
   if [[ "$PLATFORM" == linux ]]; then
     symlink_file "$REPO_DIR/linux/dots-fix-tiling.sh" "$HOME/.local/bin/dots-fix-tiling"
     symlink_file "$REPO_DIR/linux/dots-diag.sh" "$HOME/.local/bin/dots-diag"
+    # Clipboard shim: repara el entorno gráfico obsoleto en cada copia/pegado, de modo
+    # que Claude Code, Pi y OpenCode de larga vida no pierdan el portapapeles.
+    # Solo se enlaza para herramientas reales instaladas (un shim sin binario
+    # anunciaría un backend que no existe).
+    for clip_tool in xclip wl-copy wl-paste; do
+      if [[ -n "$(PATH="${PATH//$HOME\/.local\/bin:/}" command -v "$clip_tool" 2>/dev/null)" ]]; then
+        symlink_file "$REPO_DIR/linux/clipboard-shim.sh" "$HOME/.local/bin/$clip_tool"
+      fi
+    done
     # Tema de sonido portillo: silencia solo el evento screen-capture (clic de
     # cámara de las capturas); hereda Yaru,freedesktop para el resto de sonidos.
     symlink_file "$REPO_DIR/linux/sound-theme/portillo/index.theme" \

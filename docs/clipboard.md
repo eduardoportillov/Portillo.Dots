@@ -46,6 +46,23 @@ reinicia Pi cuando sea seguro. Las sesiones tmux restauradas también quedan
 cubiertas al crear una shell nueva; los panes/procesos ya existentes deben
 reiniciarse individualmente cuando termine su trabajo.
 
+## Solución definitiva: shim de portapapeles por invocación
+
+El arreglo en la shell solo ayuda a procesos nuevos. Claude Code, Pi y OpenCode
+viven horas dentro de tmux con el entorno con el que nacieron (a menudo solo
+`DISPLAY=:0`, sin `XAUTHORITY` ni `WAYLAND_DISPLAY`), y cada reinicio de Xwayland
+cambia el archivo `.mutter-Xwaylandauth.*`. De ahí el error intermitente
+«Clipboard unavailable: install xclip or xsel, or check X11 access».
+
+`linux/clipboard-shim.sh` se enlaza como `~/.local/bin/{xclip,wl-copy,wl-paste}`
+(delante de linuxbrew en `PATH`; lo hace `installer/workstation.sh` solo si la
+herramienta real existe). En **cada** copia/pegado, que es un proceso nuevo,
+recupera el socket Wayland vivo y el `-auth`/display del Xwayland en ejecución y
+ejecuta el binario real. Así se repara también a los clientes ya abiertos, sin
+reiniciarlos. No lee cookies ni el contenido del portapapeles y respeta SSH.
+
+Pruebas: `python3 -B -m unittest tests/test_clipboard_shim.py`.
+
 ## Recuperar un cliente antiguo sin perder trabajo
 
 1. No cerrar tmux ni interrumpir tareas activas.
