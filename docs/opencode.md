@@ -95,6 +95,44 @@ accidente:
 Los plugins V1 **no se ejecutan en V2** (la API cambió; renombrar la entrada no
 basta). Reintroducirlos exige que sus autores publiquen un puerto V2.
 
+## Usar la suscripción de Claude desde OpenCode
+
+[Claude Agent](https://opencode.ai/docs/claude-agent/) es el puente nativo de
+OpenCode: Claude Code consulta el modelo y OpenCode conserva la sesión y ejecuta
+las herramientas con sus propios permisos. No hace falta instalar un plugin,
+levantar un proxy ni modificar la plantilla o el modelo predeterminado.
+
+Claude Code **2.1.248 o posterior** debe estar instalado en la misma máquina que
+el servidor de OpenCode. En cada equipo:
+
+```bash
+claude auth login                    # solo si aún no iniciaste sesión
+opencode auth login claude-agent
+opencode models | grep '^claude-agent/'
+```
+
+En la TUI, elige **Claude Agent** en `/models` (por ejemplo,
+`claude-agent/sonnet`). No elijas `anthropic/...` si quieres usar la sesión de
+Claude Code: es otro proveedor. Con el plan de Claude conectado se aplican sus
+límites de uso, no la facturación de una API key. La conexión es local a cada
+equipo y no se sincroniza con Git.
+
+Para verificar el puente sin modificar archivos ni cambiar el modelo por defecto,
+ejecuta desde la raíz del repo:
+
+```bash
+opencode run --archived --agent plan --model claude-agent/sonnet --format json \
+  'Usa read de OpenCode para leer docs/opencode.md, sin shell ni ediciones.
+   ¿Qué archivo contiene las preferencias del cliente de terminal?'
+```
+
+La salida debe incluir una llamada a `read` y una respuesta que mencione
+`opencode/cli.json`. Si Claude devuelve un límite de uso, espera al reinicio
+indicado y repite la prueba. Si el servidor no encuentra `claude`, configura su
+ruta con `opencode service set env OPENCODE_CLAUDE_PATH "$(command -v claude)"`.
+Para desconectar el proveedor en este equipo, usa `opencode auth logout claude-agent`
+y selecciona la cuenta si OpenCode lo solicita.
+
 ## Dependencias MCP
 
 Los servidores `local` arrancan un comando. `--check` avisa si falta en el `PATH`:
